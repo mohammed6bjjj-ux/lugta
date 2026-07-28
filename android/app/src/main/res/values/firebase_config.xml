@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Firebase Android client identifiers are public configuration values. -->
+    <!-- Must belong to the Firebase Android app registered for the current
+         applicationId (lugta.nawl.com); a mismatch fails FCM registration. -->
+    <string name="google_app_id" translatable="false">1:270206370306:android:536c54510762506f24dd1b</string>
+    <string name="google_api_key" translatable="false">AIzaSyDpJve_JNxv_DBo9E9tu2OpKIE79GOl9Kc</string>
+    <string name="gcm_defaultSenderId" translatable="false">270206370306</string>
+    <!-- Firebase reads this identifier dynamically from Android resources. -->
+    <!--suppress UnusedResources -->
+    <string name="project_id" translatable="false">nawl-7587b</string>
+    <string name="google_storage_bucket" translatable="false">nawl-7587b.firebasestorage.app</string>
+
+    <string name="default_notification_channel_id" translatable="false">nawl_orders</string>
+    <string name="default_notification_channel_name">إشعارات الطلبات والحساب</string>
+    <string name="default_notification_channel_description">تحديثات الطلبات والسحوبات والحساب</string>
+</resources>

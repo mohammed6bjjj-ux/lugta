@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- هوية لُگطة: لون الحبر الموحد للإقلاع وخلفية الأيقونة التكيفية. -->
+    <color name="brandBackground">#191713</color>
+    <color name="ic_launcher_background">#191713</color>
+</resources>

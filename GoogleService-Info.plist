@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyCUoURTg9LB_Z-0unuMq2339yOHMNc9rUw</string>
+	<key>GCM_SENDER_ID</key>
+	<string>270206370306</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>lugta.nawl.com</string>
+	<key>PROJECT_ID</key>
+	<string>nawl-7587b</string>
+	<key>STORAGE_BUCKET</key>
+	<string>nawl-7587b.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:270206370306:ios:08c1ce6d603d73ac24dd1b</string>
+</dict>
+</plist>
