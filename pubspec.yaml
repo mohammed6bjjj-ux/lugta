@@ -1,7 +1,7 @@
 name: flutter_app
 description: "Luqta — لقطة mobile commerce app."
 publish_to: 'none'
-version: 0.1.6+8
+version: 0.1.7+9
 
 environment:
   sdk: ^3.12.2

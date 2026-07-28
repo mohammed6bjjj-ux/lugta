@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 /// Compile-time configuration for the mobile client.
 ///
 /// Only the project URL and the publishable key are allowed in this client.
-/// Server-only secrets (service-role, WaSender, FCM service credentials, etc.)
+/// Server-only secrets (service-role, SMS.to, FCM service credentials, etc.)
 /// must never be added here.
 abstract final class AppConfig {
   static const String supabaseUrl = String.fromEnvironment(

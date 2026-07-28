@@ -12,10 +12,40 @@ if (releaseKeystorePropertiesFile.exists()) {
     releaseKeystorePropertiesFile.inputStream().use(releaseKeystoreProperties::load)
 }
 
+val releaseSigningKeys = listOf(
+    "keyAlias",
+    "keyPassword",
+    "storeFile",
+    "storePassword",
+)
+val releaseStoreFile = releaseKeystoreProperties
+    .getProperty("storeFile")
+    ?.takeIf(String::isNotBlank)
+    ?.let(project::file)
+val releaseSigningReady =
+    releaseKeystorePropertiesFile.exists() &&
+        releaseSigningKeys.all {
+            !releaseKeystoreProperties.getProperty(it).isNullOrBlank()
+        } &&
+        releaseStoreFile?.isFile == true
+val releaseBuildRequested = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+
+if (releaseBuildRequested && !releaseSigningReady) {
+    throw GradleException(
+        "A signed release was requested, but android/key.properties or its " +
+            "keystore is missing/incomplete. Production builds must never use " +
+            "the Android debug signing key.",
+    )
+}
+
 android {
     namespace = "lugta.nawl.com"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Google Play requires API 36 for new apps and updates from 31 Aug 2026.
+    compileSdk = 36
+    // NDK r28 produces 16 KB-aligned ELF segments by default.
+    ndkVersion = "28.2.13676358"
 
     lint {
         // Flutter rewrites android/local.properties on Windows and escapes
@@ -36,18 +66,18 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         multiDexEnabled = true
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     signingConfigs {
-        if (releaseKeystorePropertiesFile.exists()) {
+        if (releaseSigningReady) {
             create("release") {
                 keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
                 keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
-                storeFile = file(releaseKeystoreProperties.getProperty("storeFile"))
+                storeFile = releaseStoreFile
                 storePassword = releaseKeystoreProperties.getProperty("storePassword")
             }
         }
@@ -55,14 +85,23 @@ android {
 
     buildTypes {
         release {
-            // Real releases are signed with the keystore declared in key.properties.
-            // Without it, fall back to the debug key so `flutter run --release`
-            // installs on a local device instead of producing an unsigned APK.
-            // This fallback cannot reach production by accident: Google Play
-            // rejects uploads signed with Android's public debug key.
-            signingConfig = signingConfigs.findByName("release")
-                ?: signingConfigs.getByName("debug")
+            // Release artifacts are always signed with the private upload key.
+            signingConfigs.findByName("release")?.let {
+                signingConfig = it
+            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
+    }
+
+    packaging {
+        // Keep native libraries uncompressed. AGP 9 aligns them on 16 KB
+        // boundaries in both APKs and bundles.
+        jniLibs.useLegacyPackaging = false
     }
 }
 

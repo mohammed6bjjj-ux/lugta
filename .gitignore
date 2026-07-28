@@ -47,6 +47,7 @@ app.*.map.json
 # Local release artifacts (keep source in Git, binaries in release storage).
 /release/*.apk
 /release/*.apk.idsig
+/release/*.aab
 /release/*.ipa
 /release/*.xcarchive
 /release/*.xcarchive.zip

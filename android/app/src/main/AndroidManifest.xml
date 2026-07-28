@@ -2,10 +2,10 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Saving product media to the gallery. API 30+ writes through
-         MediaStore and needs no permission, so this is capped at 29. -->
+    <!-- Saving product media on Android 9 and older. Android 10+ uses
+         scoped MediaStore and does not receive broad storage access. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
+        android:maxSdkVersion="28" />
     <application
         android:label="لقطة"
         android:name="${applicationName}"
@@ -13,7 +13,9 @@
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
-        tools:targetApi="33"
+        android:localeConfig="@xml/locales_config"
+        android:supportsRtl="true"
+        tools:targetApi="36"
         android:usesCleartextTraffic="false"
         android:resizeableActivity="true"
         android:icon="@mipmap/ic_launcher"

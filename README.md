@@ -15,6 +15,9 @@
 ## التحقق
 
 ```text
-dart analyze
+flutter analyze
 flutter test
 ```
+
+متطلبات وفحوص إصدار Google Play موثقة في
+[`docs/google-play-release.md`](docs/google-play-release.md).
