@@ -87,6 +87,11 @@ class WizardStrings {
     'ئارەزوومەندانە — نرخی قاپەکە دەخرێتە سەر کڕیار و لە قازانجت کەم ناکرێتەوە.',
     'Optional — the box price is charged to the customer and does not reduce your profit.',
   );
+  static String get packagingImageHint => _t(
+    'اضغط علامة التكبير حتى تشوف صورة العلبة بحجم كامل.',
+    'لەسەر نیشانەی گەورەکردنەوە دابگرە بۆ ئەوەی وێنەی قاپەکە بە قەبارەی تەواو ببینیت.',
+    'Tap the zoom icon to view the box image full size.',
+  );
   static String get noPackaging => _t('بدون علبة', 'بێ قاپ', 'No packaging');
   static String get freePackaging => _t('مجانية', 'خۆڕایی', 'Free');
   static String get packagingChangedBeforeSubmit => _t(
