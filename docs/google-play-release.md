@@ -7,7 +7,7 @@ Package: `lugta.nawl.com`
 ## Build and technical requirements
 
 - Upload an Android App Bundle (`.aab`), not the universal APK.
-- Version `0.1.7+9` uses `compileSdk 36`, `targetSdk 36`, AGP 9, and NDK
+- Version `0.1.8+10` uses `compileSdk 36`, `targetSdk 36`, AGP 9, and NDK
   `28.2.13676358`.
 - The release task fails if `android/key.properties` or its private upload
   keystore is missing. It never falls back to Android's public debug key.

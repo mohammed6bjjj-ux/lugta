@@ -2,12 +2,17 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lugta's order and checkout flows require a touch interface. Declaring
+         this prevents Google Play from offering the phone app to TVs, cars,
+         and other non-touch form factors where the UI cannot be completed. -->
+    <uses-feature android:name="android.hardware.touchscreen"
+        android:required="true" />
     <!-- Saving product media on Android 9 and older. Android 10+ uses
          scoped MediaStore and does not receive broad storage access. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <application
-        android:label="لقطة"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
