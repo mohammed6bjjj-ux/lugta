@@ -61,6 +61,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   Governorate? _governorate;
+  DeliveryQuote? _deliveryQuote;
+  PackagingBox? _packagingBox;
+  bool _loadingDeliveryQuote = false;
 
   @override
   void initState() {
@@ -142,7 +145,11 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   int get _unitProfit => _salePrice - _averageWholesalePrice;
   int get _totalProfit => (_salePrice * _totalQuantity) - _wholesaleTotal;
 
-  int get _deliveryFee => _governorate?.deliveryFee ?? 0;
+  int get _deliveryFee =>
+      _deliveryQuote?.deliveryFee ?? _governorate?.deliveryFee ?? 0;
+  int get _baseDeliveryFee =>
+      _deliveryQuote?.baseDeliveryFee ?? _governorate?.deliveryFee ?? 0;
+  int get _packagingTotal => (_packagingBox?.price ?? 0) * _totalQuantity;
 
   bool get _nextEnabled {
     if (_submitting) return false;
@@ -160,6 +167,27 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       return;
     }
     setState(() => draft.quantity = quantity);
+  }
+
+  Future<void> _selectGovernorate(Governorate? governorate) async {
+    setState(() {
+      _governorate = governorate;
+      _deliveryQuote = null;
+      _loadingDeliveryQuote = governorate != null;
+    });
+    if (governorate == null) return;
+    try {
+      final quote = await session.quoteDeliveryFee(governorate.id);
+      if (!mounted || _governorate?.id != governorate.id) return;
+      setState(() {
+        _deliveryQuote = quote;
+        _loadingDeliveryQuote = false;
+      });
+    } catch (error) {
+      if (!mounted || _governorate?.id != governorate.id) return;
+      setState(() => _loadingDeliveryQuote = false);
+      _showSubmissionWarning(error.toString());
+    }
   }
 
   // ─────────────────────────── تنقّل الخطوات ───────────────────────────
@@ -235,6 +263,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     try {
       final results = await Future.wait<Object>([
         session.refreshProductById(_product.id),
+        session.refreshCatalog().then<Object>((_) => const Object()),
         session.refreshPublicData().then<Object>((_) => const Object()),
       ]);
       final latestProduct = results.first as Product;
@@ -262,12 +291,30 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         _showSubmissionWarning(WizardStrings.deliveryZoneUnavailable);
         return;
       }
+      final latestQuote = await session.quoteDeliveryFee(latestGovernorate.id);
+      if (!mounted) return;
       final deliveryFeeChanged =
-          latestGovernorate.deliveryFee != selectedGovernorate.deliveryFee;
+          latestQuote.deliveryFee != _deliveryFee ||
+          latestQuote.baseDeliveryFee != _baseDeliveryFee;
+      final packagingStillAvailable =
+          _packagingBox == null ||
+          (latestProduct.packagingEnabled &&
+              session.packagingBoxes.any((box) => box.id == _packagingBox!.id));
 
       _product = latestProduct;
       _drafts = reconciliation.drafts;
       _governorate = latestGovernorate;
+      _deliveryQuote = latestQuote;
+      if (!packagingStillAvailable) {
+        _packagingBox = null;
+        setState(() {
+          _submitting = false;
+          _forward = false;
+          _step = 0;
+        });
+        _showSubmissionWarning(WizardStrings.packagingChangedBeforeSubmit);
+        return;
+      }
       if (reconciliation.selectionAdjusted || reconciliation.tooManyLines) {
         setState(() {
           _submitting = false;
@@ -315,6 +362,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        packagingBox: _packagingBox,
       );
       if (!mounted) return;
       Navigator.of(
@@ -538,7 +586,69 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         ],
         const SizedBox(height: AppSpacing.sm),
         Entrance(index: 3 + _drafts.length, child: _buildQuantitySummaryCard()),
+        if (_product.packagingEnabled) ...[
+          const SizedBox(height: AppSpacing.md),
+          Entrance(index: 4 + _drafts.length, child: _buildPackagingSelector()),
+        ],
       ],
+    );
+  }
+
+  Widget _buildPackagingSelector() {
+    final theme = Theme.of(context);
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            WizardStrings.packagingTitle,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            WizardStrings.packagingSubtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              ChoiceChip(
+                label: Text(WizardStrings.noPackaging),
+                selected: _packagingBox == null,
+                onSelected: (_) => setState(() => _packagingBox = null),
+              ),
+              for (final box in session.packagingBoxes)
+                ChoiceChip(
+                  avatar: box.imageUrl.isEmpty
+                      ? const Icon(Icons.inventory_2_outlined, size: 18)
+                      : ClipOval(
+                          child: AppNetworkImage(
+                            box.imageUrl,
+                            width: 24,
+                            height: 24,
+                            fit: BoxFit.cover,
+                            borderRadius: BorderRadius.zero,
+                          ),
+                        ),
+                  label: Text(
+                    box.isFree
+                        ? '${box.name} · ${WizardStrings.freePackaging}'
+                        : '${box.name} · ${formatIqd(box.price)}',
+                  ),
+                  selected: _packagingBox?.id == box.id,
+                  onSelected: (_) => setState(() => _packagingBox = box),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1069,7 +1179,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                         ),
                       ),
                   ],
-                  onChanged: (g) => setState(() => _governorate = g),
+                  onChanged: (g) {
+                    _selectGovernorate(g);
+                  },
                   validator: (g) =>
                       g == null ? WizardStrings.selectGovernorate : null,
                 ),
@@ -1104,7 +1216,13 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                       const SizedBox(width: AppSpacing.sm),
                       Flexible(
                         child: Text(
-                          WizardStrings.deliveryFeeIs(formatIqd(_deliveryFee)),
+                          _loadingDeliveryQuote
+                              ? WizardStrings.checkingDeliveryOffer
+                              : (_deliveryQuote?.isFree == true
+                                    ? WizardStrings.freeDelivery
+                                    : WizardStrings.deliveryFeeIs(
+                                        formatIqd(_deliveryFee),
+                                      )),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.labelLarge?.copyWith(
@@ -1254,6 +1372,18 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                       ],
                     ),
                   ),
+                if (_packagingBox != null) ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.sm + 2),
+                    child: Divider(),
+                  ),
+                  _reviewInfoRow(
+                    Icons.inventory_2_outlined,
+                    _packagingBox!.isFree
+                        ? '${_packagingBox!.name} · ${WizardStrings.freePackaging}'
+                        : '${_packagingBox!.name} · ${formatIqd(_packagingTotal)}',
+                  ),
+                ],
               ],
             ),
           ),
@@ -1301,6 +1431,8 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
             wholesaleTotal: _wholesaleTotal,
             saleTotal: _salePrice * _totalQuantity,
             deliveryFee: _deliveryFee,
+            baseDeliveryFee: _baseDeliveryFee,
+            packagingTotal: _packagingTotal,
             quantity: _totalQuantity,
           ),
         ),

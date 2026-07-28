@@ -80,6 +80,20 @@ class WizardStrings {
     'کۆگا یان یەکێک لە جۆرەکانی بەرهەمەکە گۆڕاوە. بڕە نوێکراوەکان بپشکنە و دووبارە پشتڕاستی بکەوە.',
     'Stock or product options changed. Review the updated quantities, then confirm again.',
   );
+  static String get packagingTitle =>
+      _t('اختيار العلبة', 'هەڵبژاردنی قاپ', 'Choose packaging');
+  static String get packagingSubtitle => _t(
+    'اختياري — سعر العلبة يُضاف على الزبون ولا يُخصم من ربحك.',
+    'ئارەزوومەندانە — نرخی قاپەکە دەخرێتە سەر کڕیار و لە قازانجت کەم ناکرێتەوە.',
+    'Optional — the box price is charged to the customer and does not reduce your profit.',
+  );
+  static String get noPackaging => _t('بدون علبة', 'بێ قاپ', 'No packaging');
+  static String get freePackaging => _t('مجانية', 'خۆڕایی', 'Free');
+  static String get packagingChangedBeforeSubmit => _t(
+    'العلبة المختارة لم تعد متاحة. اختر علبة أخرى أو أكمل بدون علبة.',
+    'ئەو قاپەی هەڵتبژاردووە چیتر بەردەست نییە. قاپێکی تر هەڵبژێرە یان بەبێ قاپ بەردەوام بە.',
+    'The selected box is no longer available. Choose another one or continue without packaging.',
+  );
   static String get priceChangedBeforeSubmit => _t(
     'تغيّرت حدود سعر المنتج. راجع السعر المحدّث ثم أكّد الطلب من جديد.',
     'سنووری نرخی بەرهەمەکە گۆڕاوە. نرخە نوێکراوەکە بپشکنە و دووبارە پشتڕاستی بکەوە.',
@@ -180,6 +194,16 @@ class WizardStrings {
     'أجرة التوصيل: $amount',
     'کرێی گەیاندن: $amount',
     'Delivery fee: $amount',
+  );
+  static String get freeDelivery => _t(
+    'التوصيل مجاني لهذا الطلب',
+    'گەیاندن بۆ ئەم داواکارییە خۆڕاییە',
+    'Free delivery for this order',
+  );
+  static String get checkingDeliveryOffer => _t(
+    'جاري فحص عرض التوصيل...',
+    'پشکنینی ئۆفەری گەیاندن...',
+    'Checking delivery offer...',
   );
   static String get addressLabel => _t(
     'العنوان التفصيلي / أقرب نقطة دالة',

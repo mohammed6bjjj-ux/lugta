@@ -13,17 +13,25 @@ class PriceSummaryCard extends StatelessWidget {
     required this.saleTotal,
     required this.deliveryFee,
     this.quantity,
+    this.packagingTotal = 0,
+    this.baseDeliveryFee,
   });
 
   final int wholesaleTotal;
   final int saleTotal;
   final int deliveryFee;
+  final int packagingTotal;
+  final int? baseDeliveryFee;
 
   /// إن مُررت الكمية تُعرض في ترويسة البطاقة.
   final int? quantity;
 
   int get profit => saleTotal - wholesaleTotal;
-  int get customerTotal => saleTotal + deliveryFee;
+  int get customerTotal => saleTotal + packagingTotal + deliveryFee;
+  int get deliveryDiscount {
+    final discount = (baseDeliveryFee ?? deliveryFee) - deliveryFee;
+    return discount > 0 ? discount : 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +107,20 @@ class PriceSummaryCard extends StatelessWidget {
                   CoreStrings.deliveryFeeOnCustomer,
                   formatIqd(deliveryFee),
                 ),
+                if (deliveryDiscount > 0)
+                  _row(
+                    context,
+                    CoreStrings.deliveryDiscount,
+                    '- ${formatIqd(deliveryDiscount)}',
+                    valueColor: AppColors.success,
+                    bold: true,
+                  ),
+                if (packagingTotal > 0)
+                  _row(
+                    context,
+                    CoreStrings.packagingFeeOnCustomer,
+                    formatIqd(packagingTotal),
+                  ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
                   child: Divider(),

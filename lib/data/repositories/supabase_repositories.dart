@@ -795,7 +795,7 @@ class SupabaseCatalogRepository implements CatalogRepository {
     id, category_id, name_ar, name_ckb, name_en,
     description_ar, description_ckb, description_en, specifications,
     wholesale_price, old_wholesale_price, suggested_price,
-    min_sale_price, max_sale_price, is_new, created_at
+    min_sale_price, max_sale_price, is_new, packaging_enabled, created_at
   ''';
   static const _variantColumns = '''
     id, product_id, sku, name_ar, name_ckb, name_en,
@@ -1029,6 +1029,12 @@ class SupabaseCatalogRepository implements CatalogRepository {
               table: 'categories',
               callback: emitChange,
             )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'packaging_boxes',
+              callback: emitChange,
+            )
             .subscribe();
       },
       onCancel: () async {
@@ -1063,6 +1069,65 @@ class SupabaseCatalogRepository implements CatalogRepository {
         ),
     ];
   });
+
+  @override
+  Future<List<PackagingBox>> fetchPackagingBoxes() async => _guard(() async {
+    final rows = _maps(
+      await _readRetry.run(
+        () => _client
+            .from('packaging_boxes')
+            .select(
+              'id,name,price,image_bucket,image_path,sort_order,created_at',
+            )
+            .eq('is_active', true)
+            .order('sort_order')
+            .order('created_at')
+            .retry(enabled: false),
+      ),
+    );
+    final urls = _resolveAuthenticatedMediaUrls(
+      _client,
+      rows.map(
+        (row) => {
+          'bucket_name': row['image_bucket'],
+          'object_path': row['image_path'],
+        },
+      ),
+    );
+    return [
+      for (final row in rows)
+        PackagingBox(
+          id: _text(row['id']),
+          name: _text(row['name']),
+          price: _int(row['price']),
+          imageUrl:
+              urls['${_text(row['image_bucket'])}|'
+                  '${_text(row['image_path'])}'] ??
+              '',
+        ),
+    ];
+  });
+
+  @override
+  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) async =>
+      _guard(() async {
+        final row = _singleMap(
+          await _readRetry.run(
+            () => _client.rpc(
+              'quote_delivery_fee',
+              params: {'p_delivery_zone_id': deliveryZoneId},
+            ),
+          ),
+        );
+        return DeliveryQuote(
+          baseDeliveryFee: _int(row['base_delivery_fee']),
+          deliveryFee: _int(row['delivery_fee']),
+          deliveryDiscount: _int(row['delivery_discount']),
+          freeDeliveryReason: _nullableText(row['free_delivery_reason']),
+          campaignName: _nullableText(row['campaign_name']),
+          validUntil: _dateOrNull(row['valid_until']),
+        );
+      });
 
   @override
   Future<PublicContentSnapshot> fetchPublicContent() async => _guard(() async {
@@ -1187,7 +1252,8 @@ class SupabaseOrdersRepository implements OrdersRepository {
   static const _orderSelect = '''
     *,
     order_items(*),
-    order_events(*)
+    order_events(*),
+    order_complaints(*)
   ''';
 
   @override
@@ -1204,11 +1270,17 @@ class SupabaseOrdersRepository implements OrdersRepository {
     );
     final mediaUrls = _resolveAuthenticatedMediaUrls(
       _client,
-      itemRows.map(
-        (item) => {
-          'bucket_name': item['cover_bucket_snapshot'],
-          'object_path': item['cover_path_snapshot'],
-        },
+      itemRows.expand(
+        (item) => [
+          {
+            'bucket_name': item['cover_bucket_snapshot'],
+            'object_path': item['cover_path_snapshot'],
+          },
+          {
+            'bucket_name': item['packaging_bucket_snapshot'],
+            'object_path': item['packaging_path_snapshot'],
+          },
+        ],
       ),
     );
     return [for (final row in rows) _orderFromJson(row, mediaUrls)];
@@ -1235,6 +1307,8 @@ class SupabaseOrdersRepository implements OrdersRepository {
                 'variant_id': item.variant.id,
                 'quantity': item.quantity,
                 'unit_sale_price': request.unitSalePrice,
+                if (request.packagingBox != null)
+                  'packaging_box_id': request.packagingBox!.id,
               },
           ],
           'p_customer_alt_phone': request.customerPhone2?.trim().isEmpty == true
@@ -1262,11 +1336,17 @@ class SupabaseOrdersRepository implements OrdersRepository {
     final itemRows = _maps(row['order_items'] ?? const <Object>[]);
     final urls = _resolveAuthenticatedMediaUrls(
       _client,
-      itemRows.map(
-        (item) => {
-          'bucket_name': item['cover_bucket_snapshot'],
-          'object_path': item['cover_path_snapshot'],
-        },
+      itemRows.expand(
+        (item) => [
+          {
+            'bucket_name': item['cover_bucket_snapshot'],
+            'object_path': item['cover_path_snapshot'],
+          },
+          {
+            'bucket_name': item['packaging_bucket_snapshot'],
+            'object_path': item['packaging_path_snapshot'],
+          },
+        ],
       ),
     );
     return _orderFromJson(row, urls);
@@ -1321,6 +1401,27 @@ class SupabaseOrdersRepository implements OrdersRepository {
       );
     });
   }
+
+  @override
+  Future<OrderComplaint> createComplaint({
+    required String orderId,
+    required OrderComplaintKind kind,
+    required String subject,
+    required String message,
+    required String clientRequestId,
+  }) async => _guard(() async {
+    final result = await _client.rpc(
+      'create_order_complaint',
+      params: {
+        'p_order_id': orderId,
+        'p_kind': kind == OrderComplaintKind.report ? 'report' : 'complaint',
+        'p_subject': subject,
+        'p_message': message,
+        'p_idempotency_key': clientRequestId,
+      },
+    );
+    return _orderComplaintFromJson(_singleMap(result));
+  });
 }
 
 class SupabaseWalletRepository implements WalletRepository {
@@ -1780,6 +1881,7 @@ Product _productFromJson(
     minSalePrice: _intOrNull(row['min_sale_price']),
     maxSalePrice: _intOrNull(row['max_sale_price']),
     isNew: _bool(row['is_new']),
+    packagingEnabled: _bool(row['packaging_enabled']),
     createdAt: _date(row['created_at']),
   );
 }
@@ -1819,6 +1921,12 @@ Order _orderFromJson(Map<String, dynamic> row, Map<String, String> mediaUrls) {
         quantity: _int(item['quantity']),
         wholesaleUnitPrice: _int(item['unit_wholesale_price']),
         saleUnitPrice: _int(item['unit_sale_price']),
+        packagingBoxId: _nullableText(item['packaging_box_id']),
+        packagingName: _nullableText(item['packaging_name_snapshot']),
+        packagingImageUrl:
+            mediaUrls['${_text(item['packaging_bucket_snapshot'])}|'
+                '${_text(item['packaging_path_snapshot'])}'],
+        packagingUnitPrice: _int(item['unit_packaging_price']),
       ),
   ];
   final firstItem = itemRows.isEmpty ? <String, dynamic>{} : itemRows.first;
@@ -1838,6 +1946,17 @@ Order _orderFromJson(Map<String, dynamic> row, Map<String, String> mediaUrls) {
       fallback: items.isEmpty ? 0 : items.first.saleUnitPrice ?? 0,
     ),
     deliveryFee: _int(row['delivery_fee']),
+    baseDeliveryFee: _int(
+      row['base_delivery_fee'],
+      fallback: _int(row['delivery_fee']),
+    ),
+    deliveryDiscount: _int(row['delivery_discount']),
+    freeDeliveryReason: _nullableText(row['free_delivery_reason']),
+    packagingTotal: _int(row['packaging_total']),
+    complaints: [
+      for (final item in _maps(row['order_complaints'] ?? const <Object>[]))
+        _orderComplaintFromJson(item),
+    ],
     customerName: _text(row['customer_name']),
     customerPhone: _text(row['customer_phone']),
     customerPhone2: _nullableText(row['customer_alt_phone']),
@@ -1866,6 +1985,27 @@ Order _orderFromJson(Map<String, dynamic> row, Map<String, String> mediaUrls) {
     sellerPhoneSnapshot: _text(row['seller_phone_snapshot']),
   );
 }
+
+OrderComplaint _orderComplaintFromJson(Map<String, dynamic> row) =>
+    OrderComplaint(
+      id: _text(row['id']),
+      ticketNumber: _text(row['ticket_number']),
+      orderId: _text(row['order_id']),
+      kind: _text(row['kind']) == 'report'
+          ? OrderComplaintKind.report
+          : OrderComplaintKind.complaint,
+      subject: _text(row['subject']),
+      message: _text(row['message']),
+      status: switch (_text(row['status'])) {
+        'in_review' => OrderComplaintStatus.inReview,
+        'resolved' => OrderComplaintStatus.resolved,
+        'rejected' => OrderComplaintStatus.rejected,
+        _ => OrderComplaintStatus.open,
+      },
+      adminResponse: _nullableText(row['admin_response']),
+      createdAt: _date(row['created_at']),
+      reviewedAt: _dateOrNull(row['reviewed_at']),
+    );
 
 Withdrawal _withdrawalFromJson(Map<String, dynamic> row) => Withdrawal(
   id: _text(row['id']),

@@ -228,6 +228,49 @@ class OrdersStrings {
     'دەربارەی داواکارییەکە پەیوەندی بە پشتگیرییەوە بکە',
     'Contact support about this order',
   );
+  static String get addComplaintOrReport => _t(
+    'إضافة شكوى أو بلاغ',
+    'زیادکردنی سکاڵا یان ڕاپۆرت',
+    'Add complaint or report',
+  );
+  static String get complaintsTitle =>
+      _t('الشكاوى والبلاغات', 'سکاڵا و ڕاپۆرتەکان', 'Complaints & reports');
+  static String get complaintKind => _t('شكوى', 'سکاڵا', 'Complaint');
+  static String get reportKind => _t('بلاغ', 'ڕاپۆرت', 'Report');
+  static String get freePackaging => _t('مجانية', 'خۆڕایی', 'Free');
+  static String get complaintSubject =>
+      _t('عنوان مختصر', 'ناونیشانی کورت', 'Short subject');
+  static String get complaintDetails =>
+      _t('التفاصيل', 'وردەکارییەکان', 'Details');
+  static String get complaintDetailsHint => _t(
+    'اكتب المشكلة بوضوح حتى يستطيع فريق الإدارة متابعتها.',
+    'کێشەکە بە ڕوونی بنووسە بۆ ئەوەی تیمی بەڕێوەبەرایەتی بتوانێت بەدواداچوونی بۆ بکات.',
+    'Describe the issue clearly so the admin team can follow it up.',
+  );
+  static String get submitComplaint =>
+      _t('إرسال للإدارة', 'ناردن بۆ بەڕێوەبەرایەتی', 'Send to admin');
+  static String get complaintSent => _t(
+    'وصلت الشكوى أو البلاغ إلى الإدارة',
+    'سکاڵا یان ڕاپۆرتەکە گەیشتە بەڕێوەبەرایەتی',
+    'Your complaint or report reached the admin team',
+  );
+  static String get adminResponse =>
+      _t('رد الإدارة', 'وەڵامی بەڕێوەبەرایەتی', 'Admin response');
+  static String complaintStatus(OrderComplaintStatus status) =>
+      switch (status) {
+        OrderComplaintStatus.open => _t('جديدة', 'نوێ', 'Open'),
+        OrderComplaintStatus.inReview => _t(
+          'قيد المراجعة',
+          'لە پێداچوونەوەدایە',
+          'In review',
+        ),
+        OrderComplaintStatus.resolved => _t(
+          'تم الحل',
+          'چارەسەرکرا',
+          'Resolved',
+        ),
+        OrderComplaintStatus.rejected => _t('مرفوضة', 'ڕەتکراوە', 'Rejected'),
+      };
   static String supportChatOpened(String code) => _t(
     'تم فتح محادثة مع الدعم بخصوص الطلب $code',
     'گفتوگۆ لەگەڵ پشتگیری کرایەوە دەربارەی داواکاری $code',

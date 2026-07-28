@@ -224,6 +224,34 @@ class DemoCatalogRepository implements CatalogRepository {
       List.of(MockData.governorates);
 
   @override
+  Future<List<PackagingBox>> fetchPackagingBoxes() async => const [
+    PackagingBox(
+      id: 'demo-box-free',
+      name: 'علبة قياسية',
+      price: 0,
+      imageUrl: '',
+    ),
+    PackagingBox(
+      id: 'demo-box-premium',
+      name: 'علبة هدية فاخرة',
+      price: 5000,
+      imageUrl: '',
+    ),
+  ];
+
+  @override
+  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) async {
+    final governorate = MockData.governorates.firstWhere(
+      (item) => item.id == deliveryZoneId,
+    );
+    return DeliveryQuote(
+      baseDeliveryFee: governorate.deliveryFee,
+      deliveryFee: governorate.deliveryFee,
+      deliveryDiscount: 0,
+    );
+  }
+
+  @override
   Future<PublicContentSnapshot> fetchPublicContent() async =>
       PublicContentSnapshot(
         banners: List.of(MockData.banners),
@@ -285,11 +313,19 @@ class DemoOrdersRepository implements OrdersRepository {
             variantName: draft.variant.nameAr,
             imageUrl: draft.variant.imageUrl,
             quantity: draft.quantity,
+            packagingBoxId: request.packagingBox?.id,
+            packagingName: request.packagingBox?.name,
+            packagingImageUrl: request.packagingBox?.imageUrl,
+            packagingUnitPrice: request.packagingBox?.price ?? 0,
           ),
       ],
       wholesalePrice: request.product.wholesalePrice,
       unitSalePrice: request.unitSalePrice,
       deliveryFee: request.governorate.deliveryFee,
+      baseDeliveryFee: request.governorate.deliveryFee,
+      packagingTotal:
+          (request.packagingBox?.price ?? 0) *
+          request.items.fold(0, (sum, item) => sum + item.quantity),
       customerName: request.customerName,
       customerPhone: request.customerPhone,
       customerPhone2: request.customerPhone2,
@@ -338,6 +374,62 @@ class DemoOrdersRepository implements OrdersRepository {
     required Map<String, dynamic> proposedChanges,
     required String clientRequestId,
   }) async {}
+
+  @override
+  Future<OrderComplaint> createComplaint({
+    required String orderId,
+    required OrderComplaintKind kind,
+    required String subject,
+    required String message,
+    required String clientRequestId,
+  }) async {
+    final index = _orders.indexWhere((order) => order.id == orderId);
+    if (index == -1) throw const BackendException('الطلب غير موجود.');
+    final complaint = OrderComplaint(
+      id: 'demo-complaint-${DateTime.now().microsecondsSinceEpoch}',
+      ticketNumber: 'CMP-DEMO',
+      orderId: orderId,
+      kind: kind,
+      subject: subject,
+      message: message,
+      status: OrderComplaintStatus.open,
+      createdAt: DateTime.now(),
+    );
+    final order = _orders[index];
+    _orders[index] = Order(
+      id: order.id,
+      code: order.code,
+      productId: order.productId,
+      productName: order.productName,
+      productImage: order.productImage,
+      items: order.items,
+      wholesalePrice: order.wholesalePrice,
+      unitSalePrice: order.unitSalePrice,
+      deliveryFee: order.deliveryFee,
+      baseDeliveryFee: order.baseDeliveryFee,
+      deliveryDiscount: order.deliveryDiscount,
+      freeDeliveryReason: order.freeDeliveryReason,
+      packagingTotal: order.packagingTotal,
+      complaints: [...order.complaints, complaint],
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerPhone2: order.customerPhone2,
+      governorateName: order.governorateName,
+      regionName: order.regionName,
+      addressDetails: order.addressDetails,
+      landmark: order.landmark,
+      notes: order.notes,
+      deliveryCompany: order.deliveryCompany,
+      trackingNumber: order.trackingNumber,
+      status: order.status,
+      statusHistory: order.statusHistory,
+      failReason: order.failReason,
+      createdAt: order.createdAt,
+      storeNameSnapshot: order.storeNameSnapshot,
+      sellerPhoneSnapshot: order.sellerPhoneSnapshot,
+    );
+    return complaint;
+  }
 }
 
 class DemoWalletRepository implements WalletRepository {

@@ -74,6 +74,7 @@ class AppSession extends ChangeNotifier {
   AccountDeletionRequest? accountDeletionRequest;
   List<Category> categories = List.of(MockData.categories);
   List<Product> products = List.of(MockData.products);
+  List<PackagingBox> packagingBoxes = const <PackagingBox>[];
   List<Governorate> governorates = List.of(MockData.governorates);
   List<PromoBanner> banners = List.of(MockData.banners);
   List<FaqItem> faq = List.of(MockData.faq);
@@ -168,6 +169,7 @@ class AppSession extends ChangeNotifier {
       accountDeletionRequest = null;
       categories = [];
       products = [];
+      packagingBoxes = [];
       governorates = [];
       banners = [];
       faq = [];
@@ -414,6 +416,7 @@ class AppSession extends ChangeNotifier {
     if (seller.status == AccountStatus.deleted) {
       accountDeletionRequest = null;
       products = [];
+      packagingBoxes = [];
       categories = [];
       orders = [];
       transactions = [];
@@ -443,6 +446,7 @@ class AppSession extends ChangeNotifier {
       await deletionRefresh;
       if (!_isCurrent(scope)) return;
       products = [];
+      packagingBoxes = [];
       categories = [];
       orders = [];
       transactions = [];
@@ -545,10 +549,13 @@ class AppSession extends ChangeNotifier {
     _listenForCatalogChanges(scope);
     List<Category>? fetchedCategories;
     List<Product>? fetchedProducts;
+    List<PackagingBox>? fetchedPackagingBoxes;
     Object? categoriesError;
     StackTrace? categoriesStackTrace;
     Object? productsError;
     StackTrace? productsStackTrace;
+    Object? packagingError;
+    StackTrace? packagingStackTrace;
     await Future.wait<void>([
       scope.repositories.catalog.fetchCategories().then<void>(
         (value) => fetchedCategories = value,
@@ -564,6 +571,13 @@ class AppSession extends ChangeNotifier {
           productsStackTrace = stackTrace;
         },
       ),
+      scope.repositories.catalog.fetchPackagingBoxes().then<void>(
+        (value) => fetchedPackagingBoxes = value,
+        onError: (Object error, StackTrace stackTrace) {
+          packagingError = error;
+          packagingStackTrace = stackTrace;
+        },
+      ),
     ]);
     if (!_isCurrent(scope) || seller.status != AccountStatus.approved) return;
 
@@ -571,7 +585,12 @@ class AppSession extends ChangeNotifier {
     // temporarily unavailable, but only a complete revision reaches disk.
     if (fetchedCategories != null) categories = fetchedCategories!;
     if (fetchedProducts != null) products = fetchedProducts!;
-    if (fetchedCategories != null || fetchedProducts != null) {
+    if (fetchedPackagingBoxes != null) {
+      packagingBoxes = fetchedPackagingBoxes!;
+    }
+    if (fetchedCategories != null ||
+        fetchedProducts != null ||
+        fetchedPackagingBoxes != null) {
       notifyListeners();
     }
     if (fetchedCategories != null && fetchedProducts != null) {
@@ -584,6 +603,9 @@ class AppSession extends ChangeNotifier {
     }
     if (productsError != null) {
       Error.throwWithStackTrace(productsError!, productsStackTrace!);
+    }
+    if (packagingError != null) {
+      Error.throwWithStackTrace(packagingError!, packagingStackTrace!);
     }
   }
 
@@ -863,6 +885,7 @@ class AppSession extends ChangeNotifier {
     String? customerPhone2,
     required String addressDetails,
     String? notes,
+    PackagingBox? packagingBox,
   }) async {
     final scope = _requireAuthenticatedScope();
     final order = await scope.repositories.orders.createOrder(
@@ -877,6 +900,7 @@ class AppSession extends ChangeNotifier {
         customerPhone2: customerPhone2,
         addressDetails: addressDetails,
         notes: notes,
+        packagingBox: packagingBox,
       ),
     );
     _ensureCurrent(scope);
@@ -884,6 +908,34 @@ class AppSession extends ChangeNotifier {
     orders.insert(0, order);
     notifyListeners();
     return order;
+  }
+
+  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) {
+    final scope = _requireAuthenticatedScope();
+    if (seller.status != AccountStatus.approved) {
+      throw const BackendException('Seller account is not approved.');
+    }
+    return scope.repositories.catalog.quoteDeliveryFee(deliveryZoneId);
+  }
+
+  Future<OrderComplaint> createOrderComplaint({
+    required String orderId,
+    required OrderComplaintKind kind,
+    required String subject,
+    required String message,
+    String? clientRequestId,
+  }) async {
+    final scope = _requireAuthenticatedScope();
+    final complaint = await scope.repositories.orders.createComplaint(
+      orderId: orderId,
+      kind: kind,
+      subject: subject,
+      message: message,
+      clientRequestId: clientRequestId ?? _newRequestId(),
+    );
+    _ensureCurrent(scope);
+    await refreshOrderById(orderId);
+    return complaint;
   }
 
   Future<void> cancelOrder(String orderId, {String? clientRequestId}) async {
@@ -1206,6 +1258,7 @@ class AppSession extends ChangeNotifier {
     seller = _emptySeller();
     accountDeletionRequest = null;
     products = [];
+    packagingBoxes = [];
     categories = [];
     orders = [];
     transactions = [];

@@ -352,6 +352,21 @@ class _IdempotentOrdersRepository implements OrdersRepository {
       clientRequestId: clientRequestId,
     );
   }
+
+  @override
+  Future<OrderComplaint> createComplaint({
+    required String orderId,
+    required OrderComplaintKind kind,
+    required String subject,
+    required String message,
+    required String clientRequestId,
+  }) => _delegate.createComplaint(
+    orderId: orderId,
+    kind: kind,
+    subject: subject,
+    message: message,
+    clientRequestId: clientRequestId,
+  );
 }
 
 class _MutationThenReadFailureWalletRepository implements WalletRepository {

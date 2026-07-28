@@ -189,6 +189,7 @@ class Product {
     this.nameEn,
     this.descriptionCkb,
     this.descriptionEn,
+    this.packagingEnabled = false,
   });
 
   final String id;
@@ -220,6 +221,7 @@ class Product {
 
   final int ordersCount;
   final bool isNew;
+  final bool packagingEnabled;
   final DateTime createdAt;
 
   int get totalStock => variants.fold(0, (sum, v) => sum + v.stock);
@@ -292,6 +294,42 @@ class Governorate {
     AppLanguage.en => nameEn?.trim().isNotEmpty == true ? nameEn! : nameAr,
     AppLanguage.ar => nameAr,
   };
+}
+
+class PackagingBox {
+  const PackagingBox({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.imageUrl,
+  });
+
+  final String id;
+  final String name;
+  final int price;
+  final String imageUrl;
+
+  bool get isFree => price == 0;
+}
+
+class DeliveryQuote {
+  const DeliveryQuote({
+    required this.baseDeliveryFee,
+    required this.deliveryFee,
+    required this.deliveryDiscount,
+    this.freeDeliveryReason,
+    this.campaignName,
+    this.validUntil,
+  });
+
+  final int baseDeliveryFee;
+  final int deliveryFee;
+  final int deliveryDiscount;
+  final String? freeDeliveryReason;
+  final String? campaignName;
+  final DateTime? validUntil;
+
+  bool get isFree => baseDeliveryFee > 0 && deliveryFee == 0;
 }
 
 /// آلة حالات الطلب الموحّدة (10 حالات).
@@ -394,6 +432,10 @@ class OrderItem {
     required this.quantity,
     this.wholesaleUnitPrice,
     this.saleUnitPrice,
+    this.packagingBoxId,
+    this.packagingName,
+    this.packagingImageUrl,
+    this.packagingUnitPrice = 0,
   });
 
   final String variantId;
@@ -402,6 +444,40 @@ class OrderItem {
   final int quantity;
   final int? wholesaleUnitPrice;
   final int? saleUnitPrice;
+  final String? packagingBoxId;
+  final String? packagingName;
+  final String? packagingImageUrl;
+  final int packagingUnitPrice;
+}
+
+enum OrderComplaintKind { complaint, report }
+
+enum OrderComplaintStatus { open, inReview, resolved, rejected }
+
+class OrderComplaint {
+  const OrderComplaint({
+    required this.id,
+    required this.ticketNumber,
+    required this.orderId,
+    required this.kind,
+    required this.subject,
+    required this.message,
+    required this.status,
+    required this.createdAt,
+    this.adminResponse,
+    this.reviewedAt,
+  });
+
+  final String id;
+  final String ticketNumber;
+  final String orderId;
+  final OrderComplaintKind kind;
+  final String subject;
+  final String message;
+  final OrderComplaintStatus status;
+  final String? adminResponse;
+  final DateTime createdAt;
+  final DateTime? reviewedAt;
 }
 
 class Order {
@@ -431,6 +507,11 @@ class Order {
     this.failReason,
     this.deliveryCompany,
     this.trackingNumber,
+    this.baseDeliveryFee = 0,
+    this.deliveryDiscount = 0,
+    this.freeDeliveryReason,
+    this.packagingTotal = 0,
+    this.complaints = const <OrderComplaint>[],
   });
 
   final String id;
@@ -452,6 +533,11 @@ class Order {
 
   /// أجرة التوصيل وقت إنشاء الطلب.
   final int deliveryFee;
+  final int baseDeliveryFee;
+  final int deliveryDiscount;
+  final String? freeDeliveryReason;
+  final int packagingTotal;
+  final List<OrderComplaint> complaints;
 
   // ── لقطة إخفاء المورد: تُطبع على بوليصة الشحن باسم متجر البائع ──
   final String storeNameSnapshot;
@@ -492,8 +578,8 @@ class Order {
   /// ربح البائع = (سعر البيع − سعر الجملة) × الكمية.
   int get profit => saleTotal - wholesaleTotal;
 
-  /// المبلغ النهائي على الزبون = إجمالي البيع + أجرة التوصيل.
-  int get customerTotal => saleTotal + deliveryFee;
+  /// المبلغ النهائي على الزبون = البيع + التعليب + أجرة التوصيل.
+  int get customerTotal => saleTotal + packagingTotal + deliveryFee;
 
   /// يحق للبائع الإلغاء المباشر خلال الساعة الأولى فقط، وبعدها يرسل
   /// طلب إلغاء تراجعه الإدارة ما دام الطلب لم يُشحن.
@@ -519,6 +605,11 @@ class Order {
     wholesalePrice: wholesalePrice,
     unitSalePrice: unitSalePrice,
     deliveryFee: deliveryFee,
+    baseDeliveryFee: baseDeliveryFee,
+    deliveryDiscount: deliveryDiscount,
+    freeDeliveryReason: freeDeliveryReason,
+    packagingTotal: packagingTotal,
+    complaints: complaints,
     customerName: customerName,
     customerPhone: customerPhone,
     customerPhone2: customerPhone2,

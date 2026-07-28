@@ -36,6 +36,7 @@ class CreateOrderRequest {
     required this.addressDetails,
     this.customerPhone2,
     this.notes,
+    this.packagingBox,
   });
 
   final String clientRequestId;
@@ -48,6 +49,7 @@ class CreateOrderRequest {
   final String? customerPhone2;
   final String addressDetails;
   final String? notes;
+  final PackagingBox? packagingBox;
 }
 
 class CreateWithdrawalRequest {
@@ -184,6 +186,8 @@ abstract interface class CatalogRepository {
   Future<Product> fetchProduct(String productId);
   Stream<void> watchCatalogChanges();
   Future<List<Governorate>> fetchDeliveryZones();
+  Future<List<PackagingBox>> fetchPackagingBoxes();
+  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId);
   Future<PublicContentSnapshot> fetchPublicContent();
   Future<Set<String>> fetchFavoriteProductIds();
   Future<Set<String>> fetchStockAlertProductIds();
@@ -201,6 +205,13 @@ abstract interface class OrdersRepository {
     required OrderChangeRequestType type,
     required String reason,
     required Map<String, dynamic> proposedChanges,
+    required String clientRequestId,
+  });
+  Future<OrderComplaint> createComplaint({
+    required String orderId,
+    required OrderComplaintKind kind,
+    required String subject,
+    required String message,
     required String clientRequestId,
   });
 }

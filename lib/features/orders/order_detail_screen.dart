@@ -153,6 +153,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  Future<void> _openComplaintSheet(Order order) async {
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _ComplaintSheet(order: order),
+    );
+    if (sent == true && mounted) {
+      _showSnack(OrdersStrings.complaintSent);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -173,7 +184,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 AppSpacing.md,
                 AppSpacing.md,
                 AppSpacing.md,
-                170,
+                220,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,6 +233,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       wholesaleTotal: order.wholesaleTotal,
                       saleTotal: order.saleTotal,
                       deliveryFee: order.deliveryFee,
+                      baseDeliveryFee: order.baseDeliveryFee,
+                      packagingTotal: order.packagingTotal,
                       quantity: order.totalQuantity,
                     ),
                   ),
@@ -230,6 +243,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     index: 5,
                     child: _StoreNameNotice(storeName: order.storeNameSnapshot),
                   ),
+                  if (order.complaints.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    Entrance(
+                      index: 6,
+                      child: _SectionCard(
+                        title: OrdersStrings.complaintsTitle,
+                        icon: Icons.report_problem_outlined,
+                        child: _ComplaintsCard(complaints: order.complaints),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -283,6 +307,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                 ],
+                SecondaryButton(
+                  label: OrdersStrings.addComplaintOrReport,
+                  icon: Icons.report_problem_outlined,
+                  onPressed: () => _openComplaintSheet(order),
+                ),
+                const SizedBox(height: AppSpacing.xs),
                 TextButton.icon(
                   onPressed: () => _contactSupport(order),
                   icon: const Icon(Icons.support_agent_rounded, size: 20),
@@ -886,6 +916,28 @@ class _ProductItemsCard extends StatelessWidget {
               ),
             ],
           ),
+          if (order.items[i].packagingName != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 52),
+              child: Row(
+                children: [
+                  const Icon(Icons.inventory_2_outlined, size: 17),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      '${order.items[i].packagingName} · '
+                      '${order.items[i].packagingUnitPrice == 0 ? OrdersStrings.freePackaging : formatIqd(order.items[i].packagingUnitPrice)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -1089,6 +1141,203 @@ class _StoreNameNotice extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ComplaintsCard extends StatelessWidget {
+  const _ComplaintsCard({required this.complaints});
+
+  final List<OrderComplaint> complaints;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        for (final (index, complaint) in complaints.indexed) ...[
+          if (index > 0) const Divider(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  complaint.subject,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                OrdersStrings.complaintStatus(complaint.status),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: AppColors.goldDark,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${complaint.ticketNumber} · '
+            '${complaint.kind == OrderComplaintKind.report ? OrdersStrings.reportKind : OrdersStrings.complaintKind}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(complaint.message),
+          ),
+          if (complaint.adminResponse?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.sm + 2),
+              decoration: BoxDecoration(
+                color: AppColors.successSoft,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                '${OrdersStrings.adminResponse}: ${complaint.adminResponse}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _ComplaintSheet extends StatefulWidget {
+  const _ComplaintSheet({required this.order});
+
+  final Order order;
+
+  @override
+  State<_ComplaintSheet> createState() => _ComplaintSheetState();
+}
+
+class _ComplaintSheetState extends State<_ComplaintSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _subjectController = TextEditingController();
+  final _messageController = TextEditingController();
+  late final String _clientRequestId = newUuidV4();
+  OrderComplaintKind _kind = OrderComplaintKind.complaint;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _subjectController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_submitting || !(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _submitting = true);
+    try {
+      await session.createOrderComplaint(
+        orderId: widget.order.id,
+        kind: _kind,
+        subject: _subjectController.text.trim(),
+        message: _messageController.text.trim(),
+        clientRequestId: _clientRequestId,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.md,
+        ),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${OrdersStrings.addComplaintOrReport} · ${widget.order.code}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                SegmentedButton<OrderComplaintKind>(
+                  segments: [
+                    ButtonSegment(
+                      value: OrderComplaintKind.complaint,
+                      label: Text(OrdersStrings.complaintKind),
+                      icon: const Icon(Icons.chat_bubble_outline),
+                    ),
+                    ButtonSegment(
+                      value: OrderComplaintKind.report,
+                      label: Text(OrdersStrings.reportKind),
+                      icon: const Icon(Icons.flag_outlined),
+                    ),
+                  ],
+                  selected: {_kind},
+                  onSelectionChanged: (value) {
+                    setState(() => _kind = value.first);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: _subjectController,
+                  maxLength: 160,
+                  decoration: InputDecoration(
+                    labelText: OrdersStrings.complaintSubject,
+                  ),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? OrdersStrings.reasonRequired
+                      : null,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                TextFormField(
+                  controller: _messageController,
+                  minLines: 4,
+                  maxLines: 7,
+                  maxLength: 4000,
+                  decoration: InputDecoration(
+                    labelText: OrdersStrings.complaintDetails,
+                    hintText: OrdersStrings.complaintDetailsHint,
+                    alignLabelWithHint: true,
+                  ),
+                  validator: (value) =>
+                      value == null || value.trim().length < 10
+                      ? OrdersStrings.reasonRequired
+                      : null,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                PrimaryButton(
+                  label: OrdersStrings.submitComplaint,
+                  icon: Icons.send_outlined,
+                  loading: _submitting,
+                  onPressed: _submitting ? null : _submit,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
