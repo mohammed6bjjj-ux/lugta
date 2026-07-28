@@ -87,11 +87,32 @@ class WizardStrings {
     'ئارەزوومەندانە — نرخی قاپەکە دەخرێتە سەر کڕیار و لە قازانجت کەم ناکرێتەوە.',
     'Optional — the box price is charged to the customer and does not reduce your profit.',
   );
-  static String get packagingImageHint => _t(
-    'اضغط علامة التكبير حتى تشوف صورة العلبة بحجم كامل.',
-    'لەسەر نیشانەی گەورەکردنەوە دابگرە بۆ ئەوەی وێنەی قاپەکە بە قەبارەی تەواو ببینیت.',
-    'Tap the zoom icon to view the box image full size.',
+  static String get showAvailablePackaging => _t(
+    'عرض العلب المتوفرة',
+    'پیشاندانی قاپە بەردەستەکان',
+    'Show available boxes',
   );
+  static String get changePackaging =>
+      _t('تغيير العلبة', 'گۆڕینی قاپ', 'Change box');
+  static String get availablePackaging =>
+      _t('العلب المتوفرة', 'قاپە بەردەستەکان', 'Available boxes');
+  static String get packagingListHint => _t(
+    'اختر العلبة المناسبة حتى تظهر صورتها وسعرها ضمن الطلب.',
+    'قاپی گونجاو هەڵبژێرە تا وێنە و نرخەکەی لە داواکارییەکەدا پیشان بدرێت.',
+    'Choose a box to show its image and price in the order.',
+  );
+  static String get noPackagingAvailable => _t(
+    'لا توجد علب متوفرة حالياً.',
+    'لە ئێستادا هیچ قاپێک بەردەست نییە.',
+    'No boxes are currently available.',
+  );
+  static String get noPackagingSelected => _t(
+    'لم تختر علبة — اضغط الزر لمشاهدة الخيارات.',
+    'هیچ قاپێکت هەڵنەبژاردووە — بۆ بینینی هەڵبژاردەکان دوگمەکە دابگرە.',
+    'No box selected — tap the button to see the options.',
+  );
+  static String get selectedPackaging =>
+      _t('العلبة المختارة', 'قاپی هەڵبژێردراو', 'Selected box');
   static String get noPackaging => _t('بدون علبة', 'بێ قاپ', 'No packaging');
   static String get freePackaging => _t('مجانية', 'خۆڕایی', 'Free');
   static String get packagingChangedBeforeSubmit => _t(

@@ -597,7 +597,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   Widget _buildPackagingSelector() {
     final theme = Theme.of(context);
     final boxes = session.packagingBoxes;
-    final withoutPackagingSelected = _packagingBox == null;
+    final selectedBox = _packagingBox;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -616,138 +616,114 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
               height: 1.5,
             ),
           ),
-          if (boxes.any((box) => box.imageUrl.isNotEmpty)) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Icon(
-                  Icons.zoom_in_rounded,
-                  size: 17,
-                  color: AppColors.goldDark,
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    WizardStrings.packagingImageHint,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppColors.goldDark,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
           const SizedBox(height: AppSpacing.md),
-          Semantics(
-            button: true,
-            selected: withoutPackagingSelected,
-            child: AnimatedContainer(
-              key: const ValueKey('packaging_none'),
-              duration: AppDurations.base,
-              curve: AppCurves.emphasized,
+          if (boxes.isEmpty)
+            Container(
+              key: const ValueKey('packaging_empty_state'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: withoutPackagingSelected
-                    ? AppColors.goldSoft
-                    : AppColors.surfaceAlt,
+                color: AppColors.surfaceAlt,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: withoutPackagingSelected
-                      ? AppColors.gold
-                      : AppColors.divider,
-                  width: withoutPackagingSelected ? 1.6 : 1,
-                ),
+                border: Border.all(color: AppColors.divider),
               ),
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  onTap: () => setState(() => _packagingBox = null),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm + 4,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      WizardStrings.noPackagingAvailable,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        AnimatedContainer(
-                          duration: AppDurations.base,
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: withoutPackagingSelected
-                                ? AppColors.gold
-                                : AppColors.surface,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            withoutPackagingSelected
-                                ? Icons.check_rounded
-                                : Icons.block_rounded,
-                            color: withoutPackagingSelected
-                                ? Colors.white
-                                : AppColors.textSecondary,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm + 4),
-                        Expanded(
-                          child: Text(
-                            WizardStrings.noPackaging,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: withoutPackagingSelected
-                                  ? AppColors.goldDark
-                                  : AppColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            if (selectedBox != null) ...[
+              _SelectedPackagingCard(
+                box: selectedBox,
+                onPreview: selectedBox.imageUrl.isEmpty
+                    ? null
+                    : () => _showPackagingPreview(selectedBox),
+              ),
+              const SizedBox(height: AppSpacing.sm + 4),
+            ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const ValueKey('packaging_picker_button'),
+                onPressed: _openPackagingPicker,
+                icon: Icon(
+                  selectedBox == null
+                      ? Icons.inventory_2_outlined
+                      : Icons.swap_horiz_rounded,
+                ),
+                label: Text(
+                  selectedBox == null
+                      ? WizardStrings.showAvailablePackaging
+                      : WizardStrings.changePackaging,
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.gold,
+                  side: BorderSide(color: AppColors.gold, width: 1.4),
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  textStyle: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
             ),
-          ),
-          if (boxes.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm + 4),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final columnCount = constraints.maxWidth >= 620
-                    ? 3
-                    : constraints.maxWidth >= 330
-                    ? 2
-                    : 1;
-                const gap = AppSpacing.sm + 4;
-                final tileWidth =
-                    (constraints.maxWidth - (columnCount - 1) * gap) /
-                    columnCount;
-                return Wrap(
-                  spacing: gap,
-                  runSpacing: gap,
-                  children: [
-                    for (final box in boxes)
-                      SizedBox(
-                        width: tileWidth,
-                        child: _PackagingBoxCard(
-                          key: ValueKey('packaging_box_${box.id}'),
-                          box: box,
-                          selected: _packagingBox?.id == box.id,
-                          onSelected: () => setState(() => _packagingBox = box),
-                          onPreview: box.imageUrl.isEmpty
-                              ? null
-                              : () => _showPackagingPreview(box),
-                        ),
+            if (selectedBox == null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 17,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      WizardStrings.noPackagingSelected,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
                       ),
-                  ],
-                );
-              },
-            ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ],
       ),
     );
+  }
+
+  Future<void> _openPackagingPicker() async {
+    final selection = await showModalBottomSheet<_PackagingSelection>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _PackagingPickerSheet(
+        boxes: session.packagingBoxes,
+        selectedBoxId: _packagingBox?.id,
+      ),
+    );
+    if (!mounted || selection == null) return;
+    setState(() => _packagingBox = selection.box);
   }
 
   Future<void> _showPackagingPreview(PackagingBox box) {
@@ -1947,19 +1923,301 @@ class _PulseRingState extends State<_PulseRing>
   }
 }
 
-class _PackagingBoxCard extends StatelessWidget {
-  const _PackagingBoxCard({
+class _PackagingSelection {
+  const _PackagingSelection(this.box);
+
+  final PackagingBox? box;
+}
+
+class _SelectedPackagingCard extends StatelessWidget {
+  const _SelectedPackagingCard({required this.box, this.onPreview});
+
+  final PackagingBox box;
+  final VoidCallback? onPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final priceLabel = box.isFree
+        ? WizardStrings.freePackaging
+        : formatIqd(box.price);
+
+    return Semantics(
+      selected: true,
+      label: '${WizardStrings.selectedPackaging}: ${box.name}, $priceLabel',
+      child: AnimatedContainer(
+        key: const ValueKey('packaging_selected_details'),
+        duration: AppDurations.base,
+        curve: AppCurves.emphasized,
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: AppColors.goldSoft,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+            color: AppColors.gold.withValues(alpha: .7),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Material(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                key: const ValueKey('packaging_selected_preview'),
+                onTap: onPreview,
+                child: Stack(
+                  alignment: AlignmentDirectional.bottomEnd,
+                  children: [
+                    AppNetworkImage(
+                      box.imageUrl,
+                      width: 92,
+                      height: 92,
+                      fit: BoxFit.cover,
+                      fallbackIcon: Icons.inventory_2_outlined,
+                    ),
+                    if (onPreview != null)
+                      Container(
+                        margin: const EdgeInsets.all(6),
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: .65),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.zoom_in_rounded,
+                          color: Colors.white,
+                          size: 17,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      WizardStrings.selectedPackaging,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    box.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    priceLabel,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: box.isFree
+                          ? AppColors.success
+                          : AppColors.goldDark,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PackagingPickerSheet extends StatelessWidget {
+  const _PackagingPickerSheet({
+    required this.boxes,
+    required this.selectedBoxId,
+  });
+
+  final List<PackagingBox> boxes;
+  final String? selectedBoxId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    return FractionallySizedBox(
+      heightFactor: .82,
+      child: Container(
+        key: const ValueKey('packaging_picker_sheet'),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
+          ),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          WizardStrings.availablePackaging,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          WizardStrings.packagingListHint,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    key: const ValueKey('packaging_picker_close'),
+                    tooltip: WizardStrings.closeTooltip,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  bottomInset + AppSpacing.lg,
+                ),
+                itemCount: boxes.length + 1,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(height: AppSpacing.sm),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    final selected = selectedBoxId == null;
+                    return Semantics(
+                      button: true,
+                      selected: selected,
+                      child: Material(
+                        key: const ValueKey('packaging_none'),
+                        color: selected
+                            ? AppColors.goldSoft
+                            : AppColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          onTap: () => Navigator.of(
+                            context,
+                          ).pop(const _PackagingSelection(null)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 54,
+                                  height: 54,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.sm,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.block_rounded,
+                                    color: selected
+                                        ? AppColors.goldDark
+                                        : AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Text(
+                                    WizardStrings.noPackaging,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                                _PackagingSelectionMark(selected: selected),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  final box = boxes[index - 1];
+                  return _PackagingPickerTile(
+                    key: ValueKey('packaging_box_${box.id}'),
+                    box: box,
+                    selected: box.id == selectedBoxId,
+                    onTap: () =>
+                        Navigator.of(context).pop(_PackagingSelection(box)),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PackagingPickerTile extends StatelessWidget {
+  const _PackagingPickerTile({
     super.key,
     required this.box,
     required this.selected,
-    required this.onSelected,
-    this.onPreview,
+    required this.onTap,
   });
 
   final PackagingBox box;
   final bool selected;
-  final VoidCallback onSelected;
-  final VoidCallback? onPreview;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1977,116 +2235,94 @@ class _PackagingBoxCard extends StatelessWidget {
         duration: AppDurations.base,
         curve: AppCurves.emphasized,
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: selected ? AppColors.goldSoft : AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: selected ? AppColors.gold : AppColors.divider,
-            width: selected ? 2 : 1,
+            width: selected ? 1.8 : 1,
           ),
-          boxShadow: selected ? AppShadows.goldGlow : AppShadows.card,
         ),
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.md),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: onSelected,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Stack(
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 1.18,
-                      child: AppNetworkImage(
-                        box.imageUrl,
-                        fit: BoxFit.cover,
-                        fallbackIcon: Icons.inventory_2_outlined,
-                      ),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: AppNetworkImage(
+                      box.imageUrl,
+                      width: 86,
+                      height: 86,
+                      fit: BoxFit.cover,
+                      fallbackIcon: Icons.inventory_2_outlined,
                     ),
-                    if (selected)
-                      PositionedDirectional(
-                        top: AppSpacing.sm,
-                        end: AppSpacing.sm,
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: AppColors.gold,
-                            shape: BoxShape.circle,
-                            boxShadow: AppShadows.card,
-                          ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            size: 19,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    if (onPreview != null)
-                      PositionedDirectional(
-                        bottom: AppSpacing.sm,
-                        end: AppSpacing.sm,
-                        child: Material(
-                          color: Colors.black.withValues(alpha: .64),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            key: ValueKey('packaging_preview_${box.id}'),
-                            customBorder: const CircleBorder(),
-                            onTap: onPreview,
-                            child: const Padding(
-                              padding: EdgeInsets.all(7),
-                              child: Icon(
-                                Icons.zoom_in_rounded,
-                                size: 19,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.sm + 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: 42,
-                        child: Align(
-                          alignment: AlignmentDirectional.centerStart,
-                          child: Text(
-                            box.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              height: 1.25,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        priceLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: box.isFree
-                              ? AppColors.success
-                              : AppColors.goldDark,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          box.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          priceLabel,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: box.isFree
+                                ? AppColors.success
+                                : AppColors.goldDark,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _PackagingSelectionMark(selected: selected),
+                ],
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PackagingSelectionMark extends StatelessWidget {
+  const _PackagingSelectionMark({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: AppDurations.base,
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: selected ? AppColors.gold : AppColors.surface,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: selected ? AppColors.gold : AppColors.divider,
+          width: 1.4,
+        ),
+      ),
+      child: selected
+          ? const Icon(Icons.check_rounded, color: Colors.white, size: 19)
+          : null,
     );
   }
 }
