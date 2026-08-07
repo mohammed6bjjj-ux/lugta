@@ -31,7 +31,7 @@ void main() {
         .join('\n');
 
     expect(publishedText, contains('Nawl Ltd'));
-    expect(publishedText, contains('لقطة (Luqta)'));
+    expect(publishedText, contains('لكطة (Lugta)'));
     expect(publishedText, contains('0773 882 2202'));
     expect(publishedText, contains('10,000'));
     expect(publishedText, contains('خمسة أيام'));
