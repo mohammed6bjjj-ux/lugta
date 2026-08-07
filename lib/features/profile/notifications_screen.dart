@@ -43,6 +43,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     unawaited(_markReadBestEffort(notification.id));
     if (!mounted) return;
 
+    final targetType = notification.targetType?.trim().toLowerCase();
+    if (targetType == 'referral' ||
+        notification.type == NotificationType.referral) {
+      Navigator.pushNamed(context, Routes.referrals);
+      return;
+    }
+    if (notification.targetPromotionId != null ||
+        targetType == 'promotion' ||
+        targetType == 'reward' ||
+        notification.type == NotificationType.promotion ||
+        notification.type == NotificationType.reward) {
+      Navigator.pushNamed(context, Routes.promotions);
+      return;
+    }
+
     if (notification.targetOrderId != null) {
       final order = session.orderById(notification.targetOrderId!);
       if (order != null) {
@@ -69,8 +84,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       listenable: session,
       builder: (context, _) {
         final unread = session.unreadNotificationsCount;
-        final items = List<AppNotification>.of(session.notifications)
-          ..sort((a, b) => b.at.compareTo(a.at));
+        final items =
+            session.notifications
+                .where((notification) => notification.showInbox)
+                .toList(growable: false)
+              ..sort((a, b) => b.at.compareTo(a.at));
 
         final now = DateTime.now();
         final today = <AppNotification>[];

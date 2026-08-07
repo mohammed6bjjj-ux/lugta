@@ -13,6 +13,7 @@ AppRepositories createDemoRepositories() {
   final orders = DemoOrdersRepository(() => profile.seller);
   final wallet = DemoWalletRepository(() => orders.currentOrders);
   final notifications = DemoNotificationsRepository();
+  final promotions = DemoPromotionsRepository();
   return AppRepositories(
     auth: auth,
     profile: profile,
@@ -20,6 +21,7 @@ AppRepositories createDemoRepositories() {
     orders: orders,
     wallet: wallet,
     notifications: notifications,
+    promotions: promotions,
     isDemo: true,
   );
 }
@@ -300,32 +302,44 @@ class DemoOrdersRepository implements OrdersRepository {
     final serial = _serial++;
     final now = DateTime.now();
     final seller = _seller();
+    final firstLine = request.lines.first;
     final order = Order(
       id: 'o-$serial',
       code: 'ORD-$serial',
-      productId: request.product.id,
-      productName: request.product.nameAr,
-      productImage: request.product.coverImage,
+      productId: firstLine.product.id,
+      productName: firstLine.product.nameAr,
+      productImage: firstLine.product.coverImage,
       items: [
-        for (final draft in request.items)
+        for (final line in request.lines)
           OrderItem(
-            variantId: draft.variant.id,
-            variantName: draft.variant.nameAr,
-            imageUrl: draft.variant.imageUrl,
-            quantity: draft.quantity,
-            packagingBoxId: request.packagingBox?.id,
-            packagingName: request.packagingBox?.name,
-            packagingImageUrl: request.packagingBox?.imageUrl,
-            packagingUnitPrice: request.packagingBox?.price ?? 0,
+            productId: line.product.id,
+            productName: line.product.nameAr,
+            variantId: line.variant.id,
+            variantName: line.variant.nameAr,
+            imageUrl: line.variant.imageUrl.trim().isEmpty
+                ? line.product.coverImage
+                : line.variant.imageUrl,
+            quantity: line.quantity,
+            wholesaleUnitPrice:
+                line.variant.wholesalePriceOverride ??
+                line.product.wholesalePrice,
+            saleUnitPrice: line.unitSalePrice,
+            packagingBoxId: line.packagingBox?.id,
+            packagingName: line.packagingBox?.name,
+            packagingImageUrl: line.packagingBox?.imageUrl,
+            packagingUnitPrice: line.packagingBox?.price ?? 0,
           ),
       ],
-      wholesalePrice: request.product.wholesalePrice,
-      unitSalePrice: request.unitSalePrice,
+      wholesalePrice:
+          firstLine.variant.wholesalePriceOverride ??
+          firstLine.product.wholesalePrice,
+      unitSalePrice: firstLine.unitSalePrice,
       deliveryFee: request.governorate.deliveryFee,
       baseDeliveryFee: request.governorate.deliveryFee,
-      packagingTotal:
-          (request.packagingBox?.price ?? 0) *
-          request.items.fold(0, (sum, item) => sum + item.quantity),
+      packagingTotal: request.lines.fold(
+        0,
+        (sum, line) => sum + (line.packagingBox?.price ?? 0) * line.quantity,
+      ),
       customerName: request.customerName,
       customerPhone: request.customerPhone,
       customerPhone2: request.customerPhone2,
@@ -614,6 +628,14 @@ class DemoNotificationsRepository implements NotificationsRepository {
         isRead: item.isRead,
         targetOrderId: item.targetOrderId,
         targetProductId: item.targetProductId,
+        targetPromotionId: item.targetPromotionId,
+        targetType: item.targetType,
+        showPopup: item.showPopup,
+        showInbox: item.showInbox,
+        popupSeenAt: item.popupSeenAt,
+        popupPriority: item.popupPriority,
+        expiresAt: item.expiresAt,
+        deepLink: item.deepLink,
       ),
   ];
   final StreamController<List<AppNotification>> _controller =
@@ -640,5 +662,28 @@ class DemoNotificationsRepository implements NotificationsRepository {
   }
 
   @override
+  Future<void> markPopupSeen(String notificationId) async {
+    for (final notification in _notifications) {
+      if (notification.id == notificationId) {
+        notification.popupSeenAt = DateTime.now().toUtc();
+      }
+    }
+    _controller.add(List.of(_notifications));
+  }
+
+  @override
   Stream<List<AppNotification>> watchNotifications() => _controller.stream;
+}
+
+class DemoPromotionsRepository implements PromotionsRepository {
+  @override
+  Future<List<PromotionGrant>> fetchPromotionGrants() async =>
+      List.of(MockData.promotionGrants);
+
+  @override
+  Future<ReferralSummary> fetchReferralSummary() async =>
+      MockData.referralSummary;
+
+  @override
+  Stream<void> watchPromotionGrantChanges() => const Stream.empty();
 }

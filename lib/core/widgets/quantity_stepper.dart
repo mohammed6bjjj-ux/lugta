@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../l10n/core_strings.dart';
 import '../formatters.dart';
 
 /// عدّاد كمية بحد أدنى وأقصى (الأقصى = المخزون المتاح).
@@ -75,14 +76,17 @@ class _StepButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm + 2),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Icon(
           icon,
           size: 20,
+          semanticLabel: icon == Icons.add_rounded
+              ? CoreStrings.increaseQuantity
+              : CoreStrings.decreaseQuantity,
           color: enabled ? AppColors.textPrimary : AppColors.divider,
         ),
       ),

@@ -231,6 +231,10 @@ class WizardStrings {
     'پشکنینی ئۆفەری گەیاندن...',
     'Checking delivery offer...',
   );
+  static String get deliveryOffer =>
+      _t('عرض التوصيل', 'ئۆفەری گەیاندن', 'Delivery offer');
+  static String offerValidUntil(String date) =>
+      _t('صالح لغاية $date', 'بەردەستە هەتا $date', 'Valid until $date');
   static String get addressLabel => _t(
     'العنوان التفصيلي / أقرب نقطة دالة',
     'ناونیشانی ورد / نزیکترین شوێنی ناسراو',

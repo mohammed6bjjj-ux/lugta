@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/network_image_cache.dart';
 import '../core/request_id.dart';
@@ -10,6 +12,7 @@ import 'async_request_deduplicator.dart';
 import 'catalog_snapshot_cache.dart';
 import 'mock_data.dart';
 import 'models.dart';
+import 'notification_deep_link.dart';
 import 'repositories/demo_repositories.dart';
 import 'repositories/repositories.dart';
 import 'services/device_token_registrar.dart';
@@ -33,6 +36,7 @@ class AppSession extends ChangeNotifier {
   AppSession._() : _repositories = createDemoRepositories();
 
   static final AppSession instance = AppSession._();
+  static const String _cartStoragePrefix = 'lugta.cart.v1.';
 
   AppRepositories _repositories;
   DeviceTokenRegistrar _deviceTokens = const NoopDeviceTokenRegistrar();
@@ -40,13 +44,17 @@ class AppSession extends ChangeNotifier {
   StreamSubscription<List<AppNotification>>? _notificationsSubscription;
   StreamSubscription<void>? _catalogSubscription;
   StreamSubscription<void>? _walletSubscription;
+  StreamSubscription<void>? _promotionGrantsSubscription;
   StreamSubscription<void>? _foregroundPushSubscription;
   Timer? _catalogRefreshTimer;
   Timer? _walletRefreshTimer;
+  Timer? _promotionGrantsRefreshTimer;
   bool _catalogRealtimeDirty = false;
   bool _catalogRealtimeWorkerRunning = false;
   bool _walletRealtimeDirty = false;
   bool _walletRealtimeWorkerRunning = false;
+  bool _promotionGrantsRealtimeDirty = false;
+  bool _promotionGrantsRealtimeWorkerRunning = false;
   DateTime? _lastActiveTouch;
   final AsyncRequestDeduplicator _publicRefresh = AsyncRequestDeduplicator();
   final Random _realtimeJitter = Random();
@@ -59,6 +67,8 @@ class AppSession extends ChangeNotifier {
   AsyncRequestDeduplicator _ordersRefresh = AsyncRequestDeduplicator();
   AsyncRequestDeduplicator _walletRefresh = AsyncRequestDeduplicator();
   AsyncRequestDeduplicator _notificationsRefresh = AsyncRequestDeduplicator();
+  AsyncRequestDeduplicator _promotionGrantsRefresh = AsyncRequestDeduplicator();
+  AsyncRequestDeduplicator _referralSummaryRefresh = AsyncRequestDeduplicator();
   AsyncRequestDeduplicator _resumeReconciliation = AsyncRequestDeduplicator();
   final CatalogSnapshotCache _catalogSnapshotCache = CatalogSnapshotCache();
   Future<Seller>? _profileRefresh;
@@ -85,9 +95,22 @@ class AppSession extends ChangeNotifier {
   List<AccountStatementLine> statementLines = [];
   List<WithdrawalSourceLine> withdrawalSources = [];
   List<AppNotification> notifications = List.of(MockData.notifications);
+  List<PromotionGrant> promotionGrants = List.of(MockData.promotionGrants);
+  ReferralSummary? referralSummary = MockData.referralSummary;
+  bool promotionGrantsLoading = false;
+  bool promotionGrantsLoaded = true;
+  String? promotionGrantsError;
+  bool referralSummaryLoading = false;
+  bool referralSummaryLoaded = true;
+  String? referralSummaryError;
+  final Set<String> _popupSeenNotificationIds = {};
 
   Set<String> favoriteIds = {'p-smart-pro', 'p-sun-lady', 'p-classic-leather'};
   Set<String> stockAlertIds = {};
+  List<CartItem> cartItems = [];
+  String _cartClientRequestId = newUuidV4();
+  String? _cartRestoredUserId;
+  Future<void> _cartWriteQueue = Future<void>.value();
 
   String policiesText = MockData.policiesText;
   String supportPhone = MockData.supportPhone;
@@ -127,8 +150,38 @@ class AppSession extends ChangeNotifier {
   int get minWithdrawalAmount => _minWithdrawalAmount;
   int withdrawalFeeFor(String provider) => _withdrawalFees[provider] ?? 0;
   bool get canWithdraw => _availableBalance >= _minWithdrawalAmount;
-  int get unreadNotificationsCount =>
-      notifications.where((notification) => !notification.isRead).length;
+  int get unreadNotificationsCount => notifications
+      .where((notification) => notification.showInbox && !notification.isRead)
+      .length;
+  int get cartLineCount => cartItems.length;
+  int get cartQuantity => cartItems.fold(0, (sum, item) => sum + item.quantity);
+  int get cartWholesaleTotal =>
+      cartItems.fold(0, (sum, item) => sum + item.wholesaleTotal);
+  int get cartSaleTotal =>
+      cartItems.fold(0, (sum, item) => sum + item.saleTotal);
+  int get cartPackagingTotal =>
+      cartItems.fold(0, (sum, item) => sum + item.packagingTotal);
+  int get cartProfitTotal =>
+      cartItems.fold(0, (sum, item) => sum + item.profitTotal);
+  String get cartClientRequestId => _cartClientRequestId;
+  AppNotification? get nextPopupNotification {
+    final candidates =
+        notifications
+            .where(
+              (item) =>
+                  item.hasPendingPopup &&
+                  !_popupSeenNotificationIds.contains(item.id),
+            )
+            .toList(growable: false)
+          ..sort((a, b) {
+            final priority = b.popupPriority.compareTo(a.popupPriority);
+            return priority != 0 ? priority : b.at.compareTo(a.at);
+          });
+    return candidates.firstOrNull;
+  }
+
+  AppNotification? notificationById(String id) =>
+      notifications.where((item) => item.id == id).firstOrNull;
 
   Future<void> configure(
     AppRepositories repositories, {
@@ -147,10 +200,11 @@ class AppSession extends ChangeNotifier {
     _notificationsSubscription = null;
     await _stopCatalogListener();
     await _stopWalletListener();
+    await _stopPromotionGrantsListener();
     await _foregroundPushSubscription?.cancel();
-    _foregroundPushSubscription = _deviceTokens.foregroundMessages.listen((_) {
-      if (auth.hasSession) unawaited(_refreshNotificationsBestEffort());
-    });
+    _foregroundPushSubscription = _deviceTokens.foregroundMessages.listen(
+      _handleForegroundPush,
+    );
     _observedUserId = _currentAuthUserId();
     _authStateSubscription = auth.userIdChanges.listen(
       _handleAuthUserIdChange,
@@ -163,6 +217,7 @@ class AppSession extends ChangeNotifier {
     _lastResumeReconciliation = null;
     _lastCatalogRefresh = null;
     lastError = null;
+    _resetCartMemory();
 
     if (!repositories.isDemo) {
       seller = _emptySeller();
@@ -180,8 +235,22 @@ class AppSession extends ChangeNotifier {
       statementLines = [];
       withdrawalSources = [];
       notifications = [];
+      promotionGrants = [];
+      referralSummary = null;
+      promotionGrantsLoaded = false;
+      referralSummaryLoaded = false;
+      promotionGrants = [];
+      referralSummary = null;
+      promotionGrantsLoading = false;
+      promotionGrantsLoaded = false;
+      promotionGrantsError = null;
+      referralSummaryLoading = false;
+      referralSummaryLoaded = false;
+      referralSummaryError = null;
+      _popupSeenNotificationIds.clear();
       favoriteIds = {};
       stockAlertIds = {};
+      cartItems = [];
       policiesText = '';
       supportPhone = '';
       supportWhatsapp = '';
@@ -325,6 +394,10 @@ class AppSession extends ChangeNotifier {
       _loadAccountDeletionData(scope),
       _ordersRefresh.run(() => _loadApprovedOrders(scope)),
       _notificationsRefresh.run(() => _loadApprovedNotifications(scope)),
+      _refreshPromotionEngagementForScopeBestEffort(
+        scope,
+        includeReferralSummary: referralSummaryLoaded,
+      ),
       if (_catalogNeedsResumeRefresh())
         _refreshCatalogAfterResumeBestEffort(scope),
     ]);
@@ -403,6 +476,88 @@ class AppSession extends ChangeNotifier {
     );
   }
 
+  Future<void> refreshPromotionGrants() {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null || seller.status != AccountStatus.approved) {
+      return Future<void>.value();
+    }
+    return _refreshPromotionGrantsForScope(scope);
+  }
+
+  Future<void> _refreshPromotionGrantsForScope(
+    _AuthenticatedRequestScope scope,
+  ) {
+    _listenForPromotionGrantChanges(scope);
+    return _promotionGrantsRefresh.run(() async {
+      promotionGrantsLoading = true;
+      promotionGrantsError = null;
+      notifyListeners();
+      try {
+        final items = await scope.repositories.promotions
+            .fetchPromotionGrants();
+        if (!_isCurrent(scope)) return;
+        promotionGrants = items;
+        promotionGrantsLoaded = true;
+      } catch (error) {
+        if (!_isCurrent(scope)) rethrow;
+        promotionGrantsError = _messageFor(error);
+        rethrow;
+      } finally {
+        if (_isCurrent(scope)) {
+          promotionGrantsLoading = false;
+          notifyListeners();
+        }
+      }
+    });
+  }
+
+  Future<void> refreshReferralSummary() {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null || seller.status != AccountStatus.approved) {
+      return Future<void>.value();
+    }
+    return _refreshReferralSummaryForScope(scope);
+  }
+
+  Future<void> _refreshReferralSummaryForScope(
+    _AuthenticatedRequestScope scope,
+  ) {
+    return _referralSummaryRefresh.run(() async {
+      referralSummaryLoading = true;
+      referralSummaryError = null;
+      notifyListeners();
+      try {
+        final summary = await scope.repositories.promotions
+            .fetchReferralSummary();
+        if (!_isCurrent(scope)) return;
+        referralSummary = summary;
+        referralSummaryLoaded = true;
+      } catch (error) {
+        if (!_isCurrent(scope)) rethrow;
+        referralSummaryError = _messageFor(error);
+        rethrow;
+      } finally {
+        if (_isCurrent(scope)) {
+          referralSummaryLoading = false;
+          notifyListeners();
+        }
+      }
+    });
+  }
+
+  Future<void> refreshPromotionEngagement({
+    bool includeReferralSummary = false,
+  }) {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null || seller.status != AccountStatus.approved) {
+      return Future<void>.value();
+    }
+    return Future.wait<void>([
+      _refreshPromotionGrantsForScope(scope),
+      if (includeReferralSummary) _refreshReferralSummaryForScope(scope),
+    ]);
+  }
+
   Future<void> _loadAuthenticatedData(
     _AuthenticatedRequestScope scope, {
     bool refreshProfile = true,
@@ -424,9 +579,14 @@ class AppSession extends ChangeNotifier {
       payoutAccounts = [];
       statementLines = [];
       withdrawalSources = [];
+      promotionGrants = [];
+      referralSummary = null;
+      promotionGrantsLoaded = false;
+      referralSummaryLoaded = false;
       notifications = [];
       favoriteIds = {};
       stockAlertIds = {};
+      _resetCartMemory();
       _availableBalance = 0;
       _pendingBalance = 0;
       _totalEarned = 0;
@@ -435,6 +595,7 @@ class AppSession extends ChangeNotifier {
       await notificationsSubscription?.cancel();
       await _stopCatalogListener();
       await _stopWalletListener();
+      await _stopPromotionGrantsListener();
       return;
     }
     _registerDeviceBestEffort();
@@ -456,6 +617,7 @@ class AppSession extends ChangeNotifier {
       withdrawalSources = [];
       favoriteIds = {};
       stockAlertIds = {};
+      _resetCartMemory();
       _availableBalance = 0;
       _pendingBalance = 0;
       _totalEarned = 0;
@@ -463,6 +625,7 @@ class AppSession extends ChangeNotifier {
       if (!_isCurrent(scope)) return;
       await _stopCatalogListener();
       await _stopWalletListener();
+      await _stopPromotionGrantsListener();
       return;
     }
 
@@ -538,6 +701,221 @@ class AppSession extends ChangeNotifier {
     );
   }
 
+  Future<void> _restoreOrReconcileCart(_AuthenticatedRequestScope scope) async {
+    if (!_isCurrent(scope) || products.isEmpty) return;
+    if (_repositories.isDemo) {
+      _reconcileCartWithCatalog();
+      return;
+    }
+    if (_cartRestoredUserId == scope.userId) {
+      _reconcileCartWithCatalog();
+      return;
+    }
+
+    List<CartItem> restored = const <CartItem>[];
+    var requestId = newUuidV4();
+    var normalizedDuringRestore = false;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final raw = preferences.getString('$_cartStoragePrefix${scope.userId}');
+      if (raw != null && raw.trim().isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        final payload = decoded is Map
+            ? Map<String, dynamic>.from(decoded)
+            : <String, dynamic>{'items': decoded};
+        final storedRequestId = payload['request_id']?.toString() ?? '';
+        if (_looksLikeUuid(storedRequestId)) requestId = storedRequestId;
+        final rawItems = payload['items'];
+        if (rawItems is List) {
+          final byVariant = <String, CartItem>{};
+          for (final rawItem in rawItems) {
+            if (rawItem is! Map) {
+              normalizedDuringRestore = true;
+              continue;
+            }
+            final map = Map<String, dynamic>.from(rawItem);
+            final product = _productForCartId(map['product_id']?.toString());
+            if (product == null) {
+              normalizedDuringRestore = true;
+              continue;
+            }
+            final variant = _variantForCartId(
+              product,
+              map['variant_id']?.toString(),
+            );
+            if (variant == null || !variant.inStock) {
+              normalizedDuringRestore = true;
+              continue;
+            }
+            final rawQuantity = map['quantity'];
+            final requestedQuantity = rawQuantity is num
+                ? rawQuantity.toInt()
+                : int.tryParse(rawQuantity?.toString() ?? '') ?? 1;
+            final quantity = requestedQuantity.clamp(1, variant.stock);
+            if (quantity != requestedQuantity) normalizedDuringRestore = true;
+            final rawPrice = map['unit_sale_price'];
+            var unitSalePrice = rawPrice is num
+                ? rawPrice.toInt()
+                : int.tryParse(rawPrice?.toString() ?? '') ?? 0;
+            if (unitSalePrice <= 0) {
+              unitSalePrice =
+                  variant.suggestedPriceOverride ?? product.suggestedPrice;
+              final minimum = _effectiveMinimumFor(product, variant);
+              if (unitSalePrice < minimum) unitSalePrice = minimum;
+              normalizedDuringRestore = true;
+            }
+            final packagingBox = product.packagingEnabled
+                ? _packagingBoxForCartId(map['packaging_box_id']?.toString())
+                : null;
+            if (map['packaging_box_id'] != null && packagingBox == null) {
+              normalizedDuringRestore = true;
+            }
+            if (byVariant.containsKey(variant.id)) {
+              normalizedDuringRestore = true;
+              continue;
+            }
+            byVariant[variant.id] = CartItem(
+              product: product,
+              variant: variant,
+              quantity: quantity,
+              unitSalePrice: unitSalePrice,
+              packagingBox: packagingBox,
+            );
+          }
+          restored = byVariant.values.take(50).toList(growable: false);
+          if (byVariant.length > 50) normalizedDuringRestore = true;
+        }
+      }
+    } catch (_) {
+      // A corrupt/missing local cart must not block the live catalog.
+      restored = const <CartItem>[];
+      requestId = newUuidV4();
+      normalizedDuringRestore = true;
+    }
+    if (!_isCurrent(scope)) return;
+    cartItems = List<CartItem>.unmodifiable(restored);
+    _cartClientRequestId = requestId;
+    _cartRestoredUserId = scope.userId;
+    notifyListeners();
+    if (normalizedDuringRestore) _persistCartBestEffort();
+  }
+
+  void _reconcileCartWithCatalog() {
+    if (cartItems.isEmpty) return;
+    final reconciled = <CartItem>[];
+    final seenVariants = <String>{};
+    var payloadChanged = false;
+    var referencesChanged = false;
+    for (final current in cartItems) {
+      final product = _productForCartId(current.product.id);
+      final variant = product == null
+          ? null
+          : _variantForCartId(product, current.variant.id);
+      if (product == null || variant == null || !variant.inStock) {
+        payloadChanged = true;
+        continue;
+      }
+      if (!seenVariants.add(variant.id)) {
+        payloadChanged = true;
+        continue;
+      }
+      final quantity = current.quantity.clamp(1, variant.stock);
+      final packaging = product.packagingEnabled
+          ? _packagingBoxForCartId(current.packagingBox?.id)
+          : null;
+      if (quantity != current.quantity ||
+          packaging?.id != current.packagingBox?.id) {
+        payloadChanged = true;
+      }
+      if (!identical(product, current.product) ||
+          !identical(variant, current.variant) ||
+          !identical(packaging, current.packagingBox)) {
+        referencesChanged = true;
+      }
+      reconciled.add(
+        current.copyWith(
+          product: product,
+          variant: variant,
+          quantity: quantity,
+          packagingBox: packaging,
+          clearPackaging: packaging == null,
+        ),
+      );
+    }
+    if (!payloadChanged && !referencesChanged) return;
+    cartItems = List<CartItem>.unmodifiable(reconciled);
+    if (payloadChanged) {
+      _cartClientRequestId = newUuidV4();
+      _persistCartBestEffort();
+    }
+    notifyListeners();
+  }
+
+  Product? _productForCartId(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final product in products) {
+      if (product.id == id) return product;
+    }
+    return null;
+  }
+
+  ProductVariant? _variantForCartId(Product product, String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final variant in product.variants) {
+      if (variant.id == id) return variant;
+    }
+    return null;
+  }
+
+  PackagingBox? _packagingBoxForCartId(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final box in packagingBoxes) {
+      if (box.id == id) return box;
+    }
+    return null;
+  }
+
+  bool _looksLikeUuid(String value) => RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+  ).hasMatch(value);
+
+  void _persistCartBestEffort() {
+    if (_repositories.isDemo) return;
+    final userId = _observedUserId;
+    if (userId == null || userId.isEmpty) return;
+    final requestId = _cartClientRequestId;
+    final itemSnapshot = [
+      for (final item in cartItems)
+        <String, dynamic>{
+          'product_id': item.product.id,
+          'variant_id': item.variant.id,
+          'quantity': item.quantity,
+          'unit_sale_price': item.unitSalePrice,
+          'packaging_box_id': item.packagingBox?.id,
+        },
+    ];
+    _cartWriteQueue = _cartWriteQueue.then((_) async {
+      try {
+        final preferences = await SharedPreferences.getInstance();
+        final key = '$_cartStoragePrefix$userId';
+        if (itemSnapshot.isEmpty) {
+          await preferences.remove(key);
+          return;
+        }
+        await preferences.setString(
+          key,
+          jsonEncode(<String, dynamic>{
+            'version': 1,
+            'request_id': requestId,
+            'items': itemSnapshot,
+          }),
+        );
+      } catch (_) {
+        // The in-memory cart remains fully usable when local storage fails.
+      }
+    });
+  }
+
   Future<void> _loadCatalogData(_AuthenticatedRequestScope scope) async {
     await Future.wait<void>([
       _loadCatalogEntities(scope),
@@ -588,6 +966,9 @@ class AppSession extends ChangeNotifier {
     if (fetchedPackagingBoxes != null) {
       packagingBoxes = fetchedPackagingBoxes!;
     }
+    if (fetchedProducts != null || fetchedPackagingBoxes != null) {
+      await _restoreOrReconcileCart(scope);
+    }
     if (fetchedCategories != null ||
         fetchedProducts != null ||
         fetchedPackagingBoxes != null) {
@@ -623,6 +1004,7 @@ class AppSession extends ChangeNotifier {
   Future<void> _loadApprovedAccountData(
     _AuthenticatedRequestScope scope,
   ) async {
+    _listenForPromotionGrantChanges(scope);
     await Future.wait<void>([
       _ordersRefresh.run(() => _loadApprovedOrders(scope)),
       _loadApprovedWallet(scope),
@@ -650,7 +1032,7 @@ class AppSession extends ChangeNotifier {
   ) async {
     final value = await scope.repositories.notifications.fetchNotifications();
     if (!_isCurrent(scope) || seller.status != AccountStatus.approved) return;
-    notifications = value;
+    _applyNotificationItems(value);
     _listenForNotifications(scope);
     notifyListeners();
   }
@@ -872,6 +1254,274 @@ class AppSession extends ChangeNotifier {
       notifyListeners();
       rethrow;
     }
+  }
+
+  // ─────────────────────────── السلة ───────────────────────────
+
+  CartItem? cartItemForVariant(String variantId) {
+    for (final item in cartItems) {
+      if (item.variant.id == variantId) return item;
+    }
+    return null;
+  }
+
+  void addToCart({
+    required Product product,
+    required ProductVariant variant,
+    int quantity = 1,
+  }) {
+    if (quantity <= 0) {
+      throw const BackendException('يجب أن تكون الكمية أكبر من صفر.');
+    }
+    if (!variant.inStock) {
+      throw const BackendException('هذا الخيار غير متوفر حالياً.');
+    }
+
+    final existingIndex = cartItems.indexWhere(
+      (item) => item.variant.id == variant.id,
+    );
+    if (existingIndex >= 0) {
+      final existing = cartItems[existingIndex];
+      final updatedQuantity = existing.quantity + quantity;
+      if (updatedQuantity > variant.stock) {
+        throw BackendException(
+          'الكمية المطلوبة أكبر من المخزون المتوفر (${variant.stock}).',
+        );
+      }
+      _replaceCartItem(
+        existingIndex,
+        existing.copyWith(
+          product: product,
+          variant: variant,
+          quantity: updatedQuantity,
+        ),
+      );
+      return;
+    }
+
+    if (cartItems.length >= 50) {
+      throw const BackendException(
+        'يمكن إضافة 50 خياراً مختلفاً كحد أقصى للطلب الواحد.',
+      );
+    }
+    final minimum = _effectiveMinimumFor(product, variant);
+    var salePrice = variant.suggestedPriceOverride ?? product.suggestedPrice;
+    if (salePrice < minimum) salePrice = minimum;
+    final maximum = product.maxSalePrice;
+    if (maximum != null && salePrice > maximum) salePrice = maximum;
+
+    cartItems = List<CartItem>.unmodifiable([
+      ...cartItems,
+      CartItem(
+        product: product,
+        variant: variant,
+        quantity: quantity,
+        unitSalePrice: salePrice,
+      ),
+    ]);
+    _cartMutated();
+  }
+
+  /// Adds a fully configured line, or replaces the configuration of the same
+  /// variant when it is already in the cart.
+  ///
+  /// A cart line is uniquely identified by [ProductVariant.id], matching the
+  /// order RPC contract. Price and packaging are therefore selected together
+  /// before the line enters the cart instead of being partially edited later.
+  void setCartItemConfiguration({
+    required Product product,
+    required ProductVariant variant,
+    required int quantity,
+    required int unitSalePrice,
+    PackagingBox? packagingBox,
+  }) {
+    final belongsToProduct = product.variants.any(
+      (candidate) => candidate.id == variant.id,
+    );
+    if (!belongsToProduct) {
+      throw const BackendException('هذا الخيار لا يتبع للمنتج المحدد.');
+    }
+    if (!variant.inStock) {
+      throw const BackendException('هذا الخيار غير متوفر حالياً.');
+    }
+    if (quantity <= 0 || quantity > variant.stock) {
+      throw BackendException(
+        'الكمية المطلوبة يجب أن تكون بين 1 و${variant.stock}.',
+      );
+    }
+
+    final minimum = _effectiveMinimumFor(product, variant);
+    if (unitSalePrice < minimum) {
+      throw BackendException('سعر البيع أقل من الحد المسموح ($minimum).');
+    }
+    final maximum = product.maxSalePrice;
+    if (maximum != null && unitSalePrice > maximum) {
+      throw BackendException('سعر البيع أعلى من الحد المسموح ($maximum).');
+    }
+
+    PackagingBox? canonicalBox;
+    if (packagingBox != null) {
+      if (!product.packagingEnabled) {
+        throw const BackendException('التعليب غير متاح لهذا المنتج.');
+      }
+      for (final availableBox in packagingBoxes) {
+        if (availableBox.id == packagingBox.id) {
+          canonicalBox = availableBox;
+          break;
+        }
+      }
+      if (canonicalBox == null) {
+        throw const BackendException('العلبة المختارة لم تعد متاحة.');
+      }
+    }
+
+    final configuredItem = CartItem(
+      product: product,
+      variant: variant,
+      quantity: quantity,
+      unitSalePrice: unitSalePrice,
+      packagingBox: canonicalBox,
+    );
+    final existingIndex = cartItems.indexWhere(
+      (item) => item.variant.id == variant.id,
+    );
+    if (existingIndex >= 0) {
+      _replaceCartItem(existingIndex, configuredItem);
+      return;
+    }
+    if (cartItems.length >= 50) {
+      throw const BackendException(
+        'يمكن إضافة 50 خياراً مختلفاً كحد أقصى للطلب الواحد.',
+      );
+    }
+    cartItems = List<CartItem>.unmodifiable([...cartItems, configuredItem]);
+    _cartMutated();
+  }
+
+  void updateCartQuantity(String variantId, int quantity) {
+    final index = cartItems.indexWhere((item) => item.variant.id == variantId);
+    if (index < 0) return;
+    if (quantity <= 0) {
+      removeFromCart(variantId);
+      return;
+    }
+    final item = cartItems[index];
+    if (quantity > item.variant.stock) {
+      throw BackendException(
+        'الكمية المطلوبة أكبر من المخزون المتوفر (${item.variant.stock}).',
+      );
+    }
+    _replaceCartItem(index, item.copyWith(quantity: quantity));
+  }
+
+  void updateCartSalePrice(String variantId, int unitSalePrice) {
+    final index = cartItems.indexWhere((item) => item.variant.id == variantId);
+    if (index < 0 || unitSalePrice <= 0) return;
+    _replaceCartItem(
+      index,
+      cartItems[index].copyWith(unitSalePrice: unitSalePrice),
+    );
+  }
+
+  void updateCartPackaging(String variantId, PackagingBox? packagingBox) {
+    final index = cartItems.indexWhere((item) => item.variant.id == variantId);
+    if (index < 0) return;
+    final item = cartItems[index];
+    if (packagingBox != null && !item.product.packagingEnabled) {
+      throw const BackendException('التعليب غير متاح لهذا المنتج.');
+    }
+    _replaceCartItem(
+      index,
+      item.copyWith(
+        packagingBox: packagingBox,
+        clearPackaging: packagingBox == null,
+      ),
+    );
+  }
+
+  void removeFromCart(String variantId) {
+    final updated = cartItems
+        .where((item) => item.variant.id != variantId)
+        .toList(growable: false);
+    if (updated.length == cartItems.length) return;
+    cartItems = List<CartItem>.unmodifiable(updated);
+    _cartMutated();
+  }
+
+  void clearCart() {
+    if (cartItems.isEmpty) return;
+    cartItems = const <CartItem>[];
+    _cartMutated();
+  }
+
+  void _replaceCartItem(int index, CartItem item) {
+    final updated = List<CartItem>.of(cartItems);
+    updated[index] = item;
+    cartItems = List<CartItem>.unmodifiable(updated);
+    _cartMutated();
+  }
+
+  void _cartMutated() {
+    _cartClientRequestId = newUuidV4();
+    notifyListeners();
+    _persistCartBestEffort();
+  }
+
+  int _effectiveMinimumFor(Product product, ProductVariant variant) {
+    final wholesale = variant.wholesalePriceOverride ?? product.wholesalePrice;
+    return wholesale > product.effectiveMinSalePrice
+        ? wholesale
+        : product.effectiveMinSalePrice;
+  }
+
+  Future<Order> createCartOrder({
+    required Governorate governorate,
+    required String customerName,
+    required String customerPhone,
+    String? customerPhone2,
+    required String addressDetails,
+    String? notes,
+  }) async {
+    final scope = _requireAuthenticatedScope();
+    if (cartItems.isEmpty) {
+      throw const BackendException('السلة فارغة.');
+    }
+    if (cartItems.length > 50) {
+      throw const BackendException(
+        'يمكن إضافة 50 خياراً مختلفاً كحد أقصى للطلب الواحد.',
+      );
+    }
+    if (cartItems.any((item) => !item.priceIsValid)) {
+      throw const BackendException(
+        'راجع أسعار البيع في السلة قبل تأكيد الطلب.',
+      );
+    }
+    final requestId = _cartClientRequestId;
+    final submittedLines = [
+      for (final item in cartItems) CreateOrderLine.fromCartItem(item),
+    ];
+    final order = await scope.repositories.orders.createOrder(
+      CreateOrderRequest.lines(
+        clientRequestId: requestId,
+        lines: submittedLines,
+        governorate: governorate,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        customerPhone2: customerPhone2,
+        addressDetails: addressDetails,
+        notes: notes,
+      ),
+    );
+    _ensureCurrent(scope);
+    orders.removeWhere((item) => item.id == order.id);
+    orders.insert(0, order);
+    if (_cartClientRequestId == requestId) {
+      cartItems = const <CartItem>[];
+      _cartClientRequestId = newUuidV4();
+      _persistCartBestEffort();
+    }
+    notifyListeners();
+    return order;
   }
 
   Future<Order> createOrder({
@@ -1206,6 +1856,23 @@ class AppSession extends ChangeNotifier {
     }
   }
 
+  Future<void> markNotificationPopupSeen(String notificationId) async {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null) return;
+    final notification = notificationById(notificationId);
+    _popupSeenNotificationIds.add(notificationId);
+    if (notification != null) {
+      notification.popupSeenAt ??= DateTime.now().toUtc();
+    }
+    notifyListeners();
+    try {
+      await scope.repositories.notifications.markPopupSeen(notificationId);
+    } catch (_) {
+      // Popup acknowledgement is best-effort. The local launch-level guard
+      // prevents repeated interruption while the backend catches up.
+    }
+  }
+
   /// Signs out remotely when possible and always removes local account data.
   ///
   /// Supabase can clear its local Auth session and still throw when remote
@@ -1267,11 +1934,28 @@ class AppSession extends ChangeNotifier {
     statementLines = [];
     withdrawalSources = [];
     notifications = [];
+    promotionGrants = [];
+    referralSummary = null;
+    promotionGrantsLoading = false;
+    promotionGrantsLoaded = false;
+    promotionGrantsError = null;
+    referralSummaryLoading = false;
+    referralSummaryLoaded = false;
+    referralSummaryError = null;
+    _popupSeenNotificationIds.clear();
     favoriteIds = {};
     stockAlertIds = {};
+    _resetCartMemory();
     _availableBalance = 0;
     _pendingBalance = 0;
     _totalEarned = 0;
+  }
+
+  void _resetCartMemory() {
+    cartItems = const <CartItem>[];
+    _cartClientRequestId = newUuidV4();
+    _cartRestoredUserId = null;
+    _cartWriteQueue = Future<void>.value();
   }
 
   Future<void> _transitionAuthenticatedIdentity(
@@ -1290,6 +1974,7 @@ class AppSession extends ChangeNotifier {
     _notificationsSubscription = null;
     final catalogCleanup = _stopCatalogListener();
     final walletCleanup = _stopWalletListener();
+    final promotionGrantsCleanup = _stopPromotionGrantsListener();
     _clearAuthenticatedFields();
     lastError = null;
     notifyListeners();
@@ -1299,6 +1984,7 @@ class AppSession extends ChangeNotifier {
       if (notificationsSubscription != null) notificationsSubscription.cancel(),
       catalogCleanup,
       walletCleanup,
+      promotionGrantsCleanup,
     ]);
   }
 
@@ -1325,11 +2011,15 @@ class AppSession extends ChangeNotifier {
     _ordersRefresh = AsyncRequestDeduplicator();
     _walletRefresh = AsyncRequestDeduplicator();
     _notificationsRefresh = AsyncRequestDeduplicator();
+    _promotionGrantsRefresh = AsyncRequestDeduplicator();
+    _referralSummaryRefresh = AsyncRequestDeduplicator();
     _resumeReconciliation = AsyncRequestDeduplicator();
     _catalogRealtimeDirty = false;
     _catalogRealtimeWorkerRunning = false;
     _walletRealtimeDirty = false;
     _walletRealtimeWorkerRunning = false;
+    _promotionGrantsRealtimeDirty = false;
+    _promotionGrantsRealtimeWorkerRunning = false;
     _profileRefresh = null;
     _orderRefreshes.clear();
     _productRefreshes.clear();
@@ -1403,8 +2093,29 @@ class AppSession extends ChangeNotifier {
   Future<void> _refreshNotifications(_AuthenticatedRequestScope scope) async {
     final items = await scope.repositories.notifications.fetchNotifications();
     if (!_isCurrent(scope)) return;
-    notifications = items;
+    _applyNotificationItems(items);
     _listenForNotifications(scope);
+  }
+
+  void _applyNotificationItems(List<AppNotification> items) {
+    final previousIds = notifications.map((item) => item.id).toSet();
+    final newEngagementItems = items.where(
+      (item) =>
+          !previousIds.contains(item.id) &&
+          _notificationTargetsPromotionEngagement(item),
+    );
+    final shouldRefreshEngagement = newEngagementItems.isNotEmpty;
+    final shouldRefreshReferral =
+        referralSummaryLoaded &&
+        newEngagementItems.any(_notificationTargetsReferrals);
+    notifications = items;
+    if (shouldRefreshEngagement) {
+      unawaited(
+        _refreshPromotionEngagementBestEffort(
+          includeReferralSummary: shouldRefreshReferral,
+        ),
+      );
+    }
   }
 
   void _listenForNotifications(_AuthenticatedRequestScope scope) {
@@ -1419,7 +2130,7 @@ class AppSession extends ChangeNotifier {
         .listen(
           (items) {
             if (!_isCurrent(scope)) return;
-            notifications = items;
+            _applyNotificationItems(items);
             notifyListeners();
           },
           onError: (_) {
@@ -1487,6 +2198,36 @@ class AppSession extends ChangeNotifier {
     await subscription?.cancel();
   }
 
+  void _listenForPromotionGrantChanges(_AuthenticatedRequestScope scope) {
+    if (_promotionGrantsSubscription != null || !_isCurrent(scope)) return;
+    _promotionGrantsSubscription = scope.repositories.promotions
+        .watchPromotionGrantChanges()
+        .listen(
+          (_) {
+            if (!_isCurrent(scope)) return;
+            _promotionGrantsRealtimeDirty = true;
+            if (_promotionGrantsRealtimeWorkerRunning) return;
+            _promotionGrantsRefreshTimer?.cancel();
+            _promotionGrantsRefreshTimer = Timer(
+              const Duration(milliseconds: 350),
+              () => unawaited(_drainPromotionGrantRealtimeRefreshes()),
+            );
+          },
+          onError: (_) {
+            // Resume, push delivery and manual refresh remain reliable fallbacks.
+          },
+        );
+  }
+
+  Future<void> _stopPromotionGrantsListener() async {
+    _promotionGrantsRefreshTimer?.cancel();
+    _promotionGrantsRefreshTimer = null;
+    _promotionGrantsRealtimeDirty = false;
+    final subscription = _promotionGrantsSubscription;
+    _promotionGrantsSubscription = null;
+    await subscription?.cancel();
+  }
+
   Future<void> _refreshWalletBestEffort() async {
     try {
       await refreshWallet();
@@ -1524,6 +2265,40 @@ class AppSession extends ChangeNotifier {
     } finally {
       if (generation == _authGeneration) {
         _walletRealtimeWorkerRunning = false;
+      }
+    }
+  }
+
+  Future<void> _drainPromotionGrantRealtimeRefreshes() async {
+    if (_promotionGrantsRealtimeWorkerRunning) return;
+    final generation = _authGeneration;
+    _promotionGrantsRealtimeWorkerRunning = true;
+    try {
+      while (_promotionGrantsRealtimeDirty) {
+        if (generation != _authGeneration ||
+            seller.status != AccountStatus.approved) {
+          _promotionGrantsRealtimeDirty = false;
+          return;
+        }
+        _promotionGrantsRealtimeDirty = false;
+        final joinedOlderSnapshot = _promotionGrantsRefresh.inFlight != null;
+        try {
+          await refreshPromotionGrants();
+          if (referralSummaryLoaded) {
+            await _refreshReferralSummaryBestEffort();
+          }
+        } catch (_) {
+          return;
+        }
+        if (generation != _authGeneration ||
+            seller.status != AccountStatus.approved) {
+          return;
+        }
+        if (joinedOlderSnapshot) _promotionGrantsRealtimeDirty = true;
+      }
+    } finally {
+      if (generation == _authGeneration) {
+        _promotionGrantsRealtimeWorkerRunning = false;
       }
     }
   }
@@ -1648,6 +2423,87 @@ class AppSession extends ChangeNotifier {
 
   void _registerDeviceBestEffort() {
     unawaited(_deviceTokens.registerCurrentDevice().catchError((_) {}));
+  }
+
+  void _handleForegroundPush(PushMessage message) {
+    if (!auth.hasSession) return;
+    unawaited(_refreshNotificationsBestEffort());
+
+    final event = message.openEvent;
+    final type = event.targetType?.trim().toLowerCase();
+    final deepTarget = parseTrustedNotificationDeepLink(event.deepLink);
+    final targetsReferral =
+        type == 'referral' ||
+        deepTarget?.kind == NotificationDeepLinkKind.referrals;
+    final targetsPromotion =
+        targetsReferral ||
+        event.promotionId != null ||
+        type == 'promotion' ||
+        type == 'reward' ||
+        deepTarget?.kind == NotificationDeepLinkKind.promotions;
+    if (targetsPromotion) {
+      unawaited(
+        _refreshPromotionEngagementBestEffort(
+          includeReferralSummary: targetsReferral && referralSummaryLoaded,
+        ),
+      );
+    }
+  }
+
+  bool _notificationTargetsReferrals(AppNotification notification) {
+    final type = notification.targetType?.trim().toLowerCase();
+    final deepTarget = parseTrustedNotificationDeepLink(notification.deepLink);
+    return notification.type == NotificationType.referral ||
+        type == 'referral' ||
+        deepTarget?.kind == NotificationDeepLinkKind.referrals;
+  }
+
+  bool _notificationTargetsPromotionEngagement(AppNotification notification) {
+    if (_notificationTargetsReferrals(notification)) return true;
+    final type = notification.targetType?.trim().toLowerCase();
+    final deepTarget = parseTrustedNotificationDeepLink(notification.deepLink);
+    return notification.targetPromotionId != null ||
+        notification.type == NotificationType.promotion ||
+        notification.type == NotificationType.reward ||
+        type == 'promotion' ||
+        type == 'reward' ||
+        deepTarget?.kind == NotificationDeepLinkKind.promotions;
+  }
+
+  Future<void> _refreshPromotionEngagementBestEffort({
+    bool includeReferralSummary = false,
+  }) async {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null || seller.status != AccountStatus.approved) return;
+    await _refreshPromotionEngagementForScopeBestEffort(
+      scope,
+      includeReferralSummary: includeReferralSummary,
+    );
+  }
+
+  Future<void> _refreshPromotionEngagementForScopeBestEffort(
+    _AuthenticatedRequestScope scope, {
+    bool includeReferralSummary = false,
+  }) async {
+    try {
+      await _refreshPromotionGrantsForScope(scope);
+    } catch (_) {
+      // Realtime, the next resume or pull-to-refresh will retry.
+    }
+    if (!includeReferralSummary || !_isCurrent(scope)) return;
+    try {
+      await _refreshReferralSummaryForScope(scope);
+    } catch (_) {
+      // The referral screen retains its previous usable summary.
+    }
+  }
+
+  Future<void> _refreshReferralSummaryBestEffort() async {
+    try {
+      await refreshReferralSummary();
+    } catch (_) {
+      // A later grant event, resume or manual refresh will retry.
+    }
   }
 
   Future<void> _refreshNotificationsBestEffort() async {

@@ -850,7 +850,9 @@ class _ProductItemsCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    order.productName,
+                    order.hasMultipleProducts
+                        ? '${order.productName} ${OrdersStrings.additionalProducts(formatNumber(order.productCount - 1))}'
+                        : order.productName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall?.copyWith(
@@ -887,13 +889,31 @@ class _ProductItemsCard extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.sm + 2),
               Expanded(
-                child: Text(
-                  order.items[i].variantName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (order.hasMultipleProducts &&
+                        order.items[i].productName.isNotEmpty)
+                      Text(
+                        order.items[i].productName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    Text(
+                      order.items[i].variantName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: order.hasMultipleProducts
+                            ? AppColors.textSecondary
+                            : null,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),

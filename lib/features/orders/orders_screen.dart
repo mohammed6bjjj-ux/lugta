@@ -304,7 +304,9 @@ class _OrderCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            order.productName,
+                            order.hasMultipleProducts
+                                ? '${order.productName} ${OrdersStrings.additionalProducts(formatNumber(order.productCount - 1))}'
+                                : order.productName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelLarge?.copyWith(

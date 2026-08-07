@@ -6,6 +6,7 @@ import 'package:flutter_app/app/routes.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
 import 'package:flutter_app/data/repositories/repositories.dart';
+import 'package:flutter_app/data/services/device_token_registrar.dart';
 import 'package:flutter_app/data/session.dart';
 import 'package:flutter_app/features/auth/account_blocked_screen.dart';
 import 'package:flutter_app/features/auth/account_deleted_screen.dart';
@@ -53,19 +54,24 @@ void main() {
       final base = createDemoRepositories();
       await base.auth.signIn(phone: '07700000000', password: 'test-password');
       final profile = _MutableProfileRepository(base.profile);
+      final promotions = _TrackingPromotionsRepository(base.promotions);
+      addTearDown(promotions.dispose);
       await session.configure(
-        _repositories(base, profile: profile),
+        _repositories(base, profile: profile, promotions: promotions),
         loadInitialData: false,
       );
 
       await session.reconcileAfterResume(minimumInterval: Duration.zero);
       expect(profile.fetchCount, 1);
+      expect(promotions.grantFetchCount, 1);
 
       await session.reconcileAfterResume();
       expect(profile.fetchCount, 1);
+      expect(promotions.grantFetchCount, 1);
 
       await session.reconcileAfterResume(minimumInterval: Duration.zero);
       expect(profile.fetchCount, 2);
+      expect(promotions.grantFetchCount, 2);
     },
   );
 
@@ -196,6 +202,66 @@ void main() {
     },
   );
 
+  test(
+    'a realtime grant event during an older read queues a fresh trailing read',
+    () async {
+      final base = createDemoRepositories();
+      await base.auth.signIn(phone: '07700000000', password: 'test-password');
+      final profile = _MutableProfileRepository(base.profile);
+      final promotions = _TrackingPromotionsRepository(base.promotions);
+      addTearDown(promotions.dispose);
+      await session.configure(
+        _repositories(base, profile: profile, promotions: promotions),
+        loadInitialData: false,
+      );
+      await session.refreshAuthenticatedData();
+      await session.refreshPromotionGrants();
+      expect(promotions.grantFetchCount, 1);
+
+      promotions.pauseNextGrantFetch();
+      final olderRefresh = session.refreshPromotionGrants();
+      await promotions.pausedFetchStarted.future;
+      promotions.emitChange();
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      expect(promotions.grantFetchCount, 2);
+
+      promotions.releasePausedFetch();
+      await olderRefresh;
+      await promotions.thirdFetchCompleted.future.timeout(
+        const Duration(seconds: 2),
+      );
+      expect(promotions.grantFetchCount, 3);
+    },
+  );
+
+  test('a foreground promotion push refreshes grants immediately', () async {
+    final base = createDemoRepositories();
+    await base.auth.signIn(phone: '07700000000', password: 'test-password');
+    final profile = _MutableProfileRepository(base.profile);
+    final promotions = _TrackingPromotionsRepository(base.promotions);
+    final deviceTokens = _ForegroundPushRegistrar();
+    addTearDown(promotions.dispose);
+    addTearDown(deviceTokens.dispose);
+    await session.configure(
+      _repositories(base, profile: profile, promotions: promotions),
+      deviceTokens: deviceTokens,
+      loadInitialData: false,
+    );
+    await session.refreshAuthenticatedData();
+    final baseline = promotions.grantFetchCount;
+
+    deviceTokens.emit(PushMessage(data: const {'target_type': 'promotion'}));
+    for (
+      var attempt = 0;
+      attempt < 100 && promotions.grantFetchCount == baseline;
+      attempt += 1
+    ) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    expect(promotions.grantFetchCount, baseline + 1);
+  });
+
   testWidgets(
     'protected routes react to logout and every non-approved account state',
     (tester) async {
@@ -266,6 +332,7 @@ AppRepositories _repositories(
   CatalogRepository? catalog,
   OrdersRepository? orders,
   WalletRepository? wallet,
+  PromotionsRepository? promotions,
 }) => AppRepositories(
   auth: base.auth,
   profile: profile,
@@ -273,6 +340,7 @@ AppRepositories _repositories(
   orders: orders ?? base.orders,
   wallet: wallet ?? base.wallet,
   notifications: base.notifications,
+  promotions: promotions ?? base.promotions,
   isDemo: false,
 );
 
@@ -488,6 +556,90 @@ class _BlockingFailingWalletRepository implements WalletRepository {
     withdrawalId,
     clientRequestId: clientRequestId,
   );
+}
+
+class _TrackingPromotionsRepository implements PromotionsRepository {
+  _TrackingPromotionsRepository(this._delegate);
+
+  final PromotionsRepository _delegate;
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+  Completer<void>? _release;
+  bool _pauseNext = false;
+  Completer<void> pausedFetchStarted = Completer<void>();
+  final Completer<void> thirdFetchCompleted = Completer<void>();
+  int grantFetchCount = 0;
+  int summaryFetchCount = 0;
+
+  void pauseNextGrantFetch() {
+    _pauseNext = true;
+    _release = Completer<void>();
+    pausedFetchStarted = Completer<void>();
+  }
+
+  void releasePausedFetch() {
+    final release = _release;
+    if (release != null && !release.isCompleted) release.complete();
+  }
+
+  void emitChange() => _changes.add(null);
+
+  Future<void> dispose() => _changes.close();
+
+  @override
+  Future<List<PromotionGrant>> fetchPromotionGrants() async {
+    grantFetchCount += 1;
+    final fetchNumber = grantFetchCount;
+    if (_pauseNext) {
+      _pauseNext = false;
+      pausedFetchStarted.complete();
+      await _release!.future;
+    }
+    final value = await _delegate.fetchPromotionGrants();
+    if (fetchNumber >= 3 && !thirdFetchCompleted.isCompleted) {
+      thirdFetchCompleted.complete();
+    }
+    return value;
+  }
+
+  @override
+  Future<ReferralSummary> fetchReferralSummary() async {
+    summaryFetchCount += 1;
+    return _delegate.fetchReferralSummary();
+  }
+
+  @override
+  Stream<void> watchPromotionGrantChanges() => _changes.stream;
+}
+
+class _ForegroundPushRegistrar implements DeviceTokenRegistrar {
+  final StreamController<PushMessage> _foreground =
+      StreamController<PushMessage>.broadcast();
+
+  void emit(PushMessage message) => _foreground.add(message);
+
+  @override
+  Stream<PushMessage> get foregroundMessages => _foreground.stream;
+
+  @override
+  Stream<PushOpenEvent> get notificationOpens => const Stream.empty();
+
+  @override
+  void handleNotificationOpen(PushOpenEvent event) {}
+
+  @override
+  PushOpenEvent? takePendingNotificationOpen() => null;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> registerCurrentDevice() async {}
+
+  @override
+  Future<void> unregisterCurrentDevice() async {}
+
+  @override
+  Future<void> dispose() => _foreground.close();
 }
 
 class _BlockingRealtimeCatalogRepository implements CatalogRepository {

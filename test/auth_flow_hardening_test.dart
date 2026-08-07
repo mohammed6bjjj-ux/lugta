@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_app/app/app_router.dart';
@@ -80,6 +81,31 @@ void main() {
 
       expect(auth.signUpCalls, 1);
       expect(await secureStorage.read(key: pendingRegistrationKey), isNotEmpty);
+    },
+  );
+
+  test(
+    'registration draft persists the optional normalized referral code',
+    () async {
+      const secureStorage = FlutterSecureStorage();
+      final auth = _FakeGoTrueClient();
+      final client = _FakeSupabaseClient(auth);
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      final repository = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: secureStorage,
+      );
+
+      await repository.signUp(_registration(referralCode: '  lugta-a2  '));
+
+      final encoded = await secureStorage.read(key: pendingRegistrationKey);
+      expect(encoded, isNotNull);
+      final draft = Map<String, dynamic>.from(jsonDecode(encoded!) as Map);
+      expect(draft['referral_code'], 'LUGTA-A2');
     },
   );
 
@@ -356,14 +382,16 @@ void main() {
   );
 }
 
-RegistrationRequest _registration() => const RegistrationRequest(
-  fullName: 'Test Seller',
-  phone: '07712345678',
-  password: 'safe pass',
-  storeName: 'Test Store',
-  governorateId: 'baghdad',
-  termsVersion: 'v1',
-);
+RegistrationRequest _registration({String? referralCode}) =>
+    RegistrationRequest(
+      fullName: 'Test Seller',
+      phone: '07712345678',
+      password: 'safe pass',
+      storeName: 'Test Store',
+      governorateId: 'baghdad',
+      termsVersion: 'v1',
+      referralCode: referralCode,
+    );
 
 const _user = User(
   id: 'seller-a',

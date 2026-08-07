@@ -305,6 +305,10 @@ class _FailingMarkReadNotificationsRepository
   Future<void> markAllRead() => _delegate.markAllRead();
 
   @override
+  Future<void> markPopupSeen(String notificationId) =>
+      _delegate.markPopupSeen(notificationId);
+
+  @override
   Stream<List<AppNotification>> watchNotifications() =>
       _delegate.watchNotifications();
 }

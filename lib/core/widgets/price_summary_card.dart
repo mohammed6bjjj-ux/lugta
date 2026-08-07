@@ -36,6 +36,12 @@ class PriceSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final headerBackground = AppColors.isDark
+        ? AppColors.primary
+        : AppColors.goldDark;
+    final headerForeground = AppColors.isDark
+        ? AppColors.onPrimary
+        : AppColors.onGold;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -51,24 +57,28 @@ class PriceSummaryCard extends StatelessWidget {
               horizontal: AppSpacing.md,
               vertical: AppSpacing.sm + 4,
             ),
-            decoration: BoxDecoration(gradient: AppColors.goldGradient),
+            decoration: BoxDecoration(color: headerBackground),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.receipt_long_outlined,
                   size: 18,
-                  color: Colors.white,
+                  color: headerForeground,
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  quantity == null
-                      ? CoreStrings.priceSummaryTitle
-                      : CoreStrings.priceSummaryTitleWithQty(
-                          formatNumber(quantity!),
-                        ),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                Expanded(
+                  child: Text(
+                    quantity == null
+                        ? CoreStrings.priceSummaryTitle
+                        : CoreStrings.priceSummaryTitleWithQty(
+                            formatNumber(quantity!),
+                          ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: headerForeground,
+                    ),
                   ),
                 ),
               ],

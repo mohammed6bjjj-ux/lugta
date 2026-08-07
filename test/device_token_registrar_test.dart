@@ -5,6 +5,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('push event accepts only explicit promotion and referral targets', () {
+    final event = PushOpenEvent.fromData(const {
+      'notification_id': 'notification-offer',
+      'target_promotion_id': 'promotion-7',
+      'target_type': 'referral',
+      'deep_link': 'nawl://referrals',
+      'route': '/admin',
+    });
+
+    expect(event.notificationId, 'notification-offer');
+    expect(event.promotionId, 'promotion-7');
+    expect(event.targetType, 'referral');
+    expect(event.deepLink, 'nawl://referrals');
+  });
+
   test('registers an authenticated permitted device', () async {
     final messaging = _FakeMessaging();
     final backend = _FakeBackend();

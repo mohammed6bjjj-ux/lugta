@@ -1319,6 +1319,63 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 ),
               ),
             ),
+            if (!_loadingDeliveryQuote && _deliveryQuote?.isFree == true) ...[
+              const SizedBox(height: AppSpacing.sm),
+              AppCard(
+                key: const ValueKey('delivery_offer_details'),
+                color: AppColors.goldSoft,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.celebration_outlined, color: AppColors.goldDark),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _deliveryQuote!.campaignName?.trim().isNotEmpty ==
+                                    true
+                                ? _deliveryQuote!.campaignName!.trim()
+                                : WizardStrings.deliveryOffer,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: AppColors.goldDark,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          if (_deliveryQuote!.freeDeliveryReason
+                                  ?.trim()
+                                  .isNotEmpty ==
+                              true) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _deliveryQuote!.freeDeliveryReason!.trim(),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
+                          if (_deliveryQuote!.validUntil != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              WizardStrings.offerValidUntil(
+                                formatDate(_deliveryQuote!.validUntil!),
+                              ),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
           const SizedBox(height: AppSpacing.md),
           Entrance(

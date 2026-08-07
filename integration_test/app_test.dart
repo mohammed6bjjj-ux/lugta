@@ -18,6 +18,8 @@ import 'package:flutter_app/features/order_wizard/order_wizard_screen.dart';
 import 'package:flutter_app/features/orders/orders_screen.dart';
 import 'package:flutter_app/features/profile/notifications_screen.dart';
 import 'package:flutter_app/features/profile/profile_screen.dart';
+import 'package:flutter_app/features/promotions/promotions_screen.dart';
+import 'package:flutter_app/features/referrals/referral_screen.dart';
 import 'package:flutter_app/features/shell/main_shell.dart';
 import 'package:flutter_app/features/wallet/wallet_screen.dart';
 import 'package:flutter_app/main.dart' as app;
@@ -99,6 +101,55 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('notifications_mark_all_read')));
     await tester.pumpAndSettle();
     expect(session.unreadNotificationsCount, 0);
+    expect(tester.takeException(), isNull);
+
+    Navigator.of(tester.element(find.byType(NotificationsScreen))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfileScreen), findsOneWidget);
+
+    session
+      ..promotionGrants = []
+      ..promotionGrantsLoaded = false
+      ..promotionGrantsLoading = false
+      ..promotionGrantsError = null;
+    final promotionsItem = find.byKey(
+      const ValueKey('profile_promotions_item'),
+    );
+    await tester.scrollUntilVisible(
+      promotionsItem,
+      250,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('profile_scroll_view')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(promotionsItem);
+    await tester.pumpAndSettle();
+    expect(find.byType(PromotionsScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    Navigator.of(tester.element(find.byType(PromotionsScreen))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfileScreen), findsOneWidget);
+
+    session
+      ..referralSummary = null
+      ..referralSummaryLoaded = false
+      ..referralSummaryLoading = false
+      ..referralSummaryError = null;
+    final referralsItem = find.byKey(const ValueKey('profile_referrals_item'));
+    await tester.scrollUntilVisible(
+      referralsItem,
+      250,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('profile_scroll_view')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(referralsItem);
+    await tester.pumpAndSettle();
+    expect(find.byType(ReferralScreen), findsOneWidget);
+    expect(find.byKey(const ValueKey('referral_code')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

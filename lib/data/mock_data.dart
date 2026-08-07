@@ -64,7 +64,55 @@ class MockData {
     governorateId: 'gov-baghdad',
     status: AccountStatus.approved,
     joinedAt: _now.subtract(const Duration(days: 94)),
+    referralCode: 'LUGTA-TEST',
   );
+
+  static const ReferralSummary referralSummary = ReferralSummary(
+    referralCode: 'LUGTA-TEST',
+    invitedCount: 6,
+    qualifiedCount: 3,
+    rewardedCount: 2,
+    completedReferredOrders: 11,
+    availableFreeDeliveries: 2,
+    walletRewardsEarned: 15000,
+  );
+
+  static final List<PromotionGrant> promotionGrants = [
+    PromotionGrant(
+      id: 'grant-demo-free-delivery',
+      promotionId: 'promotion-demo-referral',
+      sellerId: seller.id,
+      rewardOrdinal: 1,
+      rewardType: 'free_delivery',
+      rewardValue: 1,
+      status: PromotionGrantStatus.available,
+      expiresAt: _now.add(const Duration(days: 14)),
+      createdAt: _now.subtract(const Duration(days: 1)),
+      promotion: Promotion(
+        id: 'promotion-demo-referral',
+        nameAr: 'مكافأة دعوة صديق',
+        nameCkb: 'دیاریی بانگهێشتی هاوڕێ',
+        nameEn: 'Referral reward',
+        descriptionAr: 'توصيل مجاني مقابل دعوة ناجحة.',
+        descriptionCkb: 'گەیاندنی بەخۆڕایی بۆ بانگهێشتێکی سەرکەوتوو.',
+        descriptionEn: 'Free delivery for a successful referral.',
+        audienceType: 'referred_accounts',
+        triggerType: 'qualified_referral_count',
+        triggerThreshold: 1,
+        beneficiary: 'referrer',
+        rewardType: 'free_delivery',
+        rewardValue: 1,
+        rewardValidDays: 14,
+        startsAt: null,
+        endsAt: null,
+        isActive: true,
+        priority: 10,
+        showPopup: true,
+        showInbox: true,
+        sendPush: true,
+      ),
+    ),
+  ];
 
   // ─────────────────────────── التصنيفات ───────────────────────────
 

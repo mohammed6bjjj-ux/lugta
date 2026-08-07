@@ -12,6 +12,7 @@ import '../../core/phone_number.dart';
 import '../app_settings.dart';
 import '../content_parser.dart';
 import '../models.dart';
+import '../promotion_mapper.dart';
 import '../wallet_ledger_mapper.dart';
 import '../services/device_token_registrar.dart';
 import 'repositories.dart';
@@ -28,6 +29,7 @@ AppRepositories createSupabaseRepositories(
     orders: SupabaseOrdersRepository(client),
     wallet: SupabaseWalletRepository(client),
     notifications: SupabaseNotificationsRepository(client),
+    promotions: SupabasePromotionsRepository(client),
     isDemo: false,
   );
 }
@@ -162,21 +164,40 @@ class SupabaseAuthRepository implements AuthRepository {
       return false;
     }
 
-    await _guard(() async {
-      await _client.rpc(
-        'complete_seller_registration',
-        params: {
-          'p_full_name': draft.fullName,
-          'p_store_name': draft.storeName,
-          'p_governorate_id': draft.governorateId,
-          'p_terms_version': draft.termsVersion,
-          'p_instagram_handle': draft.instagramHandle,
-          'p_locale': draft.locale,
-        },
-      );
-    });
+    await _completeSellerRegistration(draft);
     await _clearPendingRegistration();
     return true;
+  }
+
+  Future<void> _completeSellerRegistration(
+    _PendingRegistrationDraft draft,
+  ) async {
+    final commonParams = <String, dynamic>{
+      'p_full_name': draft.fullName,
+      'p_store_name': draft.storeName,
+      'p_governorate_id': draft.governorateId,
+      'p_terms_version': draft.termsVersion,
+      'p_instagram_handle': draft.instagramHandle,
+      'p_locale': draft.locale,
+    };
+    try {
+      await _guard(() async {
+        await _client.rpc(
+          'complete_seller_registration',
+          params: {...commonParams, 'p_referral_code': draft.referralCode},
+        );
+      });
+    } on BackendException catch (error) {
+      // During a rolling backend deployment, an installation with no referral
+      // may still finish against the previous six-argument RPC. A supplied
+      // referral is never silently discarded.
+      if (draft.referralCode != null || !_isMissingBackendFeature(error)) {
+        rethrow;
+      }
+      await _guard(() async {
+        await _client.rpc('complete_seller_registration', params: commonParams);
+      });
+    }
   }
 
   @override
@@ -587,6 +608,7 @@ class _PendingRegistrationDraft {
     required this.locale,
     required this.createdAt,
     this.instagramHandle,
+    this.referralCode,
   });
 
   factory _PendingRegistrationDraft.fromRequest(
@@ -603,6 +625,7 @@ class _PendingRegistrationDraft {
     locale: locale,
     createdAt: DateTime.now().toUtc(),
     instagramHandle: instagramHandle,
+    referralCode: _normalizeReferralCode(request.referralCode),
   );
 
   factory _PendingRegistrationDraft.fromJson(Map<String, dynamic> json) {
@@ -627,6 +650,7 @@ class _PendingRegistrationDraft {
           DateTime.tryParse(json['created_at'] as String? ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
       instagramHandle: normalizedInstagram,
+      referralCode: _normalizeReferralCode(json['referral_code']?.toString()),
     );
   }
 
@@ -638,6 +662,7 @@ class _PendingRegistrationDraft {
   final String locale;
   final DateTime createdAt;
   final String? instagramHandle;
+  final String? referralCode;
 
   Map<String, dynamic> toJson() => {
     'phone': phone,
@@ -648,7 +673,13 @@ class _PendingRegistrationDraft {
     'locale': locale,
     'created_at': createdAt.toIso8601String(),
     'instagram_handle': instagramHandle,
+    'referral_code': referralCode,
   };
+}
+
+String? _normalizeReferralCode(String? value) {
+  final normalized = value?.trim().toUpperCase() ?? '';
+  return normalized.isEmpty ? null : normalized;
 }
 
 class _PasswordRecoveryGate {
@@ -1301,16 +1332,7 @@ class SupabaseOrdersRepository implements OrdersRepository {
           'p_customer_name': request.customerName,
           'p_customer_phone': normalizeIraqiPhone(request.customerPhone),
           'p_address_line': request.addressDetails,
-          'p_items': [
-            for (final item in request.items)
-              {
-                'variant_id': item.variant.id,
-                'quantity': item.quantity,
-                'unit_sale_price': request.unitSalePrice,
-                if (request.packagingBox != null)
-                  'packaging_box_id': request.packagingBox!.id,
-              },
-          ],
+          'p_items': buildCreateOrderItemsPayload(request.lines),
           'p_customer_alt_phone': request.customerPhone2?.trim().isEmpty == true
               ? null
               : request.customerPhone2 == null
@@ -1423,6 +1445,20 @@ class SupabaseOrdersRepository implements OrdersRepository {
     return _orderComplaintFromJson(_singleMap(result));
   });
 }
+
+/// يبقي تسلسل عقد RPC قابلاً للاختبار بعيداً عن الشبكة، ويضمن أن سعر
+/// البيع والعلبة يؤخذان من كل سطر بدل تكرار قيمة عامة على كامل الطلب.
+List<Map<String, dynamic>> buildCreateOrderItemsPayload(
+  Iterable<CreateOrderLine> lines,
+) => [
+  for (final line in lines)
+    <String, dynamic>{
+      'variant_id': line.variant.id,
+      'quantity': line.quantity,
+      'unit_sale_price': line.unitSalePrice,
+      if (line.packagingBox != null) 'packaging_box_id': line.packagingBox!.id,
+    },
+];
 
 class SupabaseWalletRepository implements WalletRepository {
   SupabaseWalletRepository(this._client);
@@ -1714,6 +1750,35 @@ class SupabaseNotificationsRepository implements NotificationsRepository {
   }
 
   @override
+  Future<void> markPopupSeen(String notificationId) async {
+    try {
+      await _guard(() async {
+        await _client.rpc(
+          'mark_notification_popup_seen',
+          params: {'p_notification_id': notificationId},
+        );
+      });
+      return;
+    } on BackendException catch (error) {
+      if (!_isMissingBackendFeature(error)) rethrow;
+    }
+
+    try {
+      await _guard(() async {
+        await _client
+            .from('notifications')
+            .update({'popup_seen_at': DateTime.now().toUtc().toIso8601String()})
+            .eq('id', notificationId)
+            .eq('recipient_id', _requireUserId(_client));
+      });
+    } on BackendException catch (error) {
+      // Popup acknowledgement is best-effort during a rolling migration. The
+      // in-memory session still prevents it from reopening in this launch.
+      if (!_isMissingBackendFeature(error)) rethrow;
+    }
+  }
+
+  @override
   Stream<List<AppNotification>> watchNotifications() {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return const Stream.empty();
@@ -1771,6 +1836,98 @@ class SupabaseNotificationsRepository implements NotificationsRepository {
   }
 }
 
+class SupabasePromotionsRepository implements PromotionsRepository {
+  SupabasePromotionsRepository(this._client);
+
+  final SupabaseClient _client;
+
+  @override
+  Stream<void> watchPromotionGrantChanges() {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return const Stream.empty();
+
+    late RealtimeChannel channel;
+    late final StreamController<void> controller;
+    controller = StreamController<void>.broadcast(
+      onListen: () {
+        channel = _client
+            .channel(
+              'phone-promotion-grants-${DateTime.now().microsecondsSinceEpoch}',
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'promotion_grants',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'seller_id',
+                value: userId,
+              ),
+              callback: (_) {
+                if (!controller.isClosed) controller.add(null);
+              },
+            )
+            .subscribe();
+      },
+      onCancel: () async {
+        await _client.removeChannel(channel);
+      },
+    );
+    return controller.stream;
+  }
+
+  @override
+  Future<List<PromotionGrant>> fetchPromotionGrants() async {
+    try {
+      return await _guard(() async {
+        final rows = _maps(
+          await _client.from('promotion_grants').select('*, promotions(*)'),
+        );
+        final grants = rows.map(promotionGrantFromJson).toList(growable: false)
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return grants;
+      });
+    } on BackendException catch (error) {
+      if (_isMissingBackendFeature(error)) return const [];
+      rethrow;
+    }
+  }
+
+  @override
+  Future<ReferralSummary> fetchReferralSummary() async {
+    try {
+      return await _guard(() async {
+        final value = await _client.rpc('get_my_referral_summary');
+        return referralSummaryFromRpc(value);
+      });
+    } on BackendException catch (error) {
+      if (!_isMissingBackendFeature(error)) rethrow;
+    }
+
+    try {
+      return await _guard(() async {
+        final row = await _client
+            .from('profiles')
+            .select('referral_code, referred_by')
+            .eq('id', _requireUserId(_client))
+            .maybeSingle();
+        return ReferralSummary(
+          referralCode: _text(row?['referral_code']),
+          referredBy: _nullableText(row?['referred_by']),
+          invitedCount: 0,
+          qualifiedCount: 0,
+          rewardedCount: 0,
+        );
+      });
+    } on BackendException catch (error) {
+      if (_isMissingBackendFeature(error)) {
+        return const ReferralSummary.empty();
+      }
+      rethrow;
+    }
+  }
+}
+
 Seller _sellerFromJson(Map<String, dynamic> row) => Seller(
   id: _text(row['id']),
   name: _text(row['full_name']),
@@ -1781,6 +1938,9 @@ Seller _sellerFromJson(Map<String, dynamic> row) => Seller(
   status: _accountStatus(_text(row['status'])),
   joinedAt: _date(row['created_at']),
   statusReason: _nullableText(row['review_reason']),
+  referralCode: _nullableText(row['referral_code']),
+  referredBy: _nullableText(row['referred_by']),
+  activatedAt: _dateOrNull(row['activated_at']),
   locale: _text(row['locale'], fallback: 'ar'),
   notificationPreferences: _jsonMap(
     row['notification_preferences'],
@@ -1912,6 +2072,8 @@ Order _orderFromJson(Map<String, dynamic> row, Map<String, String> mediaUrls) {
   final items = [
     for (final item in itemRows)
       OrderItem(
+        productId: _text(item['product_id']),
+        productName: _localized(item, 'product_name'),
         variantId: _text(item['variant_id']),
         variantName: _localized(item, 'variant_name'),
         imageUrl:
@@ -2084,6 +2246,7 @@ WithdrawalSourceLine _withdrawalSourceFromJson(Map<String, dynamic> row) =>
 
 AppNotification _notificationFromJson(Map<String, dynamic> row) {
   final payload = _jsonMap(row['payload']);
+  final showInbox = row['show_inbox'] ?? payload['show_inbox'];
   return AppNotification(
     id: _text(row['id']),
     title: _localized(row, 'title'),
@@ -2094,13 +2257,39 @@ AppNotification _notificationFromJson(Map<String, dynamic> row) {
         NotificationType.wallet,
       final type when type.contains('product') || type.contains('stock') =>
         NotificationType.product,
+      final type when type.contains('referral') => NotificationType.referral,
+      final type when type.contains('reward') => NotificationType.reward,
+      final type when type.contains('promotion') || type.contains('offer') =>
+        NotificationType.promotion,
       _ => NotificationType.system,
     },
     at: _date(row['created_at']),
     isRead: row['read_at'] != null,
     targetOrderId:
-        _nullableText(row['order_id']) ?? _nullableText(payload['order_id']),
-    targetProductId: _nullableText(payload['product_id']),
+        _nullableText(row['order_id']) ??
+        _nullableText(payload['order_id']) ??
+        _nullableText(payload['target_order_id']),
+    targetProductId:
+        _nullableText(row['product_id']) ??
+        _nullableText(payload['product_id']) ??
+        _nullableText(payload['target_product_id']),
+    targetPromotionId:
+        _nullableText(row['promotion_id']) ??
+        _nullableText(payload['promotion_id']) ??
+        _nullableText(payload['target_promotion_id']),
+    targetType:
+        _nullableText(row['target_type']) ??
+        _nullableText(payload['target_type']),
+    showPopup: _bool(row['show_popup']) || _bool(payload['show_popup']),
+    showInbox: showInbox == null ? true : _bool(showInbox),
+    popupSeenAt: _dateOrNull(row['popup_seen_at'] ?? payload['popup_seen_at']),
+    popupPriority: _int(
+      row['popup_priority'],
+      fallback: _int(payload['popup_priority']),
+    ),
+    expiresAt: _dateOrNull(row['expires_at'] ?? payload['expires_at']),
+    deepLink:
+        _nullableText(row['deep_link']) ?? _nullableText(payload['deep_link']),
   );
 }
 
@@ -2264,6 +2453,26 @@ void _requireOpaquePassword(String password, {int? minimumLength}) {
       code: 'password_too_short',
     );
   }
+}
+
+bool _isMissingBackendFeature(BackendException error) {
+  const missingCodes = {
+    'PGRST202',
+    'PGRST204',
+    'PGRST205',
+    '42P01',
+    '42703',
+    '42883',
+  };
+  if (missingCodes.contains(error.code)) return true;
+  final cause = error.cause;
+  final rawMessage = cause is PostgrestException
+      ? cause.message
+      : error.message;
+  final message = rawMessage.toLowerCase();
+  return message.contains('could not find the function') ||
+      message.contains('does not exist') ||
+      message.contains('schema cache');
 }
 
 Future<T> _guard<T>(Future<T> Function() action) async {

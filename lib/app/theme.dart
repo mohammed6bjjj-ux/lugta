@@ -134,6 +134,7 @@ class AppColors {
   static Color get primary => p.primary;
   static Color get onPrimary => p.onPrimary;
   static Color get gold => p.gold;
+  static Color get onGold => Colors.white;
   static Color get goldDark => p.goldDark;
   static Color get goldSoft => p.goldSoft;
   static Color get background => p.background;

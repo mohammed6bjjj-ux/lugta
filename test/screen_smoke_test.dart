@@ -31,6 +31,8 @@ import 'package:flutter_app/features/profile/legal/legal_document_screen.dart';
 import 'package:flutter_app/features/profile/legal/legal_documents.dart';
 import 'package:flutter_app/features/profile/settings_screen.dart';
 import 'package:flutter_app/features/profile/support_screen.dart';
+import 'package:flutter_app/features/promotions/promotions_screen.dart';
+import 'package:flutter_app/features/referrals/referral_screen.dart';
 import 'package:flutter_app/features/shell/main_shell.dart';
 import 'package:flutter_app/features/wallet/withdraw_request_screen.dart';
 import 'package:flutter_app/features/wallet/withdrawals_history_screen.dart';
@@ -86,6 +88,8 @@ void main() {
     'withdrawals history': () => const WithdrawalsHistoryScreen(),
     'payout accounts': () => const PayoutAccountsScreen(),
     'notifications': () => const NotificationsScreen(),
+    'promotions': () => const PromotionsScreen(),
+    'referrals': () => const ReferralScreen(),
     'edit profile': () => const EditProfileScreen(),
     'support': () => const SupportScreen(),
     'policies': () => const PoliciesScreen(),

@@ -147,7 +147,14 @@ abstract interface class DeviceTokenLocalStore {
 /// IDs are resolved against the current authenticated session before opening a
 /// screen, so a push payload can never inject a route or an arbitrary object.
 class PushOpenEvent {
-  const PushOpenEvent({this.notificationId, this.orderId, this.productId});
+  const PushOpenEvent({
+    this.notificationId,
+    this.orderId,
+    this.productId,
+    this.promotionId,
+    this.targetType,
+    this.deepLink,
+  });
 
   factory PushOpenEvent.fromData(Map<String, dynamic> data) => PushOpenEvent(
     notificationId: _firstPayloadText(data, const ['notification_id']),
@@ -156,11 +163,20 @@ class PushOpenEvent {
       'product_id',
       'target_product_id',
     ]),
+    promotionId: _firstPayloadText(data, const [
+      'promotion_id',
+      'target_promotion_id',
+    ]),
+    targetType: _firstPayloadText(data, const ['target_type']),
+    deepLink: _firstPayloadText(data, const ['deep_link']),
   );
 
   final String? notificationId;
   final String? orderId;
   final String? productId;
+  final String? promotionId;
+  final String? targetType;
+  final String? deepLink;
 }
 
 /// Platform-neutral message data for foreground presentation.
@@ -485,6 +501,10 @@ class AndroidForegroundNotificationPresenter
     'target_order_id',
     'product_id',
     'target_product_id',
+    'promotion_id',
+    'target_promotion_id',
+    'target_type',
+    'deep_link',
   };
 
   final FlutterLocalNotificationsPlugin _notifications;

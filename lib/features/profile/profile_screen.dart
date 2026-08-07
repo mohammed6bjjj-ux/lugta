@@ -15,6 +15,7 @@ import '../../core/widgets/session_refresh.dart';
 import '../../data/models.dart';
 import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
+import '../promotions/engagement_strings.dart';
 import 'profile_strings.dart';
 import 'legal/legal_document_screen.dart';
 import 'legal/legal_documents.dart';
@@ -220,6 +221,24 @@ class ProfileScreen extends StatelessWidget {
                         badgeCount: unread,
                         onTap: () =>
                             Navigator.pushNamed(context, Routes.notifications),
+                      ),
+                      _MenuItem(
+                        key: const ValueKey('profile_promotions_item'),
+                        icon: Icons.redeem_outlined,
+                        title: EngagementStrings.promotions,
+                        iconColor: AppColors.success,
+                        iconBackground: AppColors.successSoft,
+                        onTap: () =>
+                            Navigator.pushNamed(context, Routes.promotions),
+                      ),
+                      _MenuItem(
+                        key: const ValueKey('profile_referrals_item'),
+                        icon: Icons.group_add_outlined,
+                        title: EngagementStrings.referrals,
+                        iconColor: AppColors.info,
+                        iconBackground: AppColors.infoSoft,
+                        onTap: () =>
+                            Navigator.pushNamed(context, Routes.referrals),
                       ),
                       _MenuItem(
                         icon: Icons.favorite_border_rounded,

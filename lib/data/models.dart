@@ -40,6 +40,9 @@ class Seller {
     required this.status,
     required this.joinedAt,
     this.statusReason,
+    this.referralCode,
+    this.referredBy,
+    this.activatedAt,
     this.locale = 'ar',
     this.notificationPreferences = const {
       'orders': true,
@@ -58,6 +61,9 @@ class Seller {
   final AccountStatus status;
   final DateTime joinedAt;
   final String? statusReason;
+  final String? referralCode;
+  final String? referredBy;
+  final DateTime? activatedAt;
   final String locale;
   final Map<String, bool> notificationPreferences;
 
@@ -77,6 +83,9 @@ class Seller {
     status: status,
     joinedAt: joinedAt,
     statusReason: statusReason,
+    referralCode: referralCode,
+    referredBy: referredBy,
+    activatedAt: activatedAt,
     locale: locale ?? this.locale,
     notificationPreferences:
         notificationPreferences ?? this.notificationPreferences,
@@ -332,6 +341,147 @@ class DeliveryQuote {
   bool get isFree => baseDeliveryFee > 0 && deliveryFee == 0;
 }
 
+enum PromotionGrantStatus { available, used, expired }
+
+class Promotion {
+  const Promotion({
+    required this.id,
+    required this.nameAr,
+    required this.descriptionAr,
+    required this.audienceType,
+    required this.triggerType,
+    required this.beneficiary,
+    required this.rewardType,
+    required this.rewardValue,
+    required this.startsAt,
+    required this.endsAt,
+    required this.isActive,
+    required this.priority,
+    required this.showPopup,
+    required this.showInbox,
+    required this.sendPush,
+    this.nameCkb,
+    this.nameEn,
+    this.descriptionCkb,
+    this.descriptionEn,
+    this.newAccountDays,
+    this.triggerThreshold,
+    this.rewardValidDays,
+  });
+
+  final String id;
+  final String nameAr;
+  final String? nameCkb;
+  final String? nameEn;
+  final String descriptionAr;
+  final String? descriptionCkb;
+  final String? descriptionEn;
+  final String audienceType;
+  final int? newAccountDays;
+  final String triggerType;
+  final int? triggerThreshold;
+  final String beneficiary;
+  final String rewardType;
+  final int rewardValue;
+  final int? rewardValidDays;
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  final bool isActive;
+  final int priority;
+  final bool showPopup;
+  final bool showInbox;
+  final bool sendPush;
+
+  String get localizedName => switch (appSettings.language) {
+    AppLanguage.ckb => nameCkb?.trim().isNotEmpty == true ? nameCkb! : nameAr,
+    AppLanguage.en => nameEn?.trim().isNotEmpty == true ? nameEn! : nameAr,
+    AppLanguage.ar => nameAr,
+  };
+
+  String get localizedDescription => switch (appSettings.language) {
+    AppLanguage.ckb =>
+      descriptionCkb?.trim().isNotEmpty == true
+          ? descriptionCkb!
+          : descriptionAr,
+    AppLanguage.en =>
+      descriptionEn?.trim().isNotEmpty == true ? descriptionEn! : descriptionAr,
+    AppLanguage.ar => descriptionAr,
+  };
+}
+
+class PromotionGrant {
+  const PromotionGrant({
+    required this.id,
+    required this.promotionId,
+    required this.sellerId,
+    required this.rewardOrdinal,
+    required this.rewardType,
+    required this.rewardValue,
+    required this.status,
+    required this.createdAt,
+    this.promotion,
+    this.sourceProfileId,
+    this.sourceOrderId,
+    this.sourceKey,
+    this.expiresAt,
+    this.consumedAt,
+    this.consumedOrderId,
+    this.walletEntryId,
+  });
+
+  final String id;
+  final String promotionId;
+  final String sellerId;
+  final Promotion? promotion;
+  final String? sourceProfileId;
+  final String? sourceOrderId;
+  final String? sourceKey;
+  final int rewardOrdinal;
+  final String rewardType;
+  final int rewardValue;
+  final PromotionGrantStatus status;
+  final DateTime? expiresAt;
+  final DateTime? consumedAt;
+  final String? consumedOrderId;
+  final String? walletEntryId;
+  final DateTime createdAt;
+}
+
+class ReferralSummary {
+  const ReferralSummary({
+    required this.referralCode,
+    required this.invitedCount,
+    required this.qualifiedCount,
+    required this.rewardedCount,
+    this.completedReferredOrders = 0,
+    this.availableFreeDeliveries = 0,
+    this.walletRewardsEarned = 0,
+    this.referredBy,
+    this.referredByName,
+  });
+
+  const ReferralSummary.empty({String referralCode = ''})
+    : this(
+        referralCode: referralCode,
+        invitedCount: 0,
+        qualifiedCount: 0,
+        rewardedCount: 0,
+        completedReferredOrders: 0,
+        availableFreeDeliveries: 0,
+        walletRewardsEarned: 0,
+      );
+
+  final String referralCode;
+  final String? referredBy;
+  final String? referredByName;
+  final int invitedCount;
+  final int qualifiedCount;
+  final int rewardedCount;
+  final int completedReferredOrders;
+  final int availableFreeDeliveries;
+  final int walletRewardsEarned;
+}
+
 /// آلة حالات الطلب الموحّدة (10 حالات).
 enum OrderStatus {
   pendingReview,
@@ -426,6 +576,8 @@ class OrderStatusEntry {
 /// سطر داخل الطلب: متغير محدد بكمية.
 class OrderItem {
   const OrderItem({
+    this.productId = '',
+    this.productName = '',
     required this.variantId,
     required this.variantName,
     required this.imageUrl,
@@ -438,6 +590,8 @@ class OrderItem {
     this.packagingUnitPrice = 0,
   });
 
+  final String productId;
+  final String productName;
   final String variantId;
   final String variantName;
   final String imageUrl;
@@ -560,6 +714,16 @@ class Order {
   final DateTime createdAt;
 
   int get totalQuantity => items.fold(0, (sum, i) => sum + i.quantity);
+  int get productCount {
+    final ids = items
+        .map((item) => item.productId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (ids.isNotEmpty) return ids.length;
+    return productId.isEmpty ? 0 : 1;
+  }
+
+  bool get hasMultipleProducts => productCount > 1;
   int get wholesaleTotal => items.any((item) => item.wholesaleUnitPrice != null)
       ? items.fold(
           0,
@@ -891,13 +1055,24 @@ class WithdrawalSourceLine {
   };
 }
 
-enum NotificationType { order, wallet, product, system }
+enum NotificationType {
+  order,
+  wallet,
+  product,
+  promotion,
+  referral,
+  reward,
+  system,
+}
 
 extension NotificationTypeX on NotificationType {
   IconData get icon => switch (this) {
     NotificationType.order => Icons.receipt_long_outlined,
     NotificationType.wallet => Icons.account_balance_wallet_outlined,
     NotificationType.product => Icons.watch_outlined,
+    NotificationType.promotion => Icons.local_offer_outlined,
+    NotificationType.referral => Icons.group_add_outlined,
+    NotificationType.reward => Icons.redeem_outlined,
     NotificationType.system => Icons.campaign_outlined,
   };
 
@@ -905,6 +1080,9 @@ extension NotificationTypeX on NotificationType {
     NotificationType.order => AppColors.info,
     NotificationType.wallet => AppColors.success,
     NotificationType.product => AppColors.goldDark,
+    NotificationType.promotion => AppColors.goldDark,
+    NotificationType.referral => AppColors.info,
+    NotificationType.reward => AppColors.success,
     NotificationType.system => AppColors.warning,
   };
 }
@@ -919,6 +1097,14 @@ class AppNotification {
     this.isRead = false,
     this.targetOrderId,
     this.targetProductId,
+    this.targetPromotionId,
+    this.targetType,
+    this.showPopup = false,
+    this.showInbox = true,
+    this.popupSeenAt,
+    this.popupPriority = 0,
+    this.expiresAt,
+    this.deepLink,
   });
 
   final String id;
@@ -929,6 +1115,24 @@ class AppNotification {
   bool isRead;
   final String? targetOrderId;
   final String? targetProductId;
+  final String? targetPromotionId;
+  final String? targetType;
+  final bool showPopup;
+  final bool showInbox;
+  DateTime? popupSeenAt;
+  final int popupPriority;
+  final DateTime? expiresAt;
+  final String? deepLink;
+
+  bool isExpiredAt(DateTime now) {
+    final expiry = expiresAt;
+    return expiry != null && !expiry.toUtc().isAfter(now.toUtc());
+  }
+
+  bool hasPendingPopupAt(DateTime now) =>
+      !isRead && showPopup && popupSeenAt == null && !isExpiredAt(now);
+
+  bool get hasPendingPopup => hasPendingPopupAt(DateTime.now().toUtc());
 }
 
 class PromoBanner {
@@ -984,4 +1188,58 @@ class OrderDraftItem {
 
   final ProductVariant variant;
   int quantity;
+}
+
+/// سطر محفوظ في السلة قبل إنشاء الطلب.
+///
+/// السعر والعلبة مرتبطان بالسطر نفسه لأن الطلب الواحد قد يحتوي منتجات
+/// مختلفة، ولكل منتج حدود سعر وخيار تعليب مستقلان.
+class CartItem {
+  const CartItem({
+    required this.product,
+    required this.variant,
+    required this.quantity,
+    required this.unitSalePrice,
+    this.packagingBox,
+  });
+
+  final Product product;
+  final ProductVariant variant;
+  final int quantity;
+  final int unitSalePrice;
+  final PackagingBox? packagingBox;
+
+  String get id => variant.id;
+  int get unitWholesalePrice =>
+      variant.wholesalePriceOverride ?? product.wholesalePrice;
+  int get effectiveMinSalePrice {
+    final variantWholesale = unitWholesalePrice;
+    final productMinimum = product.effectiveMinSalePrice;
+    return variantWholesale > productMinimum
+        ? variantWholesale
+        : productMinimum;
+  }
+
+  bool get priceIsValid =>
+      unitSalePrice >= effectiveMinSalePrice &&
+      (product.maxSalePrice == null || unitSalePrice <= product.maxSalePrice!);
+  int get wholesaleTotal => unitWholesalePrice * quantity;
+  int get saleTotal => unitSalePrice * quantity;
+  int get packagingTotal => (packagingBox?.price ?? 0) * quantity;
+  int get profitTotal => saleTotal - wholesaleTotal;
+
+  CartItem copyWith({
+    Product? product,
+    ProductVariant? variant,
+    int? quantity,
+    int? unitSalePrice,
+    PackagingBox? packagingBox,
+    bool clearPackaging = false,
+  }) => CartItem(
+    product: product ?? this.product,
+    variant: variant ?? this.variant,
+    quantity: quantity ?? this.quantity,
+    unitSalePrice: unitSalePrice ?? this.unitSalePrice,
+    packagingBox: clearPackaging ? null : packagingBox ?? this.packagingBox,
+  );
 }

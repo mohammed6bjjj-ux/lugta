@@ -165,6 +165,11 @@ class OrdersStrings {
       _t('الخط الزمني للطلب', 'هێڵی کاتی داواکاری', 'Order timeline');
   static String get productItemsTitle =>
       _t('المنتج والعناصر', 'بەرهەم و بڕگەکان', 'Product & items');
+  static String additionalProducts(String count) => _t(
+    '+ $count منتجات أخرى',
+    '+ $count بەرهەمی تر',
+    '+ $count more products',
+  );
   static String get customerInfoTitle =>
       _t('معلومات الزبون', 'زانیاری کڕیار', 'Customer info');
 

@@ -30,6 +30,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _storeNameController = TextEditingController();
   final _instagramController = TextEditingController();
+  final _referralCodeController = TextEditingController();
 
   Governorate? _governorate;
   bool _acceptedTerms = false;
@@ -44,6 +45,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     _storeNameController.dispose();
     _instagramController.dispose();
+    _referralCodeController.dispose();
     super.dispose();
   }
 
@@ -87,6 +89,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           instagramUrl: _instagramController.text.trim().isEmpty
               ? null
               : _instagramController.text.trim(),
+          referralCode: _referralCodeController.text.trim().isEmpty
+              ? null
+              : _referralCodeController.text.trim(),
           governorateId: _governorate!.id,
           termsVersion: session.termsVersion,
         ),
@@ -263,6 +268,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           textDirection: TextDirection.ltr,
                           prefixIcon: Icons.alternate_email_rounded,
                           textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        AppTextField(
+                          key: const ValueKey('registration_referral_code'),
+                          label: AuthStrings.referralCodeLabel,
+                          controller: _referralCodeController,
+                          hint: AuthStrings.referralCodeHint,
+                          textDirection: TextDirection.ltr,
+                          prefixIcon: Icons.group_add_outlined,
+                          textInputAction: TextInputAction.next,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[A-Za-z0-9_-]'),
+                            ),
+                            LengthLimitingTextInputFormatter(32),
+                          ],
                         ),
                         const SizedBox(height: AppSpacing.md),
                         Text(

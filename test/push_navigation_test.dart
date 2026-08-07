@@ -46,6 +46,29 @@ void main() {
     },
   );
 
+  testWidgets('trusted direct deep link resolves and opens its order', (
+    tester,
+  ) async {
+    await tester.runAsync(configureApprovedDemoSession);
+    final order = session.orders.first;
+    final deviceTokens = _FakeDeviceTokens(
+      pending: [PushOpenEvent(deepLink: 'nawl://orders/${order.id}')],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        onGenerateRoute: AppRouter.onGenerateRoute,
+        home: MainShell(deviceTokens: deviceTokens),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.byType(OrderDetailScreen), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await deviceTokens.dispose();
+  });
+
   testWidgets('unknown push target falls back to durable notifications', (
     tester,
   ) async {

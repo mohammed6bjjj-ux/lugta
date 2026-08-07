@@ -221,6 +221,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                               ),
                             ),
                             const SizedBox(width: AppSpacing.sm),
+                            _CircleBubble(
+                              icon: Icons.shopping_cart_outlined,
+                              badgeCount: session.cartQuantity,
+                              onTap: () =>
+                                  Navigator.pushNamed(context, Routes.cart),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
                             ListenableBuilder(
                               listenable: session,
                               builder: (context, _) => _CircleBubble(

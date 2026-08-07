@@ -21,7 +21,7 @@ void main() {
       AppRepositories(
         auth: base.auth,
         profile: base.profile,
-        catalog: base.catalog,
+        catalog: _FreeDeliveryCatalogRepository(base.catalog),
         orders: orders,
         wallet: base.wallet,
         notifications: base.notifications,
@@ -90,6 +90,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text(session.governorates.first.localizedName).last);
     await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      find.byKey(const ValueKey('delivery_offer_details')),
+      findsOneWidget,
+    );
+    expect(find.text('Welcome offer'), findsOneWidget);
+    expect(find.text('New account reward'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('order_wizard_next_button')));
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -102,6 +108,64 @@ void main() {
 
     expect(ordersRepository.createCalls, 1);
   });
+}
+
+class _FreeDeliveryCatalogRepository implements CatalogRepository {
+  _FreeDeliveryCatalogRepository(this._delegate);
+
+  final CatalogRepository _delegate;
+
+  @override
+  Future<List<Category>> fetchCategories() => _delegate.fetchCategories();
+
+  @override
+  Future<List<Governorate>> fetchDeliveryZones() =>
+      _delegate.fetchDeliveryZones();
+
+  @override
+  Future<Set<String>> fetchFavoriteProductIds() =>
+      _delegate.fetchFavoriteProductIds();
+
+  @override
+  Future<List<PackagingBox>> fetchPackagingBoxes() =>
+      _delegate.fetchPackagingBoxes();
+
+  @override
+  Future<Product> fetchProduct(String productId) =>
+      _delegate.fetchProduct(productId);
+
+  @override
+  Future<List<Product>> fetchProducts() => _delegate.fetchProducts();
+
+  @override
+  Future<PublicContentSnapshot> fetchPublicContent() =>
+      _delegate.fetchPublicContent();
+
+  @override
+  Future<Set<String>> fetchStockAlertProductIds() =>
+      _delegate.fetchStockAlertProductIds();
+
+  @override
+  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) async =>
+      DeliveryQuote(
+        baseDeliveryFee: 5000,
+        deliveryFee: 0,
+        deliveryDiscount: 5000,
+        campaignName: 'Welcome offer',
+        freeDeliveryReason: 'New account reward',
+        validUntil: DateTime(2026, 8, 20),
+      );
+
+  @override
+  Future<void> setFavorite(String productId, {required bool enabled}) =>
+      _delegate.setFavorite(productId, enabled: enabled);
+
+  @override
+  Future<void> setStockAlert(String productId, {required bool enabled}) =>
+      _delegate.setStockAlert(productId, enabled: enabled);
+
+  @override
+  Stream<void> watchCatalogChanges() => _delegate.watchCatalogChanges();
 }
 
 class _SlowCountingOrdersRepository implements OrdersRepository {

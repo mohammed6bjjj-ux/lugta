@@ -17,6 +17,7 @@ import '../features/catalog/category_products_screen.dart';
 import '../features/catalog/favorites_screen.dart';
 import '../features/catalog/products_screen.dart';
 import '../features/catalog/search_screen.dart';
+import '../features/cart/cart_screen.dart';
 import '../features/order_wizard/order_success_screen.dart';
 import '../features/order_wizard/order_wizard_screen.dart';
 import '../features/orders/order_detail_screen.dart';
@@ -28,6 +29,8 @@ import '../features/profile/notifications_screen.dart';
 import '../features/profile/policies_screen.dart';
 import '../features/profile/settings_screen.dart';
 import '../features/profile/support_screen.dart';
+import '../features/promotions/promotions_screen.dart';
+import '../features/referrals/referral_screen.dart';
 import '../features/shell/main_shell.dart';
 import '../features/wallet/withdraw_request_screen.dart';
 import '../features/wallet/withdrawals_history_screen.dart';
@@ -64,6 +67,7 @@ class AppRouter {
       Routes.favorites ||
       Routes.productDetail ||
       Routes.mediaViewer ||
+      Routes.cart ||
       Routes.orderWizard ||
       Routes.orderSuccess ||
       Routes.orderDetail ||
@@ -71,6 +75,8 @@ class AppRouter {
       Routes.withdrawalsHistory ||
       Routes.payoutAccounts ||
       Routes.notifications ||
+      Routes.promotions ||
+      Routes.referrals ||
       Routes.editProfile ||
       Routes.settings => true,
       _ => false,
@@ -104,6 +110,7 @@ class AppRouter {
             ? ProductDetailScreen(product: args)
             : const _UnknownRouteScreen(),
       Routes.mediaViewer => _mediaViewer(args),
+      Routes.cart => const CartScreen(),
       Routes.orderWizard =>
         args is Product
             ? OrderWizardScreen(product: args)
@@ -120,6 +127,8 @@ class AppRouter {
       Routes.withdrawalsHistory => const WithdrawalsHistoryScreen(),
       Routes.payoutAccounts => const PayoutAccountsScreen(),
       Routes.notifications => const NotificationsScreen(),
+      Routes.promotions => const PromotionsScreen(),
+      Routes.referrals => const ReferralScreen(),
       Routes.editProfile => const EditProfileScreen(),
       Routes.support => const SupportScreen(),
       Routes.policies => const PoliciesScreen(),

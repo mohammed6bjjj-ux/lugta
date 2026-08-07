@@ -29,6 +29,7 @@ abstract class Routes {
   static const favorites = '/favorites';
   static const productDetail = '/product-detail';
   static const mediaViewer = '/media-viewer';
+  static const cart = '/cart';
 
   static const orderWizard = '/order-wizard';
   static const orderSuccess = '/order-success';
@@ -39,6 +40,8 @@ abstract class Routes {
   static const payoutAccounts = '/payout-accounts';
 
   static const notifications = '/notifications';
+  static const promotions = '/promotions';
+  static const referrals = '/referrals';
   static const editProfile = '/edit-profile';
   static const support = '/support';
   static const policies = '/policies';

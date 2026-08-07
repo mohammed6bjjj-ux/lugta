@@ -8,13 +8,14 @@ import '../../core/widgets/pressable.dart';
 import '../../data/app_settings.dart';
 import '../../data/backend.dart';
 import '../../data/models.dart';
+import '../../data/notification_deep_link.dart';
 import '../../data/services/device_token_registrar.dart';
 import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
 import '../catalog/home_screen.dart';
-import '../catalog/new_arrivals_promo.dart';
 import '../catalog/products_screen.dart';
 import '../orders/orders_screen.dart';
+import '../promotions/promotion_notification_popup.dart';
 import '../profile/profile_screen.dart';
 import '../wallet/wallet_screen.dart';
 
@@ -35,7 +36,9 @@ class _MainShellState extends State<MainShell> {
   final List<PushOpenEvent> _queuedPushOpens = [];
   bool _pushNavigationScheduled = false;
   bool _pushNavigationInFlight = false;
-  VoidCallback? _promoWaiter;
+  VoidCallback? _popupWaiter;
+  bool _popupShownThisShell = false;
+  bool _popupDialogOpen = false;
 
   late final List<Widget?> _tabs = <Widget?>[
     const HomeScreen(),
@@ -75,14 +78,12 @@ class _MainShellState extends State<MainShell> {
     while ((pending = deviceTokens.takePendingNotificationOpen()) != null) {
       _queuePushOpen(pending!);
     }
-    _schedulePromo();
+    _scheduleNotificationPopup();
   }
 
-  /// The catalog usually lands a moment after the shell mounts, so wait for it
-  /// instead of checking once and giving up. A push notification that opens a
-  /// specific screen always wins — interrupting that with an ad would hijack a
-  /// deliberate tap.
-  void _schedulePromo() {
+  /// Wait for the durable server notification instead of choosing a random
+  /// catalog item. An explicit push tap always wins over an automatic popup.
+  void _scheduleNotificationPopup() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       void attempt() {
@@ -91,19 +92,129 @@ class _MainShellState extends State<MainShell> {
           session.removeListener(attempt);
           return;
         }
-        if (session.products.isEmpty) return;
+        if (_popupShownThisShell || _popupDialogOpen) {
+          session.removeListener(attempt);
+          return;
+        }
+        final notification = session.nextPopupNotification;
+        if (notification == null) return;
         session.removeListener(attempt);
-        unawaited(NewArrivalsPromo.maybeShow(context));
+        _popupShownThisShell = true;
+        unawaited(_showNotificationPopup(notification));
       }
 
       session.addListener(attempt);
-      _promoWaiter = attempt;
+      _popupWaiter = attempt;
       attempt();
     });
   }
 
+  Future<void> _showNotificationPopup(AppNotification notification) async {
+    await session.markNotificationPopupSeen(notification.id);
+    if (!mounted || _queuedPushOpens.isNotEmpty) return;
+    _popupDialogOpen = true;
+    final open = await showPromotionNotificationPopup(context, notification);
+    _popupDialogOpen = false;
+    if (!open || !mounted || _queuedPushOpens.isNotEmpty) return;
+    try {
+      await session.markNotificationRead(notification.id);
+    } catch (_) {
+      // Opening the linked content is more important than read-state sync.
+    }
+    if (!mounted) return;
+    await _openNotificationTarget(notification);
+  }
+
+  Future<void> _openNotificationTarget(AppNotification notification) async {
+    final type = notification.targetType?.trim().toLowerCase();
+    if (type == 'referral' || notification.type == NotificationType.referral) {
+      _refreshPromotionEngagement(includeReferralSummary: true);
+      await Navigator.of(context).pushNamed(Routes.referrals);
+      return;
+    }
+    if (notification.targetPromotionId != null ||
+        type == 'promotion' ||
+        type == 'reward' ||
+        notification.type == NotificationType.promotion ||
+        notification.type == NotificationType.reward) {
+      _refreshPromotionEngagement();
+      await Navigator.of(context).pushNamed(Routes.promotions);
+      return;
+    }
+
+    final deepTarget = parseTrustedNotificationDeepLink(notification.deepLink);
+    final orderId =
+        notification.targetOrderId ??
+        (deepTarget?.kind == NotificationDeepLinkKind.order
+            ? deepTarget?.entityId
+            : null);
+    if (orderId != null) {
+      try {
+        final order = await session.refreshOrderById(orderId);
+        if (mounted) {
+          await Navigator.of(
+            context,
+          ).pushNamed(Routes.orderDetail, arguments: order);
+          return;
+        }
+      } catch (_) {
+        // Missing, offline or RLS-denied targets use the durable inbox fallback.
+      }
+    }
+
+    final productId =
+        notification.targetProductId ??
+        (deepTarget?.kind == NotificationDeepLinkKind.product
+            ? deepTarget?.entityId
+            : null);
+    if (productId != null) {
+      try {
+        final product = await session.refreshProductById(productId);
+        if (mounted) {
+          await Navigator.of(
+            context,
+          ).pushNamed(Routes.productDetail, arguments: product);
+          return;
+        }
+      } catch (_) {
+        // The durable notifications page remains a safe fallback.
+      }
+    }
+
+    if (!mounted) return;
+    if (deepTarget?.kind == NotificationDeepLinkKind.referrals) {
+      _refreshPromotionEngagement(includeReferralSummary: true);
+      await Navigator.of(context).pushNamed(Routes.referrals);
+      return;
+    }
+    if (deepTarget?.kind == NotificationDeepLinkKind.promotions) {
+      _refreshPromotionEngagement();
+      await Navigator.of(context).pushNamed(Routes.promotions);
+      return;
+    }
+    if (deepTarget?.kind == NotificationDeepLinkKind.products) {
+      await Navigator.of(context).pushNamed(Routes.products);
+      return;
+    }
+    await Navigator.of(context).pushNamed(Routes.notifications);
+  }
+
+  void _refreshPromotionEngagement({bool includeReferralSummary = false}) {
+    unawaited(
+      session
+          .refreshPromotionEngagement(
+            includeReferralSummary: includeReferralSummary,
+          )
+          .catchError((_) {}),
+    );
+  }
+
   void _queuePushOpen(PushOpenEvent event) {
     if (!mounted) return;
+    if (_popupDialogOpen) {
+      _popupDialogOpen = false;
+      Navigator.of(context, rootNavigator: true).pop(false);
+    }
     // Keep only the newest explicit tap while a target is being resolved. This
     // prevents a burst of OS callbacks from stacking several detail screens.
     _queuedPushOpens
@@ -138,20 +249,82 @@ class _MainShellState extends State<MainShell> {
           _queuedPushOpens.clear();
           return;
         }
+        if (!mounted) return;
+        final navigator = Navigator.of(context);
+
+        final durable = event.notificationId == null
+            ? null
+            : session.notificationById(event.notificationId!);
+        final targetType = (event.targetType ?? durable?.targetType)
+            ?.trim()
+            .toLowerCase();
+        final targetPromotionId =
+            event.promotionId ?? durable?.targetPromotionId;
+        final deepTarget = parseTrustedNotificationDeepLink(
+          event.deepLink ?? durable?.deepLink,
+        );
+        if (durable != null) {
+          unawaited(
+            session.markNotificationRead(durable.id).catchError((_) {}),
+          );
+        }
+        if (targetType == 'referral' ||
+            durable?.type == NotificationType.referral) {
+          _refreshPromotionEngagement(includeReferralSummary: true);
+          await navigator.pushNamed(Routes.referrals);
+          continue;
+        }
+        if (targetPromotionId != null ||
+            targetType == 'promotion' ||
+            targetType == 'reward' ||
+            durable?.type == NotificationType.promotion ||
+            durable?.type == NotificationType.reward) {
+          _refreshPromotionEngagement();
+          await navigator.pushNamed(Routes.promotions);
+          continue;
+        }
 
         Order? order;
         Product? product;
-        if (event.orderId != null) {
+        final explicitOrderId = event.orderId ?? durable?.targetOrderId;
+        final explicitProductId = event.productId ?? durable?.targetProductId;
+        if (explicitOrderId == null && explicitProductId == null) {
+          if (deepTarget?.kind == NotificationDeepLinkKind.referrals) {
+            _refreshPromotionEngagement(includeReferralSummary: true);
+            await navigator.pushNamed(Routes.referrals);
+            continue;
+          }
+          if (deepTarget?.kind == NotificationDeepLinkKind.promotions) {
+            _refreshPromotionEngagement();
+            await navigator.pushNamed(Routes.promotions);
+            continue;
+          }
+          if (deepTarget?.kind == NotificationDeepLinkKind.products) {
+            await navigator.pushNamed(Routes.products);
+            continue;
+          }
+        }
+        final orderId =
+            explicitOrderId ??
+            (deepTarget?.kind == NotificationDeepLinkKind.order
+                ? deepTarget?.entityId
+                : null);
+        final productId =
+            explicitProductId ??
+            (deepTarget?.kind == NotificationDeepLinkKind.product
+                ? deepTarget?.entityId
+                : null);
+        if (orderId != null) {
           try {
-            order = await session.refreshOrderById(event.orderId!);
+            order = await session.refreshOrderById(orderId);
           } catch (_) {
             // Missing/RLS-denied/offline targets fall back to the durable list;
             // never open the potentially stale cached order snapshot.
           }
         }
-        if (order == null && event.productId != null) {
+        if (order == null && productId != null) {
           try {
-            product = await session.refreshProductById(event.productId!);
+            product = await session.refreshProductById(productId);
           } catch (_) {
             // The durable notifications page remains a safe fallback.
           }
@@ -198,7 +371,7 @@ class _MainShellState extends State<MainShell> {
   @override
   void dispose() {
     unawaited(_pushOpenSubscription?.cancel());
-    if (_promoWaiter != null) session.removeListener(_promoWaiter!);
+    if (_popupWaiter != null) session.removeListener(_popupWaiter!);
     super.dispose();
   }
 

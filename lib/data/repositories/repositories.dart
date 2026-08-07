@@ -13,6 +13,7 @@ class RegistrationRequest {
     required this.governorateId,
     required this.termsVersion,
     this.instagramUrl,
+    this.referralCode,
   });
 
   final String fullName;
@@ -22,10 +23,11 @@ class RegistrationRequest {
   final String governorateId;
   final String termsVersion;
   final String? instagramUrl;
+  final String? referralCode;
 }
 
 class CreateOrderRequest {
-  const CreateOrderRequest({
+  CreateOrderRequest({
     required this.clientRequestId,
     required this.product,
     required this.items,
@@ -37,7 +39,35 @@ class CreateOrderRequest {
     this.customerPhone2,
     this.notes,
     this.packagingBox,
-  });
+  }) : lines = List<CreateOrderLine>.unmodifiable([
+         for (final item in items)
+           CreateOrderLine(
+             product: product,
+             variant: item.variant,
+             quantity: item.quantity,
+             unitSalePrice: unitSalePrice,
+             packagingBox: packagingBox,
+           ),
+       ]);
+
+  CreateOrderRequest.lines({
+    required this.clientRequestId,
+    required List<CreateOrderLine> lines,
+    required this.governorate,
+    required this.customerName,
+    required this.customerPhone,
+    required this.addressDetails,
+    this.customerPhone2,
+    this.notes,
+  }) : assert(lines.isNotEmpty),
+       lines = List<CreateOrderLine>.unmodifiable(lines),
+       product = lines.first.product,
+       items = List<OrderDraftItem>.unmodifiable([
+         for (final line in lines)
+           OrderDraftItem(variant: line.variant, quantity: line.quantity),
+       ]),
+       unitSalePrice = lines.first.unitSalePrice,
+       packagingBox = lines.first.packagingBox;
 
   final String clientRequestId;
   final Product product;
@@ -49,6 +79,32 @@ class CreateOrderRequest {
   final String? customerPhone2;
   final String addressDetails;
   final String? notes;
+  final PackagingBox? packagingBox;
+  final List<CreateOrderLine> lines;
+}
+
+/// عقد سطر مستقل عند إرسال طلب متعدد المنتجات إلى الخادم.
+class CreateOrderLine {
+  const CreateOrderLine({
+    required this.product,
+    required this.variant,
+    required this.quantity,
+    required this.unitSalePrice,
+    this.packagingBox,
+  });
+
+  factory CreateOrderLine.fromCartItem(CartItem item) => CreateOrderLine(
+    product: item.product,
+    variant: item.variant,
+    quantity: item.quantity,
+    unitSalePrice: item.unitSalePrice,
+    packagingBox: item.packagingBox,
+  );
+
+  final Product product;
+  final ProductVariant variant;
+  final int quantity;
+  final int unitSalePrice;
   final PackagingBox? packagingBox;
 }
 
@@ -233,7 +289,28 @@ abstract interface class NotificationsRepository {
   Future<List<AppNotification>> fetchNotifications();
   Future<void> markRead(String notificationId);
   Future<void> markAllRead();
+  Future<void> markPopupSeen(String notificationId);
   Stream<List<AppNotification>> watchNotifications();
+}
+
+abstract interface class PromotionsRepository {
+  Future<List<PromotionGrant>> fetchPromotionGrants();
+  Future<ReferralSummary> fetchReferralSummary();
+  Stream<void> watchPromotionGrantChanges();
+}
+
+class EmptyPromotionsRepository implements PromotionsRepository {
+  const EmptyPromotionsRepository();
+
+  @override
+  Future<List<PromotionGrant>> fetchPromotionGrants() async => const [];
+
+  @override
+  Future<ReferralSummary> fetchReferralSummary() async =>
+      const ReferralSummary.empty();
+
+  @override
+  Stream<void> watchPromotionGrantChanges() => const Stream.empty();
 }
 
 class AppRepositories {
@@ -244,6 +321,7 @@ class AppRepositories {
     required this.orders,
     required this.wallet,
     required this.notifications,
+    this.promotions = const EmptyPromotionsRepository(),
     required this.isDemo,
   });
 
@@ -253,6 +331,7 @@ class AppRepositories {
   final OrdersRepository orders;
   final WalletRepository wallet;
   final NotificationsRepository notifications;
+  final PromotionsRepository promotions;
   final bool isDemo;
 }
 

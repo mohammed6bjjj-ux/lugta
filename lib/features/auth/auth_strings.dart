@@ -140,6 +140,16 @@ class AuthStrings {
     'لینکی پەیجی ئینستاگرام (ئارەزوومەندانە)',
     'Instagram page link (optional)',
   );
+  static String get referralCodeLabel => _t(
+    'رمز الدعوة (اختياري)',
+    'کۆدی بانگهێشت (ئارەزوومەندانە)',
+    'Referral code (optional)',
+  );
+  static String get referralCodeHint => _t(
+    'أدخل الرمز الذي أرسله لك صديقك',
+    'کۆدەکەی هاوڕێکەت بنووسە',
+    'Enter the code a friend shared',
+  );
   static String get governorate => _t('المحافظة', 'پارێزگا', 'Governorate');
   static String get governorateHint =>
       _t('اختر محافظتك', 'پارێزگاکەت هەڵبژێرە', 'Select your governorate');

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +17,8 @@ import '../../core/widgets/session_refresh.dart';
 import '../../data/models.dart';
 import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
+import '../cart/cart_strings.dart';
+import '../cart/product_cart_configurator.dart';
 import 'media_share_sheet.dart';
 import 'product_strings.dart';
 import 'product_media_thumbnail.dart';
@@ -32,11 +35,19 @@ class ProductDetailScreen extends StatefulWidget {
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
 }
 
-class _ProductDetailScreenState extends State<ProductDetailScreen> {
+class _ProductDetailScreenState extends State<ProductDetailScreen>
+    with SingleTickerProviderStateMixin {
   static const double _galleryHeight = 420;
   static const double _sheetOverlap = 28;
 
   final PageController _galleryController = PageController();
+  final GlobalKey _cartAnchorKey = GlobalKey();
+  final GlobalKey _addButtonAnchorKey = GlobalKey();
+  late final AnimationController _cartMotionController;
+  OverlayEntry? _cartFlightEntry;
+  Offset _cartFlightStart = Offset.zero;
+  Offset _cartFlightEnd = Offset.zero;
+  String _cartFlightImageUrl = '';
   int _currentPage = 0;
   ProductVariant? _selectedVariant;
 
@@ -44,7 +55,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       session.productById(widget.product.id) ?? widget.product;
 
   @override
+  void initState() {
+    super.initState();
+    _cartMotionController =
+        AnimationController(vsync: this, duration: AppDurations.slow)
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed) {
+              _removeCartFlight();
+            }
+          });
+    for (final variant in widget.product.variants) {
+      if (variant.inStock) {
+        _selectedVariant = variant;
+        break;
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    _removeCartFlight();
+    _cartMotionController.dispose();
     _galleryController.dispose();
     super.dispose();
   }
@@ -89,6 +120,191 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(ProductStrings.descriptionCopied)));
+  }
+
+  Future<void> _addSelectedToCart() async {
+    ProductVariant? selected;
+    final selectedId = _selectedVariant?.id;
+    for (final variant in product.variants) {
+      if (variant.id == selectedId && variant.inStock) {
+        selected = variant;
+        break;
+      }
+    }
+    if (selected == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(CartStrings.chooseVariantFirst)));
+      return;
+    }
+    final configuration = await showProductCartConfigurator(
+      context: context,
+      product: product,
+      variant: selected,
+      packagingBoxes: session.packagingBoxes,
+      existingItem: session.cartItemForVariant(selected.id),
+    );
+    if (!mounted || configuration == null) return;
+    try {
+      session.setCartItemConfiguration(
+        product: product,
+        variant: selected,
+        quantity: configuration.quantity,
+        unitSalePrice: configuration.unitSalePrice,
+        packagingBox: configuration.packagingBox,
+      );
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      await _playCartMotion(selected);
+      if (!mounted) return;
+      _showAddedToCartMessage();
+    } catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
+  Future<void> _playCartMotion(ProductVariant variant) async {
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    final source = _addButtonAnchorKey.currentContext?.findRenderObject();
+    final target = _cartAnchorKey.currentContext?.findRenderObject();
+    if (source is! RenderBox || target is! RenderBox) return;
+
+    _cartFlightStart = source.localToGlobal(source.size.center(Offset.zero));
+    _cartFlightEnd = target.localToGlobal(target.size.center(Offset.zero));
+    _cartFlightImageUrl = variant.imageUrl.trim().isEmpty
+        ? product.coverImage
+        : variant.imageUrl;
+    _removeCartFlight();
+    _cartFlightEntry = OverlayEntry(builder: _buildCartFlight);
+    Overlay.of(context, rootOverlay: true).insert(_cartFlightEntry!);
+    await _cartMotionController.forward(from: 0);
+  }
+
+  Widget _buildCartFlight(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _cartMotionController,
+      builder: (context, _) {
+        final progress = Curves.easeInOutCubic.transform(
+          _cartMotionController.value,
+        );
+        final position = Offset.lerp(
+          _cartFlightStart,
+          _cartFlightEnd,
+          progress,
+        )!;
+        final fadeProgress = ((progress - .68) / .32).clamp(0.0, 1.0);
+        return Positioned(
+          left: position.dx - 29,
+          top: position.dy - 29,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: 1 - Curves.easeIn.transform(fadeProgress),
+              child: Transform.scale(
+                scale: 1 - (.55 * progress),
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: AppColors.gold, width: 2),
+                    boxShadow: AppShadows.floating,
+                  ),
+                  child: _cartFlightImageUrl.isEmpty
+                      ? Icon(
+                          Icons.shopping_bag_outlined,
+                          color: AppColors.goldDark,
+                        )
+                      : AppNetworkImage(
+                          _cartFlightImageUrl,
+                          width: 52,
+                          height: 52,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _removeCartFlight() {
+    _cartFlightEntry?.remove();
+    _cartFlightEntry = null;
+  }
+
+  void _showAddedToCartMessage() {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.primary,
+          margin: const EdgeInsetsDirectional.fromSTEB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            108,
+          ),
+          duration: const Duration(seconds: 4),
+          content: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Icon(
+                  Icons.check_rounded,
+                  color: AppColors.onGold,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      CartStrings.addedToCart,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.onPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      CartStrings.cartReadySubtitle(
+                        product.localizedName,
+                        formatNumber(session.cartQuantity),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.onPrimary.withValues(alpha: .82),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          action: SnackBarAction(
+            label: CartStrings.viewCart,
+            textColor: AppColors.gold,
+            onPressed: () => Navigator.of(context).pushNamed(Routes.cart),
+          ),
+        ),
+      );
   }
 
   @override
@@ -169,6 +385,40 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 },
               ),
               const SizedBox(width: AppSpacing.sm),
+              ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => AnimatedBuilder(
+                  animation: _cartMotionController,
+                  builder: (context, child) {
+                    final pulseProgress =
+                        ((_cartMotionController.value - .62) / .38).clamp(
+                          0.0,
+                          1.0,
+                        );
+                    final scale = 1 + (math.sin(pulseProgress * math.pi) * .16);
+                    return Transform.scale(scale: scale, child: child);
+                  },
+                  child: RepaintBoundary(
+                    key: _cartAnchorKey,
+                    child: _GlassCircleButton(
+                      tooltip: CartStrings.openCart,
+                      onTap: () => Navigator.of(context).pushNamed(Routes.cart),
+                      child: Badge(
+                        isLabelVisible: session.cartQuantity > 0,
+                        label: Text(formatNumber(session.cartQuantity)),
+                        backgroundColor: AppColors.goldDark,
+                        textColor: AppColors.onGold,
+                        child: Icon(
+                          Icons.shopping_cart_outlined,
+                          size: 21,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               _GlassCircleButton(
                 tooltip: ProductStrings.shareMediaTooltip,
                 onTap: () => showMediaShareSheet(context, product),
@@ -208,55 +458,61 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ? variantImage
               : null;
           final showVideoOverlay = item.isVideo && overrideUrl == null;
-          return GestureDetector(
-            onTap: () => unawaited(_openViewer(index)),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Hero(
-                  tag: item.id,
-                  child: overrideUrl != null
-                      ? AppNetworkImage(overrideUrl)
-                      : ProductMediaThumbnail(item: item),
-                ),
-                if (showVideoOverlay) ...[
-                  Center(
-                    child: Container(
-                      width: 66,
-                      height: 66,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: .4),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: .55),
-                          width: 1.2,
+          return Semantics(
+            button: true,
+            label: '${product.localizedName} ${index + 1}',
+            child: Pressable(
+              onTap: () => unawaited(_openViewer(index)),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Hero(
+                    tag: item.id,
+                    child: overrideUrl != null
+                        ? AppNetworkImage(overrideUrl)
+                        : ProductMediaThumbnail(item: item),
+                  ),
+                  if (showVideoOverlay) ...[
+                    Center(
+                      child: Container(
+                        width: 66,
+                        height: 66,
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.scrim.withValues(alpha: .4),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.onGold.withValues(alpha: .55),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.play_arrow_rounded,
+                          color: AppColors.onGold,
+                          size: 42,
                         ),
                       ),
-                      child: const Icon(
-                        Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 42,
+                    ),
+                    PositionedDirectional(
+                      top: 110,
+                      start: AppSpacing.md,
+                      child: _darkChip(
+                        icon: Icons.videocam_rounded,
+                        label: ProductStrings.video,
                       ),
                     ),
-                  ),
-                  PositionedDirectional(
-                    top: 110,
-                    start: AppSpacing.md,
-                    child: _darkChip(
-                      icon: Icons.videocam_rounded,
-                      label: ProductStrings.video,
+                    PositionedDirectional(
+                      bottom: _sheetOverlap + AppSpacing.sm + 4,
+                      start: AppSpacing.md,
+                      child: _darkChip(
+                        icon: Icons.schedule_rounded,
+                        label: _fmtDuration(item.durationSec),
+                      ),
                     ),
-                  ),
-                  PositionedDirectional(
-                    bottom: _sheetOverlap + AppSpacing.sm + 4,
-                    start: AppSpacing.md,
-                    child: _darkChip(
-                      icon: Icons.schedule_rounded,
-                      label: _fmtDuration(item.durationSec),
-                    ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           );
         },
@@ -268,18 +524,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: .55),
+        color: Theme.of(context).colorScheme.scrim.withValues(alpha: .55),
         borderRadius: BorderRadius.circular(100),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.white),
+          Icon(icon, size: 14, color: AppColors.onGold),
           const SizedBox(width: 4),
           Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppColors.onGold,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -332,7 +588,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1D1B18).withValues(alpha: .08),
+              color: AppColors.p.shadowBase.withValues(alpha: .08),
               blurRadius: 30,
               offset: const Offset(0, -10),
             ),
@@ -498,7 +754,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: Text(
               CoreStrings.badgeNew,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: Colors.white,
+                color: AppColors.onGold,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -531,7 +787,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
                           CoreStrings.wholesalePrice,
@@ -540,20 +799,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                         ),
                         if (product.hasDiscount) ...[
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              formatIqd(product.oldWholesalePrice!),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: AppColors.textSecondary,
-                                decoration: TextDecoration.lineThrough,
-                                decorationColor: AppColors.error,
-                              ),
+                          Text(
+                            formatIqd(product.oldWholesalePrice!),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: AppColors.textSecondary,
+                              decoration: TextDecoration.lineThrough,
+                              decorationColor: AppColors.error,
                             ),
                           ),
-                          const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 7,
@@ -568,7 +823,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 formatNumber(product.discountPercent),
                               ),
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.white,
+                                color: AppColors.onGold,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -588,7 +843,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                          color: AppColors.onGold,
                         ),
                       ),
                     ),
@@ -986,15 +1241,35 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   child: ListenableBuilder(
                     listenable: session,
                     builder: (context, _) => product.inStock
-                        ? PrimaryButton(
-                            label: ProductStrings.createOrder,
-                            icon: Icons.add_shopping_cart_rounded,
-                            gold: true,
-                            onPressed: () => Navigator.pushNamed(
-                              context,
-                              Routes.orderWizard,
-                              arguments: product,
-                            ),
+                        ? Row(
+                            children: [
+                              Expanded(
+                                child: SecondaryButton(
+                                  label: CartStrings.buyNow,
+                                  onPressed: () => Navigator.pushNamed(
+                                    context,
+                                    Routes.orderWizard,
+                                    arguments: product,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                flex: 2,
+                                child: RepaintBoundary(
+                                  key: _addButtonAnchorKey,
+                                  child: PrimaryButton(
+                                    key: const ValueKey(
+                                      'product_add_to_cart_button',
+                                    ),
+                                    label: CartStrings.addToCart,
+                                    icon: Icons.add_shopping_cart_rounded,
+                                    gold: true,
+                                    onPressed: _addSelectedToCart,
+                                  ),
+                                ),
+                              ),
+                            ],
                           )
                         : _buildAlertButton(context),
                   ),

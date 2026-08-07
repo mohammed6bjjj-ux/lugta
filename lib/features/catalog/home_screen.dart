@@ -14,6 +14,7 @@ import '../../core/widgets/section_header.dart';
 import '../../core/widgets/session_refresh.dart';
 import '../../data/models.dart';
 import '../../data/session.dart';
+import '../cart/cart_strings.dart';
 import 'catalog_strings.dart';
 
 /// الشاشة الرئيسية — محتوى تبويب «الرئيسية» داخل الشِل.
@@ -79,6 +80,14 @@ class HomeScreen extends StatelessWidget {
                                   context,
                                   Routes.favorites,
                                 ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              _CircleIconButton(
+                                tooltip: CartStrings.openCart,
+                                icon: Icons.shopping_cart_outlined,
+                                badgeCount: session.cartQuantity,
+                                onTap: () =>
+                                    Navigator.pushNamed(context, Routes.cart),
                               ),
                               const SizedBox(width: AppSpacing.sm),
                               ListenableBuilder(

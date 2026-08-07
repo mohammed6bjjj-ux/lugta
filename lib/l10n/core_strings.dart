@@ -13,7 +13,7 @@ class CoreStrings {
       };
 
   // ── عام ──
-  static String get appTitle => _t('لقطة', 'لقطة', 'Luqta');
+  static String get appTitle => _t('لكطة', 'لكطة', 'Lugta');
   static String get unknownRouteTitle =>
       _t('صفحة غير موجودة', 'پەڕە نەدۆزرایەوە', 'Page not found');
   static String get unknownRouteBody => _t(
@@ -23,6 +23,10 @@ class CoreStrings {
   );
   static String get refreshTooltip =>
       _t('تحديث البيانات', 'نوێکردنەوەی داتا', 'Refresh data');
+  static String get increaseQuantity =>
+      _t('زيادة الكمية', 'زیادکردنی بڕ', 'Increase quantity');
+  static String get decreaseQuantity =>
+      _t('تقليل الكمية', 'کەمکردنەوەی بڕ', 'Decrease quantity');
   static String get refreshFailed => _t(
     'تعذر تحديث البيانات. تحقق من الإنترنت وحاول مرة أخرى.',
     'نوێکردنەوەی داتا سەرکەوتوو نەبوو. ئینتەرنێت بپشکنەوە و دووبارە هەوڵ بدە.',
