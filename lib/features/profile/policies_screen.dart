@@ -89,7 +89,7 @@ class PoliciesScreen extends StatelessWidget {
                                   const SizedBox(height: AppSpacing.xs),
                                   Text(
                                     localized(
-                                      ar: 'كل ما يوضح حقوقك والتزاماتك وطريقة عمل لقطة في مكان واحد.',
+                                      ar: 'كل ما يوضح حقوقك والتزاماتك وطريقة عمل لكطة في مكان واحد.',
                                       ku: 'هەموو ماف و ئەرکەکانت و شێوازی کاری لقطة لە یەک شوێن.',
                                       en: 'Your rights, responsibilities and how Luqta works, in one place.',
                                     ),
@@ -179,7 +179,7 @@ class PoliciesScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   localized(
-                    ar: 'تشغّل Nawl Ltd تطبيق لقطة داخل العراق. للدعم والاستفسارات: 0773 882 2202',
+                    ar: 'تشغّل Nawl Ltd تطبيق لكطة داخل العراق. للدعم والاستفسارات: 0773 882 2202',
                     ku: 'Nawl Ltd ئەپی لقطة لە عێراق بەڕێوە دەبات. پشتگیری: 0773 882 2202',
                     en: 'Luqta is operated in Iraq by Nawl Ltd. Support: 0773 882 2202',
                   ),

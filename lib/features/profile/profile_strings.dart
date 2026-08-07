@@ -270,7 +270,7 @@ class ProfileStrings {
 
   // ── حول التطبيق ──
   static String get brandTagline => _t(
-    'كل يوم لقطة جديدة',
+    'كل يوم لكطة جديدة',
     'هەموو ڕۆژێک لقطةیەکی نوێ',
     'A new find every day',
   );
@@ -311,7 +311,7 @@ class ProfileStrings {
     'Your profit is the gap between wholesale and your sale price — paid to your wallet after delivery',
   );
   static String get copyright => _t(
-    '© 2026 لقطة — جميع الحقوق محفوظة',
+    '© 2026 لكطة — جميع الحقوق محفوظة',
     '© 2026 لقطة — هەموو مافەکان پارێزراون',
     '© 2026 Luqta — All rights reserved',
   );

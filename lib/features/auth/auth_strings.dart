@@ -14,7 +14,7 @@ class AuthStrings {
 
   // ── شاشة البداية ──
   static String get splashTagline => _t(
-    'كل يوم لقطة جديدة',
+    'كل يوم لكطة جديدة',
     'هەموو ڕۆژێک لقطةیەکی نوێ',
     'A new find every day',
   );
