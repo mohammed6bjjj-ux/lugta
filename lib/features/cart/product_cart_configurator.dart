@@ -454,7 +454,7 @@ class _ProductCartConfiguratorSheetState
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.goldSoft,
+        color: AppColors.accentSoft,
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Column(
@@ -503,7 +503,7 @@ class _ProductCartConfiguratorSheetState
         icon: widget.existingItem == null
             ? Icons.add_shopping_cart_rounded
             : Icons.sync_rounded,
-        gold: true,
+        accented: true,
         onPressed: _submit,
       ),
     );
@@ -528,7 +528,7 @@ class _ReadOnlySalePrice extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.sell_outlined, color: AppColors.goldDark),
+          Icon(Icons.sell_outlined, color: AppColors.accentStrong),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -579,7 +579,7 @@ class _PackagingOptionCard extends StatelessWidget {
       child: SizedBox(
         width: 132,
         child: Material(
-          color: selected ? AppColors.goldSoft : AppColors.surfaceAlt,
+          color: selected ? AppColors.accentSoft : AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(AppRadius.md),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -588,7 +588,7 @@ class _PackagingOptionCard extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: selected ? AppColors.goldDark : AppColors.divider,
+                  color: selected ? AppColors.accentStrong : AppColors.divider,
                   width: selected ? 2 : 1,
                 ),
                 borderRadius: BorderRadius.circular(AppRadius.md),
@@ -647,7 +647,7 @@ class _PackagingOptionCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: selected
-                          ? AppColors.goldDark
+                          ? AppColors.accentStrong
                           : AppColors.textSecondary,
                       fontWeight: FontWeight.w700,
                     ),

@@ -6,10 +6,12 @@ import '../../app/routes.dart';
 import '../../app/theme.dart';
 import '../../core/formatters.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/app_network_image.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/entrance.dart';
 import '../../core/widgets/session_refresh.dart';
 import '../../data/models.dart';
+import '../../data/notification_deep_link.dart';
 import '../../data/session.dart';
 import 'profile_strings.dart';
 
@@ -44,6 +46,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (!mounted) return;
 
     final targetType = notification.targetType?.trim().toLowerCase();
+    final deepTarget = parseTrustedNotificationDeepLink(notification.deepLink);
+    if (targetType == 'loyalty' ||
+        deepTarget?.kind == NotificationDeepLinkKind.loyalty) {
+      Navigator.pushNamed(context, Routes.loyalty);
+      return;
+    }
     if (targetType == 'referral' ||
         notification.type == NotificationType.referral) {
       Navigator.pushNamed(context, Routes.referrals);
@@ -55,6 +63,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         notification.type == NotificationType.promotion ||
         notification.type == NotificationType.reward) {
       Navigator.pushNamed(context, Routes.promotions);
+      return;
+    }
+
+    if (notification.type == NotificationType.wallet) {
+      Navigator.pushNamed(context, Routes.withdrawalsHistory);
       return;
     }
 
@@ -145,26 +158,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           appBar: AppBar(
             title: Text(ProfileStrings.notifications),
             actions: [
-              if (MediaQuery.sizeOf(context).width >= 480)
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
-                  child: TextButton(
-                    key: const ValueKey('notifications_mark_all_read'),
-                    onPressed: unread == 0
-                        ? null
-                        : () => unawaited(_markAllReadBestEffort()),
-                    child: Text(ProfileStrings.markAllRead),
-                  ),
-                )
-              else
-                IconButton(
-                  key: const ValueKey('notifications_mark_all_read'),
-                  onPressed: unread == 0
-                      ? null
-                      : () => unawaited(_markAllReadBestEffort()),
-                  tooltip: ProfileStrings.markAllRead,
-                  icon: const Icon(Icons.done_all_rounded),
-                ),
+              IconButton(
+                key: const ValueKey('notifications_mark_all_read'),
+                onPressed: unread == 0
+                    ? null
+                    : () => unawaited(_markAllReadBestEffort()),
+                tooltip: ProfileStrings.markAllRead,
+                icon: const Icon(Icons.done_all_rounded),
+              ),
             ],
           ),
           body: SessionRefreshIndicator(
@@ -185,7 +186,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   )
                 : ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(
+                    padding: const EdgeInsetsDirectional.fromSTEB(
                       AppSpacing.md,
                       AppSpacing.sm,
                       AppSpacing.md,
@@ -245,22 +246,38 @@ class _NotificationTile extends StatelessWidget {
       color: n.isRead
           ? AppColors.surface
           : Color.alphaBlend(
-              AppColors.goldSoft.withValues(alpha: .45),
-              Colors.white,
+              AppColors.accentSoft.withValues(alpha: .45),
+              AppColors.surface,
             ),
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: n.type.color.withValues(alpha: .12),
-              shape: BoxShape.circle,
+          if (n.imageUrl?.isNotEmpty == true)
+            Semantics(
+              image: true,
+              label: n.imageAlt ?? n.title,
+              child: ExcludeSemantics(
+                child: SizedBox.square(
+                  dimension: 68,
+                  child: AppNetworkImage(
+                    n.imageUrl!,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    fallbackIcon: n.type.icon,
+                  ),
+                ),
+              ),
+            )
+          else
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: n.type.color.withValues(alpha: .12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(n.type.icon, size: 22, color: n.type.color),
             ),
-            child: Icon(n.type.icon, size: 22, color: n.type.color),
-          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -365,11 +382,13 @@ class _PulsingDotState extends State<_PulsingDot> {
           width: _expanded ? 10 : 7,
           height: _expanded ? 10 : 7,
           decoration: BoxDecoration(
-            color: AppColors.gold,
+            color: AppColors.accent,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: AppColors.gold.withValues(alpha: _expanded ? .45 : .15),
+                color: AppColors.accent.withValues(
+                  alpha: _expanded ? .45 : .15,
+                ),
                 blurRadius: _expanded ? 10 : 4,
                 spreadRadius: _expanded ? 2 : 0,
               ),

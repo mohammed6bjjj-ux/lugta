@@ -4,6 +4,7 @@ enum NotificationDeepLinkKind {
   product,
   promotions,
   referrals,
+  loyalty,
   order,
 }
 
@@ -62,6 +63,9 @@ NotificationDeepLinkTarget? parseTrustedNotificationDeepLink(String? raw) {
       ),
       'referrals' => const NotificationDeepLinkTarget(
         NotificationDeepLinkKind.referrals,
+      ),
+      'loyalty' => const NotificationDeepLinkTarget(
+        NotificationDeepLinkKind.loyalty,
       ),
       _ => null,
     };

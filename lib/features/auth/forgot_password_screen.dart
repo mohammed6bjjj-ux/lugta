@@ -403,7 +403,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.2,
-                      color: AppColors.goldDark,
+                      color: AppColors.accentStrong,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -598,7 +598,7 @@ class _StepProgressIndicator extends StatelessWidget {
                     heightFactor: 1,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        gradient: AppColors.goldGradient,
+                        gradient: AppColors.accentGradient,
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
@@ -618,30 +618,30 @@ class _StepProgressIndicator extends StatelessWidget {
                   height: 36,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: i < current ? AppColors.goldGradient : null,
+                    gradient: i < current ? AppColors.accentGradient : null,
                     color: switch (current - i) {
                       > 0 => null,
-                      0 => AppColors.goldSoft,
+                      0 => AppColors.accentSoft,
                       _ => AppColors.neutralChip,
                     },
                     border: Border.all(
                       color: i <= current
-                          ? AppColors.goldDark
+                          ? AppColors.accentStrong
                           : Colors.transparent,
                       width: 1.4,
                     ),
-                    boxShadow: i == current ? AppShadows.goldGlow : null,
+                    boxShadow: i == current ? AppShadows.accentGlow : null,
                   ),
                   child: Center(
                     child: AnimatedSwitcher(
                       duration: AppDurations.base,
                       switchInCurve: AppCurves.spring,
                       child: i < current
-                          ? const Icon(
+                          ? Icon(
                               Icons.check_rounded,
                               key: ValueKey('check'),
                               size: 18,
-                              color: Colors.white,
+                              color: AppColors.onAccent,
                             )
                           : Text(
                               '${i + 1}',
@@ -649,7 +649,7 @@ class _StepProgressIndicator extends StatelessWidget {
                               style: theme.textTheme.labelLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 color: i == current
-                                    ? AppColors.goldDark
+                                    ? AppColors.accentStrong
                                     : AppColors.textSecondary,
                               ),
                             ),

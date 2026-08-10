@@ -43,7 +43,7 @@ class SessionRefreshIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      color: AppColors.goldDark,
+      color: AppColors.primary,
       onRefresh: () => runSessionRefresh(context, onRefresh: onRefresh),
       child: child,
     );
@@ -89,7 +89,7 @@ class _SessionRefreshButtonState extends State<SessionRefreshButton> {
                   dimension: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppColors.goldDark,
+                    color: AppColors.primary,
                   ),
                 )
               : const Icon(Icons.refresh_rounded),

@@ -117,7 +117,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 AppCard(
-                  color: AppColors.goldSoft,
+                  color: AppColors.accentSoft,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -137,7 +137,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
-                                color: AppColors.goldDark,
+                                color: AppColors.accentStrong,
                                 fontWeight: FontWeight.w900,
                               ),
                         ),
@@ -264,7 +264,7 @@ class _MetricCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(icon, color: AppColors.goldDark),
+          Icon(icon, color: AppColors.accentStrong),
           const SizedBox(height: AppSpacing.xs),
           Directionality(
             textDirection: TextDirection.ltr,

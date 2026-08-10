@@ -46,8 +46,16 @@ class SellerApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          builder: (context, child) =>
-              AppLifecycleReconciler(child: child ?? const SizedBox.shrink()),
+          builder: (context, child) {
+            // Theme factories must stay pure. Resolve the active semantic
+            // palette from the actual inherited brightness at the app root.
+            AppColors.p = Theme.of(context).brightness == Brightness.dark
+                ? AppPalette.dark
+                : AppPalette.light;
+            return AppLifecycleReconciler(
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           home: SplashScreen(bootstrap: bootstrap),
           onGenerateRoute: AppRouter.onGenerateRoute,
         );

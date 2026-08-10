@@ -234,6 +234,37 @@ void main() {
     },
   );
 
+  test(
+    'a realtime loyalty event during an older read queues a fresh trailing read',
+    () async {
+      final base = createDemoRepositories();
+      await base.auth.signIn(phone: '07700000000', password: 'test-password');
+      final profile = _MutableProfileRepository(base.profile);
+      final loyalty = _TrackingLoyaltyRepository(base.loyalty);
+      addTearDown(loyalty.dispose);
+      await session.configure(
+        _repositories(base, profile: profile, loyalty: loyalty),
+        loadInitialData: false,
+      );
+      await session.refreshAuthenticatedData();
+      expect(loyalty.fetchCount, 1);
+
+      loyalty.pauseNextFetch();
+      final olderRefresh = session.refreshLoyaltySummary();
+      await loyalty.pausedFetchStarted.future;
+      loyalty.emitChange();
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      expect(loyalty.fetchCount, 2);
+
+      loyalty.releasePausedFetch();
+      await olderRefresh;
+      await loyalty.thirdFetchCompleted.future.timeout(
+        const Duration(seconds: 2),
+      );
+      expect(loyalty.fetchCount, 3);
+    },
+  );
+
   test('a foreground promotion push refreshes grants immediately', () async {
     final base = createDemoRepositories();
     await base.auth.signIn(phone: '07700000000', password: 'test-password');
@@ -333,6 +364,7 @@ AppRepositories _repositories(
   OrdersRepository? orders,
   WalletRepository? wallet,
   PromotionsRepository? promotions,
+  LoyaltyRepository? loyalty,
 }) => AppRepositories(
   auth: base.auth,
   profile: profile,
@@ -341,6 +373,7 @@ AppRepositories _repositories(
   wallet: wallet ?? base.wallet,
   notifications: base.notifications,
   promotions: promotions ?? base.promotions,
+  loyalty: loyalty ?? base.loyalty,
   isDemo: false,
 );
 
@@ -379,6 +412,7 @@ class _MutableProfileRepository implements ProfileRepository {
     required String name,
     required String storeName,
     required String instagramUrl,
+    ProfileAvatarChange? avatarChange,
   }) async {
     current = Seller(
       id: current.id,
@@ -390,6 +424,8 @@ class _MutableProfileRepository implements ProfileRepository {
       status: current.status,
       statusReason: current.statusReason,
       joinedAt: current.joinedAt,
+      avatarPath: current.avatarPath,
+      avatarUrl: current.avatarUrl,
       locale: current.locale,
       notificationPreferences: current.notificationPreferences,
     );
@@ -611,6 +647,52 @@ class _TrackingPromotionsRepository implements PromotionsRepository {
   Stream<void> watchPromotionGrantChanges() => _changes.stream;
 }
 
+class _TrackingLoyaltyRepository implements LoyaltyRepository {
+  _TrackingLoyaltyRepository(this._delegate);
+
+  final LoyaltyRepository _delegate;
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+  Completer<void>? _release;
+  bool _pauseNext = false;
+  Completer<void> pausedFetchStarted = Completer<void>();
+  final Completer<void> thirdFetchCompleted = Completer<void>();
+  int fetchCount = 0;
+
+  void pauseNextFetch() {
+    _pauseNext = true;
+    _release = Completer<void>();
+    pausedFetchStarted = Completer<void>();
+  }
+
+  void releasePausedFetch() {
+    final release = _release;
+    if (release != null && !release.isCompleted) release.complete();
+  }
+
+  void emitChange() => _changes.add(null);
+
+  Future<void> dispose() => _changes.close();
+
+  @override
+  Future<LoyaltySummary> fetchLoyaltySummary() async {
+    fetchCount += 1;
+    final fetchNumber = fetchCount;
+    if (_pauseNext) {
+      _pauseNext = false;
+      pausedFetchStarted.complete();
+      await _release!.future;
+    }
+    final value = await _delegate.fetchLoyaltySummary();
+    if (fetchNumber >= 3 && !thirdFetchCompleted.isCompleted) {
+      thirdFetchCompleted.complete();
+    }
+    return value;
+  }
+
+  @override
+  Stream<void> watchLoyaltyChanges() => _changes.stream;
+}
+
 class _ForegroundPushRegistrar implements DeviceTokenRegistrar {
   final StreamController<PushMessage> _foreground =
       StreamController<PushMessage>.broadcast();
@@ -708,8 +790,11 @@ class _BlockingRealtimeCatalogRepository implements CatalogRepository {
       _delegate.fetchPackagingBoxes();
 
   @override
-  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) =>
-      _delegate.quoteDeliveryFee(deliveryZoneId);
+  Future<DeliveryQuote> quoteDeliveryFee(
+    String deliveryZoneId, {
+    required int orderSubtotal,
+  }) =>
+      _delegate.quoteDeliveryFee(deliveryZoneId, orderSubtotal: orderSubtotal);
 
   @override
   Future<PublicContentSnapshot> fetchPublicContent() =>
@@ -770,8 +855,11 @@ class _PartiallyFailingCatalogRepository implements CatalogRepository {
       _delegate.fetchPackagingBoxes();
 
   @override
-  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) =>
-      _delegate.quoteDeliveryFee(deliveryZoneId);
+  Future<DeliveryQuote> quoteDeliveryFee(
+    String deliveryZoneId, {
+    required int orderSubtotal,
+  }) =>
+      _delegate.quoteDeliveryFee(deliveryZoneId, orderSubtotal: orderSubtotal);
 
   @override
   Future<PublicContentSnapshot> fetchPublicContent() =>

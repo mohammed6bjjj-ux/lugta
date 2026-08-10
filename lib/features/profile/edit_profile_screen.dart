@@ -1,19 +1,31 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../app/theme.dart';
 import '../../core/external_actions.dart';
 import '../../core/formatters.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/app_network_image.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/entrance.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/session_refresh.dart';
 import '../../data/session.dart';
+import '../../data/repositories/repositories.dart';
 import 'profile_strings.dart';
 
 /// تعديل الملف الشخصي — الاسم واسم المتجر ورابط إنستغرام (الهاتف للقراءة فقط).
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  const EditProfileScreen({super.key, this.pickImage, this.recoverLostData});
+
+  @visibleForTesting
+  final Future<XFile?> Function()? pickImage;
+
+  @visibleForTesting
+  final Future<LostDataResponse> Function()? recoverLostData;
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -26,8 +38,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _storeNameController;
   late final TextEditingController _instagramController;
   late final TextEditingController _phoneController;
+  final ImagePicker _imagePicker = ImagePicker();
 
   bool _saving = false;
+  bool _pickingAvatar = false;
+  bool _removeAvatar = false;
+  Uint8List? _avatarBytes;
+  String? _avatarMimeType;
+
+  static const int _maxAvatarBytes = 5 * 1024 * 1024;
 
   @override
   void initState() {
@@ -37,6 +56,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _storeNameController = TextEditingController(text: seller.storeName);
     _instagramController = TextEditingController(text: seller.instagramUrl);
     _phoneController = TextEditingController(text: seller.phone);
+    unawaited(_recoverLostAvatar());
   }
 
   @override
@@ -54,10 +74,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _saving = true);
 
     try {
+      final avatarChange = _avatarBytes != null
+          ? ProfileAvatarChange.replace(
+              bytes: _avatarBytes!,
+              mimeType: _avatarMimeType,
+            )
+          : _removeAvatar
+          ? const ProfileAvatarChange.remove()
+          : null;
       await session.updateProfile(
         name: _nameController.text.trim(),
         storeName: _storeNameController.text.trim(),
         instagramUrl: instagramUrl,
+        avatarChange: avatarChange,
       );
       if (!mounted) return;
       setState(() => _saving = false);
@@ -83,7 +112,93 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _storeNameController.text = seller.storeName;
       _instagramController.text = seller.instagramUrl;
       _phoneController.text = seller.phone;
+      _avatarBytes = null;
+      _avatarMimeType = null;
+      _removeAvatar = false;
     });
+  }
+
+  Future<void> _recoverLostAvatar() async {
+    try {
+      final response =
+          await (widget.recoverLostData?.call() ??
+              _imagePicker.retrieveLostData());
+      if (!mounted || response.isEmpty) return;
+      final recoveredFile = response.files?.firstOrNull ?? response.file;
+      if (recoveredFile != null) {
+        await _acceptAvatarFile(recoveredFile);
+        return;
+      }
+      final exception = response.exception;
+      if (exception != null && mounted) {
+        _showAvatarError(ProfileStrings.avatarSelectionFailed);
+      }
+    } catch (_) {
+      if (mounted) _showAvatarError(ProfileStrings.avatarSelectionFailed);
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    if (_pickingAvatar || _saving) return;
+    setState(() => _pickingAvatar = true);
+    try {
+      final file =
+          await (widget.pickImage?.call() ??
+              _imagePicker.pickImage(
+                source: ImageSource.gallery,
+                maxWidth: 1600,
+                maxHeight: 1600,
+                imageQuality: 88,
+              ));
+      if (file != null) await _acceptAvatarFile(file);
+    } catch (_) {
+      if (mounted) _showAvatarError(ProfileStrings.avatarSelectionFailed);
+    } finally {
+      if (mounted) setState(() => _pickingAvatar = false);
+    }
+  }
+
+  Future<void> _acceptAvatarFile(XFile file) async {
+    final length = await file.length();
+    if (length <= 0 || length > _maxAvatarBytes) {
+      if (mounted) _showAvatarError(ProfileStrings.avatarTooLarge);
+      return;
+    }
+    final bytes = await file.readAsBytes();
+    final mimeType = _avatarMimeTypeFor(bytes, file.mimeType);
+    if (mimeType == null) {
+      if (mounted) _showAvatarError(ProfileStrings.avatarUnsupported);
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _avatarBytes = Uint8List.fromList(bytes);
+      _avatarMimeType = mimeType;
+      _removeAvatar = false;
+    });
+  }
+
+  void _removeSelectedAvatar() {
+    if (_saving) return;
+    setState(() {
+      _avatarBytes = null;
+      _avatarMimeType = null;
+      _removeAvatar = session.seller.avatarPath.isNotEmpty;
+    });
+  }
+
+  void _showAvatarError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _sellerInitials() {
+    final text = session.seller.storeName.trim().isNotEmpty
+        ? session.seller.storeName.trim()
+        : session.seller.name.trim();
+    final words = text.split(RegExp(r'\s+')).where((word) => word.isNotEmpty);
+    return words.isEmpty ? '؟' : words.take(2).map((word) => word[0]).join();
   }
 
   @override
@@ -100,6 +215,106 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
+              Entrance(
+                child: AppCard(
+                  child: Column(
+                    children: [
+                      Semantics(
+                        label: ProfileStrings.profilePhoto,
+                        image: true,
+                        child: Container(
+                          width: 112,
+                          height: 112,
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: AppColors.accentGradient,
+                          ),
+                          child: Container(
+                            clipBehavior: Clip.antiAlias,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.surface,
+                            ),
+                            child: _avatarBytes != null
+                                ? Image.memory(
+                                    _avatarBytes!,
+                                    width: 104,
+                                    height: 104,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 256,
+                                  )
+                                : !_removeAvatar &&
+                                      session.seller.avatarUrl.isNotEmpty
+                                ? AppNetworkImage(
+                                    session.seller.avatarUrl,
+                                    width: 104,
+                                    height: 104,
+                                    fit: BoxFit.cover,
+                                    fallbackIcon: Icons.person_outline_rounded,
+                                  )
+                                : Text(
+                                    _sellerInitials(),
+                                    style: theme.textTheme.headlineMedium
+                                        ?.copyWith(
+                                          color: AppColors.accentStrong,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        ProfileStrings.profilePhoto,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        ProfileStrings.profilePhotoHint,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed: _pickingAvatar || _saving
+                                ? null
+                                : _pickAvatar,
+                            icon: _pickingAvatar
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.photo_library_outlined),
+                            label: Text(ProfileStrings.choosePhoto),
+                          ),
+                          if (_avatarBytes != null ||
+                              (!_removeAvatar &&
+                                  session.seller.avatarPath.isNotEmpty))
+                            OutlinedButton.icon(
+                              onPressed: _saving ? null : _removeSelectedAvatar,
+                              icon: const Icon(Icons.delete_outline_rounded),
+                              label: Text(ProfileStrings.removePhoto),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
               // بطاقة معلومات الحساب القابلة للتعديل.
               Entrance(
                 child: AppCard(
@@ -137,7 +352,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           Icon(
                             Icons.info_outline_rounded,
                             size: 15,
-                            color: AppColors.goldDark,
+                            color: AppColors.accentStrong,
                           ),
                           const SizedBox(width: 6),
                           Expanded(
@@ -199,13 +414,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               end: AppSpacing.sm,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.goldSoft,
+                              color: AppColors.accentSoft,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               Icons.lock_rounded,
                               size: 16,
-                              color: AppColors.goldDark,
+                              color: AppColors.accentStrong,
                             ),
                           ),
                         ),
@@ -216,7 +431,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           Icon(
                             Icons.lock_outline_rounded,
                             size: 15,
-                            color: AppColors.goldDark,
+                            color: AppColors.accentStrong,
                           ),
                           const SizedBox(width: 6),
                           Expanded(
@@ -239,7 +454,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: PrimaryButton(
                   label: ProfileStrings.saveChanges,
                   icon: Icons.check_rounded,
-                  gold: true,
+                  accented: true,
                   loading: _saving,
                   onPressed: _save,
                 ),
@@ -250,4 +465,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
     );
   }
+}
+
+String? _avatarMimeTypeFor(Uint8List bytes, String? reportedMimeType) {
+  final normalized = reportedMimeType?.trim().toLowerCase().split(';').first;
+  if (normalized == 'image/jpg' || normalized == 'image/jpeg') {
+    return 'image/jpeg';
+  }
+  if (normalized == 'image/png' || normalized == 'image/webp') {
+    return normalized;
+  }
+  if (bytes.length >= 3 &&
+      bytes[0] == 0xff &&
+      bytes[1] == 0xd8 &&
+      bytes[2] == 0xff) {
+    return 'image/jpeg';
+  }
+  if (bytes.length >= 8 &&
+      bytes[0] == 0x89 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x4e &&
+      bytes[3] == 0x47 &&
+      bytes[4] == 0x0d &&
+      bytes[5] == 0x0a &&
+      bytes[6] == 0x1a &&
+      bytes[7] == 0x0a) {
+    return 'image/png';
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] == 0x52 &&
+      bytes[1] == 0x49 &&
+      bytes[2] == 0x46 &&
+      bytes[3] == 0x46 &&
+      bytes[8] == 0x57 &&
+      bytes[9] == 0x45 &&
+      bytes[10] == 0x42 &&
+      bytes[11] == 0x50) {
+    return 'image/webp';
+  }
+  return null;
 }

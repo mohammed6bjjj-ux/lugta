@@ -15,7 +15,7 @@ class AuthStrings {
   // ── شاشة البداية ──
   static String get splashTagline => _t(
     'كل يوم لكطة جديدة',
-    'هەموو ڕۆژێک لقطةیەکی نوێ',
+    'هەموو ڕۆژێک لكطةیەکی نوێ',
     'A new find every day',
   );
   static String get startupFailed => _t(
@@ -85,6 +85,10 @@ class AuthStrings {
       _t('رقم الهاتف', 'ژمارەی مۆبایل', 'Phone number');
   static String get passwordLabel =>
       _t('كلمة المرور', 'وشەی نهێنی', 'Password');
+  static String get showPassword =>
+      _t('إظهار كلمة المرور', 'پیشاندانی وشەی نهێنی', 'Show password');
+  static String get hidePassword =>
+      _t('إخفاء كلمة المرور', 'شاردنەوەی وشەی نهێنی', 'Hide password');
   static String get forgotPasswordQ =>
       _t('نسيت كلمة المرور؟', 'وشەی نهێنیت لەبیرچووە؟', 'Forgot password?');
   static String get noAccountQ =>

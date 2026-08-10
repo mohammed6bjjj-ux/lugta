@@ -25,11 +25,23 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
   late final AnimationController _swayController = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1400),
-  )..repeat(reverse: true);
+  );
   late final CurvedAnimation _sway = CurvedAnimation(
     parent: _swayController,
     curve: Curves.easeInOut,
   );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _swayController
+        ..stop()
+        ..value = 0;
+    } else if (!_swayController.isAnimating) {
+      _swayController.repeat(reverse: true);
+    }
+  }
 
   @override
   void dispose() {
@@ -85,7 +97,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
         decoration: BoxDecoration(gradient: AppColors.pageGradient),
         child: SafeArea(
           child: RefreshIndicator(
-            color: AppColors.goldDark,
+            color: AppColors.accentStrong,
             onRefresh: _recheckStatus,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -213,7 +225,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                     child: PrimaryButton(
                       label: AuthStrings.previewApprovedLogin,
                       icon: Icons.visibility_outlined,
-                      gold: true,
+                      accented: true,
                       onPressed: () => Navigator.pushNamedAndRemoveUntil(
                         context,
                         Routes.shell,

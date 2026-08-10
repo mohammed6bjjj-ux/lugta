@@ -164,11 +164,15 @@ class WithdrawalCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topRight,
                     end: Alignment.bottomLeft,
-                    colors: [AppColors.goldSoft, const Color(0xFFFDFBF7)],
+                    colors: [AppColors.accentSoft, AppColors.surface],
                   ),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(_methodIcon, size: 22, color: AppColors.goldDark),
+                child: Icon(
+                  _methodIcon,
+                  size: 22,
+                  color: AppColors.accentStrong,
+                ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(

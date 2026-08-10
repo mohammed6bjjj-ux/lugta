@@ -238,10 +238,12 @@ class _IdempotentProfileRepository implements ProfileRepository {
     required String name,
     required String storeName,
     required String instagramUrl,
+    ProfileAvatarChange? avatarChange,
   }) => _delegate.updateCurrentProfile(
     name: name,
     storeName: storeName,
     instagramUrl: instagramUrl,
+    avatarChange: avatarChange,
   );
 
   @override

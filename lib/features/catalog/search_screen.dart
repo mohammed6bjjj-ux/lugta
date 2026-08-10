@@ -126,12 +126,12 @@ class _SearchScreenState extends State<SearchScreen> {
               enabledBorder: capsuleBorder,
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(100),
-                borderSide: BorderSide(color: AppColors.gold, width: 1.4),
+                borderSide: BorderSide(color: AppColors.accent, width: 1.4),
               ),
               prefixIcon: Icon(
                 Icons.search_rounded,
                 size: 22,
-                color: AppColors.goldDark,
+                color: AppColors.accentStrong,
               ),
               suffixIcon: _controller.text.isEmpty
                   ? null
@@ -233,7 +233,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   avatar: Icon(
                     category.icon,
                     size: 18,
-                    color: AppColors.goldDark,
+                    color: AppColors.accentStrong,
                   ),
                   label: Text(category.localizedName),
                   onPressed: () => _useTerm(category.localizedName),

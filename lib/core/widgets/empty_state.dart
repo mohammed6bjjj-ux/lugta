@@ -38,12 +38,12 @@ class EmptyState extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topRight,
                     end: Alignment.bottomLeft,
-                    colors: [AppColors.goldSoft, AppColors.surface],
+                    colors: [AppColors.accentSoft, AppColors.surfaceAlt],
                   ),
                   shape: BoxShape.circle,
                   boxShadow: AppShadows.card,
                 ),
-                child: Icon(icon, size: 40, color: AppColors.goldDark),
+                child: Icon(icon, size: 40, color: AppColors.primary),
               ),
               const SizedBox(height: AppSpacing.lg),
               Text(

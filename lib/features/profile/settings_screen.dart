@@ -193,7 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return SwitchListTile(
       value: value,
       onChanged: onChanged,
-      activeTrackColor: AppColors.gold,
+      activeTrackColor: AppColors.accent,
       inactiveTrackColor: AppColors.surfaceAlt,
       secondary: _SettingIcon(icon: icon, active: value),
       title: Text(
@@ -423,7 +423,7 @@ class _LanguageTile extends StatelessWidget {
         ),
       ),
       trailing: selected
-          ? Icon(Icons.check_circle_rounded, color: AppColors.goldDark)
+          ? Icon(Icons.check_circle_rounded, color: AppColors.accentStrong)
           : Icon(
               Icons.circle_outlined,
               color: AppColors.textSecondary.withValues(alpha: .35),
@@ -447,13 +447,13 @@ class _SettingIcon extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: active ? AppColors.goldSoft : AppColors.surfaceAlt,
+        color: active ? AppColors.accentSoft : AppColors.surfaceAlt,
         shape: BoxShape.circle,
       ),
       child: Icon(
         icon,
         size: 20,
-        color: active ? AppColors.goldDark : AppColors.textSecondary,
+        color: active ? AppColors.accentStrong : AppColors.textSecondary,
       ),
     );
   }
@@ -520,13 +520,13 @@ class _LangBadge extends StatelessWidget {
       height: 40,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: muted ? AppColors.neutralChip : AppColors.goldSoft,
+        color: muted ? AppColors.neutralChip : AppColors.accentSoft,
         shape: BoxShape.circle,
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: muted ? AppColors.textSecondary : AppColors.goldDark,
+          color: muted ? AppColors.textSecondary : AppColors.accentStrong,
           fontWeight: FontWeight.w800,
         ),
       ),

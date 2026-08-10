@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- خلفية إقلاع لُگطة بلون الحبر الرسمي. -->
+<!-- خلفية إقلاع لكطة بالبنفسجي الرسمي. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/brandBackground" />
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/launch_logo" />
+    </item>
 </layer-list>

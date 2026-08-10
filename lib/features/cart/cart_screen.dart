@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -27,6 +29,7 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   static const double _bottomClearance = 112;
+  static const int _fixedDeliveryFee = 5000;
 
   final GlobalKey<FormState> _customerFormKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
@@ -39,9 +42,21 @@ class _CartScreenState extends State<CartScreen> {
   bool _loadingDeliveryQuote = false;
   Governorate? _governorate;
   DeliveryQuote? _deliveryQuote;
+  Timer? _deliveryQuoteRefreshTimer;
+  int _deliveryQuoteRequest = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_refreshDeliveryQuote());
+    });
+  }
 
   @override
   void dispose() {
+    _deliveryQuoteRefreshTimer?.cancel();
+    _deliveryQuoteRequest += 1;
     _nameController.dispose();
     _phoneController.dispose();
     _phone2Controller.dispose();
@@ -57,8 +72,9 @@ class _CartScreenState extends State<CartScreen> {
   int get _productCount =>
       session.cartItems.map((item) => item.product.id).toSet().length;
 
-  int get _deliveryFee =>
-      _deliveryQuote?.deliveryFee ?? _governorate?.deliveryFee ?? 0;
+  int get _deliveryFee => _deliveryQuote?.deliveryFee ?? _fixedDeliveryFee;
+  int get _baseDeliveryFee =>
+      _deliveryQuote?.baseDeliveryFee ?? _fixedDeliveryFee;
 
   Future<void> _confirmClearCart() async {
     final confirmed = await showDialog<bool>(
@@ -80,13 +96,27 @@ class _CartScreenState extends State<CartScreen> {
       ),
     );
     if (confirmed != true) return;
+    _deliveryQuoteRefreshTimer?.cancel();
     session.clearCart();
-    if (mounted) setState(() => _step = 0);
+    if (mounted) {
+      setState(() {
+        _step = 0;
+        _deliveryQuote = null;
+      });
+    }
   }
 
   void _removeItem(CartItem item) {
     session.removeFromCart(item.id);
-    if (session.cartItems.isEmpty) setState(() => _step = 0);
+    if (session.cartItems.isEmpty) {
+      _deliveryQuoteRefreshTimer?.cancel();
+      setState(() {
+        _step = 0;
+        _deliveryQuote = null;
+      });
+      return;
+    }
+    _scheduleDeliveryQuoteRefresh();
   }
 
   Future<void> _editItemOptions(CartItem item) async {
@@ -107,6 +137,7 @@ class _CartScreenState extends State<CartScreen> {
         unitSalePrice: configuration.unitSalePrice,
         packagingBox: configuration.packagingBox,
       );
+      _scheduleDeliveryQuoteRefresh();
     } catch (error) {
       _showMessage(error.toString());
     }
@@ -119,22 +150,65 @@ class _CartScreenState extends State<CartScreen> {
       _loadingDeliveryQuote = governorate != null;
     });
     if (governorate == null) return;
+    await _refreshDeliveryQuote(
+      governorate: governorate,
+      showLoading: true,
+      reportError: true,
+    );
+  }
+
+  void _scheduleDeliveryQuoteRefresh() {
+    _deliveryQuoteRefreshTimer?.cancel();
+    _deliveryQuoteRequest += 1;
+    if (mounted) {
+      setState(() {
+        _deliveryQuote = null;
+        _loadingDeliveryQuote = false;
+      });
+    }
+    if (session.cartItems.isEmpty) return;
+    _deliveryQuoteRefreshTimer = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) unawaited(_refreshDeliveryQuote());
+    });
+  }
+
+  Future<void> _refreshDeliveryQuote({
+    Governorate? governorate,
+    bool showLoading = false,
+    bool reportError = false,
+  }) async {
+    final quoteGovernorate =
+        governorate ??
+        _governorate ??
+        (session.governorates.isEmpty ? null : session.governorates.first);
+    if (quoteGovernorate == null || session.cartItems.isEmpty) return;
+    final request = ++_deliveryQuoteRequest;
+    if (showLoading && mounted) {
+      setState(() => _loadingDeliveryQuote = true);
+    }
     try {
-      final quote = await session.quoteDeliveryFee(governorate.id);
-      if (!mounted || _governorate?.id != governorate.id) return;
+      final quote = await session.quoteDeliveryFee(
+        quoteGovernorate.id,
+        orderSubtotal: session.cartSaleTotal,
+      );
+      if (!mounted || request != _deliveryQuoteRequest) return;
       setState(() {
         _deliveryQuote = quote;
         _loadingDeliveryQuote = false;
       });
     } catch (error) {
-      if (!mounted || _governorate?.id != governorate.id) return;
+      if (!mounted || request != _deliveryQuoteRequest) return;
       setState(() => _loadingDeliveryQuote = false);
-      _showMessage(error.toString());
+      if (reportError) _showMessage(error.toString());
     }
   }
 
   void _next() {
     FocusScope.of(context).unfocus();
+    if (session.isGuest) {
+      Navigator.pushNamed(context, Routes.guestAccess);
+      return;
+    }
     if (_step == 0) {
       if (!_allPricesValid) {
         setState(() {});
@@ -205,7 +279,10 @@ class _CartScreenState extends State<CartScreen> {
         _showMessage(WizardStrings.deliveryZoneUnavailable);
         return;
       }
-      final latestQuote = await session.quoteDeliveryFee(latestGovernorate.id);
+      final latestQuote = await session.quoteDeliveryFee(
+        latestGovernorate.id,
+        orderSubtotal: session.cartSaleTotal,
+      );
       if (!mounted) return;
       _governorate = latestGovernorate;
       _deliveryQuote = latestQuote;
@@ -352,7 +429,7 @@ class _CartScreenState extends State<CartScreen> {
         if (index == session.cartItems.length + 1) {
           return Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs),
-            child: _buildTotalsCard(includeDelivery: false),
+            child: _buildTotalsCard(includeDelivery: true),
           );
         }
         final item = session.cartItems[index - 1];
@@ -361,8 +438,10 @@ class _CartScreenState extends State<CartScreen> {
           child: _CartLineCard(
             key: ValueKey('cart_line_${item.id}'),
             item: item,
-            onQuantityChanged: (quantity) =>
-                session.updateCartQuantity(item.id, quantity),
+            onQuantityChanged: (quantity) {
+              session.updateCartQuantity(item.id, quantity);
+              _scheduleDeliveryQuoteRefresh();
+            },
             onEditOptions: () => _editItemOptions(item),
             onRemove: () => _removeItem(item),
           ),
@@ -466,7 +545,7 @@ class _CartScreenState extends State<CartScreen> {
           if (_governorate != null) ...[
             const SizedBox(height: AppSpacing.sm),
             AppCard(
-              color: AppColors.goldSoft,
+              color: AppColors.accentSoft,
               shadows: const [],
               child: Row(
                 children: [
@@ -480,7 +559,7 @@ class _CartScreenState extends State<CartScreen> {
                       _deliveryQuote?.isFree == true
                           ? Icons.redeem_outlined
                           : Icons.local_shipping_outlined,
-                      color: AppColors.goldDark,
+                      color: AppColors.accentStrong,
                     ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
@@ -491,7 +570,7 @@ class _CartScreenState extends State<CartScreen> {
                               formatIqd(_deliveryFee),
                             ),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.goldDark,
+                        color: AppColors.accentStrong,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -580,7 +659,7 @@ class _CartScreenState extends State<CartScreen> {
                         Text(
                           '${CartStrings.packaging}: ${item.packagingBox!.name}',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.goldDark,
+                            color: AppColors.accentStrong,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -632,9 +711,7 @@ class _CartScreenState extends State<CartScreen> {
     saleTotal: session.cartSaleTotal,
     packagingTotal: session.cartPackagingTotal,
     deliveryFee: includeDelivery ? _deliveryFee : 0,
-    baseDeliveryFee: includeDelivery
-        ? (_deliveryQuote?.baseDeliveryFee ?? _deliveryFee)
-        : 0,
+    baseDeliveryFee: includeDelivery ? _baseDeliveryFee : 0,
     quantity: session.cartQuantity,
   );
 
@@ -669,7 +746,7 @@ class _CartScreenState extends State<CartScreen> {
                 _ => CartStrings.confirmOrder,
               },
               icon: _step == 2 ? Icons.check_circle_outline_rounded : null,
-              gold: _step == 2,
+              accented: _step == 2,
               loading: _submitting,
               onPressed: _submitting ? null : _next,
             ),
@@ -783,7 +860,7 @@ class _CartLineCard extends StatelessWidget {
                   child: Icon(
                     Icons.sell_outlined,
                     color: item.priceIsValid
-                        ? AppColors.goldDark
+                        ? AppColors.accentStrong
                         : AppColors.error,
                     size: 21,
                   ),
@@ -914,7 +991,7 @@ class _CartLineCard extends StatelessWidget {
                         ? CartStrings.free
                         : formatIqd(item.packagingBox!.price),
                     style: theme.textTheme.labelLarge?.copyWith(
-                      color: AppColors.goldDark,
+                      color: AppColors.accentStrong,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1052,12 +1129,12 @@ class _CartStepIndicator extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: index <= currentStep
-                      ? AppColors.goldSoft
+                      ? AppColors.accentSoft
                       : AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
                     color: index == currentStep
-                        ? AppColors.gold
+                        ? AppColors.accent
                         : AppColors.divider,
                   ),
                 ),
@@ -1067,7 +1144,7 @@ class _CartStepIndicator extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: index <= currentStep
-                        ? AppColors.goldDark
+                        ? AppColors.accentStrong
                         : AppColors.textSecondary,
                     fontWeight: FontWeight.w800,
                   ),

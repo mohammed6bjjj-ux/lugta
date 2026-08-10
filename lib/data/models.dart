@@ -43,6 +43,8 @@ class Seller {
     this.referralCode,
     this.referredBy,
     this.activatedAt,
+    this.avatarPath = '',
+    this.avatarUrl = '',
     this.locale = 'ar',
     this.notificationPreferences = const {
       'orders': true,
@@ -64,6 +66,8 @@ class Seller {
   final String? referralCode;
   final String? referredBy;
   final DateTime? activatedAt;
+  final String avatarPath;
+  final String avatarUrl;
   final String locale;
   final Map<String, bool> notificationPreferences;
 
@@ -71,6 +75,8 @@ class Seller {
     String? name,
     String? storeName,
     String? instagramUrl,
+    String? avatarPath,
+    String? avatarUrl,
     String? locale,
     Map<String, bool>? notificationPreferences,
   }) => Seller(
@@ -86,11 +92,283 @@ class Seller {
     referralCode: referralCode,
     referredBy: referredBy,
     activatedAt: activatedAt,
+    avatarPath: avatarPath ?? this.avatarPath,
+    avatarUrl: avatarUrl ?? this.avatarUrl,
     locale: locale ?? this.locale,
     notificationPreferences:
         notificationPreferences ?? this.notificationPreferences,
   );
 }
+
+enum LoyaltyTierCode { bronze, silver, gold }
+
+class LoyaltyTierDefinition {
+  const LoyaltyTierDefinition({
+    required this.code,
+    required this.nameAr,
+    required this.nameCkb,
+    required this.nameEn,
+    required this.threshold,
+    required this.rewardEnabled,
+    required this.rewardType,
+    required this.rewardValue,
+    this.rewardValidDays,
+  });
+
+  final LoyaltyTierCode code;
+  final String nameAr;
+  final String nameCkb;
+  final String nameEn;
+  final int threshold;
+  final bool rewardEnabled;
+  final String rewardType;
+  final int rewardValue;
+  final int? rewardValidDays;
+
+  String get localizedName => switch (appSettings.language) {
+    AppLanguage.ckb => nameCkb.trim().isNotEmpty ? nameCkb : nameAr,
+    AppLanguage.en => nameEn.trim().isNotEmpty ? nameEn : nameAr,
+    AppLanguage.ar => nameAr,
+  };
+}
+
+class LoyaltyNextTier {
+  const LoyaltyNextTier({
+    required this.code,
+    required this.nameAr,
+    required this.nameCkb,
+    required this.nameEn,
+    required this.threshold,
+    required this.pointsNeeded,
+  });
+
+  final LoyaltyTierCode code;
+  final String nameAr;
+  final String nameCkb;
+  final String nameEn;
+  final int threshold;
+  final int pointsNeeded;
+
+  String get localizedName => switch (appSettings.language) {
+    AppLanguage.ckb => nameCkb.trim().isNotEmpty ? nameCkb : nameAr,
+    AppLanguage.en => nameEn.trim().isNotEmpty ? nameEn : nameAr,
+    AppLanguage.ar => nameAr,
+  };
+}
+
+class LoyaltyPointEntry {
+  const LoyaltyPointEntry({
+    required this.id,
+    required this.type,
+    required this.points,
+    required this.soldUnits,
+    required this.description,
+    required this.createdAt,
+    this.orderId,
+    this.orderNumber,
+  });
+
+  final String id;
+  final String type;
+  final int points;
+  final String? orderId;
+  final String? orderNumber;
+  final int soldUnits;
+  final String description;
+  final DateTime createdAt;
+
+  bool get isCredit => points >= 0;
+}
+
+class LoyaltySummary {
+  const LoyaltySummary({
+    required this.programEnabled,
+    required this.pointsPerSoldUnit,
+    required this.totalPoints,
+    required this.completedUnits,
+    required this.tiers,
+    required this.recentEntries,
+    this.currentTier,
+    this.nextTier,
+    this.pointsToNextTier,
+  });
+
+  const LoyaltySummary.disabled()
+    : programEnabled = false,
+      pointsPerSoldUnit = 0,
+      totalPoints = 0,
+      completedUnits = 0,
+      currentTier = null,
+      nextTier = null,
+      pointsToNextTier = null,
+      tiers = const <LoyaltyTierDefinition>[],
+      recentEntries = const <LoyaltyPointEntry>[];
+
+  final bool programEnabled;
+  final int pointsPerSoldUnit;
+  final int totalPoints;
+  final int completedUnits;
+  final LoyaltyTierDefinition? currentTier;
+  final LoyaltyNextTier? nextTier;
+  final int? pointsToNextTier;
+  final List<LoyaltyTierDefinition> tiers;
+  final List<LoyaltyPointEntry> recentEntries;
+
+  double get progressToNextTier {
+    final next = nextTier;
+    if (next == null) return currentTier == null ? 0 : 1;
+    final currentThreshold = currentTier?.threshold ?? 0;
+    final span = next.threshold - currentThreshold;
+    if (span <= 0) return 1;
+    return ((totalPoints - currentThreshold) / span).clamp(0, 1).toDouble();
+  }
+
+  int get effectivePointsToNextTier =>
+      pointsToNextTier ?? nextTier?.pointsNeeded ?? 0;
+}
+
+enum CategoryStickerKey {
+  auto,
+  none,
+  newArrival,
+  premium,
+  favorite,
+  star,
+  gift,
+  electronics,
+  smart,
+  phone,
+  computer,
+  laptop,
+  tablet,
+  tv,
+  camera,
+  audio,
+  gaming,
+  network,
+  charger,
+  home,
+  appliances,
+  furniture,
+  box,
+  men,
+  women,
+  kids,
+  fashion,
+  bags,
+  footwear,
+  beauty,
+  watch,
+  glasses,
+  accessories,
+  sport,
+  toys,
+  books,
+  pets,
+  automotive,
+  tools,
+  food,
+  grocery,
+  health,
+  office,
+  travel,
+}
+
+extension CategoryStickerKeyWire on CategoryStickerKey {
+  String get wireValue => switch (this) {
+    CategoryStickerKey.auto => 'auto',
+    CategoryStickerKey.none => 'none',
+    CategoryStickerKey.newArrival => 'new',
+    CategoryStickerKey.premium => 'premium',
+    CategoryStickerKey.favorite => 'favorite',
+    CategoryStickerKey.star => 'star',
+    CategoryStickerKey.gift => 'gift',
+    CategoryStickerKey.electronics => 'electronics',
+    CategoryStickerKey.smart => 'smart',
+    CategoryStickerKey.phone => 'phone',
+    CategoryStickerKey.computer => 'computer',
+    CategoryStickerKey.laptop => 'laptop',
+    CategoryStickerKey.tablet => 'tablet',
+    CategoryStickerKey.tv => 'tv',
+    CategoryStickerKey.camera => 'camera',
+    CategoryStickerKey.audio => 'audio',
+    CategoryStickerKey.gaming => 'gaming',
+    CategoryStickerKey.network => 'network',
+    CategoryStickerKey.charger => 'charger',
+    CategoryStickerKey.home => 'home',
+    CategoryStickerKey.appliances => 'appliances',
+    CategoryStickerKey.furniture => 'furniture',
+    CategoryStickerKey.box => 'box',
+    CategoryStickerKey.men => 'men',
+    CategoryStickerKey.women => 'women',
+    CategoryStickerKey.kids => 'kids',
+    CategoryStickerKey.fashion => 'fashion',
+    CategoryStickerKey.bags => 'bags',
+    CategoryStickerKey.footwear => 'footwear',
+    CategoryStickerKey.beauty => 'beauty',
+    CategoryStickerKey.watch => 'watch',
+    CategoryStickerKey.glasses => 'glasses',
+    CategoryStickerKey.accessories => 'accessories',
+    CategoryStickerKey.sport => 'sport',
+    CategoryStickerKey.toys => 'toys',
+    CategoryStickerKey.books => 'books',
+    CategoryStickerKey.pets => 'pets',
+    CategoryStickerKey.automotive => 'automotive',
+    CategoryStickerKey.tools => 'tools',
+    CategoryStickerKey.food => 'food',
+    CategoryStickerKey.grocery => 'grocery',
+    CategoryStickerKey.health => 'health',
+    CategoryStickerKey.office => 'office',
+    CategoryStickerKey.travel => 'travel',
+  };
+}
+
+CategoryStickerKey categoryStickerKeyFromWire(Object? value) => switch (value) {
+  'none' => CategoryStickerKey.none,
+  'new' => CategoryStickerKey.newArrival,
+  'premium' => CategoryStickerKey.premium,
+  'favorite' => CategoryStickerKey.favorite,
+  'star' => CategoryStickerKey.star,
+  'gift' => CategoryStickerKey.gift,
+  'electronics' => CategoryStickerKey.electronics,
+  'smart' => CategoryStickerKey.smart,
+  'phone' => CategoryStickerKey.phone,
+  'computer' => CategoryStickerKey.computer,
+  'laptop' => CategoryStickerKey.laptop,
+  'tablet' => CategoryStickerKey.tablet,
+  'tv' => CategoryStickerKey.tv,
+  'camera' => CategoryStickerKey.camera,
+  'audio' => CategoryStickerKey.audio,
+  'gaming' => CategoryStickerKey.gaming,
+  'network' => CategoryStickerKey.network,
+  'charger' => CategoryStickerKey.charger,
+  'home' => CategoryStickerKey.home,
+  'appliances' => CategoryStickerKey.appliances,
+  'furniture' => CategoryStickerKey.furniture,
+  'box' => CategoryStickerKey.box,
+  'men' => CategoryStickerKey.men,
+  'women' => CategoryStickerKey.women,
+  'kids' => CategoryStickerKey.kids,
+  'fashion' => CategoryStickerKey.fashion,
+  'bags' => CategoryStickerKey.bags,
+  'footwear' => CategoryStickerKey.footwear,
+  'beauty' => CategoryStickerKey.beauty,
+  'watch' => CategoryStickerKey.watch,
+  'glasses' => CategoryStickerKey.glasses,
+  'accessories' => CategoryStickerKey.accessories,
+  'sport' => CategoryStickerKey.sport,
+  'toys' => CategoryStickerKey.toys,
+  'books' => CategoryStickerKey.books,
+  'pets' => CategoryStickerKey.pets,
+  'automotive' => CategoryStickerKey.automotive,
+  'tools' => CategoryStickerKey.tools,
+  'food' => CategoryStickerKey.food,
+  'grocery' => CategoryStickerKey.grocery,
+  'health' => CategoryStickerKey.health,
+  'office' => CategoryStickerKey.office,
+  'travel' => CategoryStickerKey.travel,
+  _ => CategoryStickerKey.auto,
+};
 
 class Category {
   const Category({
@@ -100,6 +378,7 @@ class Category {
     required this.imageUrl,
     this.nameCkb,
     this.nameEn,
+    this.stickerKey = CategoryStickerKey.auto,
   });
 
   final String id;
@@ -108,6 +387,7 @@ class Category {
   final String? nameEn;
   final IconData icon;
   final String imageUrl;
+  final CategoryStickerKey stickerKey;
 
   String get localizedName => switch (appSettings.language) {
     AppLanguage.ckb => nameCkb?.trim().isNotEmpty == true ? nameCkb! : nameAr,
@@ -501,9 +781,9 @@ extension OrderStatusX on OrderStatus {
   String get labelAr => ModelStrings.orderStatus(this);
 
   Color get color => switch (this) {
-    OrderStatus.pendingReview => AppColors.goldDark,
+    OrderStatus.pendingReview => AppColors.accentStrong,
     OrderStatus.confirmed => AppColors.info,
-    OrderStatus.shipped => AppColors.goldDark,
+    OrderStatus.shipped => AppColors.accentStrong,
     OrderStatus.delivered => AppColors.success,
     OrderStatus.completed => AppColors.success,
     OrderStatus.deliveryFailed => AppColors.error,
@@ -514,9 +794,9 @@ extension OrderStatusX on OrderStatus {
   };
 
   Color get softColor => switch (this) {
-    OrderStatus.pendingReview => AppColors.goldSoft,
+    OrderStatus.pendingReview => AppColors.accentSoft,
     OrderStatus.confirmed => AppColors.infoSoft,
-    OrderStatus.shipped => AppColors.goldSoft,
+    OrderStatus.shipped => AppColors.accentSoft,
     OrderStatus.delivered => AppColors.successSoft,
     OrderStatus.completed => AppColors.successSoft,
     OrderStatus.deliveryFailed => AppColors.errorSoft,
@@ -820,7 +1100,7 @@ extension WalletTxTypeX on WalletTxType {
   String get labelAr => ModelStrings.walletTxType(this);
 
   Color get color => switch (this) {
-    WalletTxType.pendingProfit => AppColors.goldDark,
+    WalletTxType.pendingProfit => AppColors.accentStrong,
     WalletTxType.profitReleased => AppColors.success,
     WalletTxType.reversal => AppColors.error,
     WalletTxType.withdrawal => AppColors.info,
@@ -1079,8 +1359,8 @@ extension NotificationTypeX on NotificationType {
   Color get color => switch (this) {
     NotificationType.order => AppColors.info,
     NotificationType.wallet => AppColors.success,
-    NotificationType.product => AppColors.goldDark,
-    NotificationType.promotion => AppColors.goldDark,
+    NotificationType.product => AppColors.accentStrong,
+    NotificationType.promotion => AppColors.accentStrong,
     NotificationType.referral => AppColors.info,
     NotificationType.reward => AppColors.success,
     NotificationType.system => AppColors.warning,
@@ -1105,6 +1385,8 @@ class AppNotification {
     this.popupPriority = 0,
     this.expiresAt,
     this.deepLink,
+    this.imageUrl,
+    this.imageAlt,
   });
 
   final String id;
@@ -1123,6 +1405,8 @@ class AppNotification {
   final int popupPriority;
   final DateTime? expiresAt;
   final String? deepLink;
+  final String? imageUrl;
+  final String? imageAlt;
 
   bool isExpiredAt(DateTime now) {
     final expiry = expiresAt;

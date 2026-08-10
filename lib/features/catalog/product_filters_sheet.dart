@@ -285,7 +285,7 @@ class _ProductFiltersSheetState extends State<_ProductFiltersSheet> {
                 min: ProductFilters.priceFloor,
                 max: ProductFilters.priceCeil,
                 divisions: 20,
-                activeColor: AppColors.gold,
+                activeColor: AppColors.accent,
                 inactiveColor: AppColors.divider,
                 labels: RangeLabels(
                   formatIqd(_range.start.round()),
@@ -325,7 +325,7 @@ class _ProductFiltersSheetState extends State<_ProductFiltersSheet> {
                       ),
                       decoration: BoxDecoration(
                         color: _sort == option
-                            ? AppColors.goldSoft
+                            ? AppColors.accentSoft
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
@@ -337,7 +337,7 @@ class _ProductFiltersSheetState extends State<_ProductFiltersSheet> {
                                 : Icons.radio_button_off_rounded,
                             size: 22,
                             color: _sort == option
-                                ? AppColors.goldDark
+                                ? AppColors.accentStrong
                                 : AppColors.textSecondary,
                           ),
                           const SizedBox(width: AppSpacing.sm),
@@ -424,7 +424,7 @@ class _ChoicePill extends StatelessWidget {
           curve: Curves.easeOut,
           style: (theme.textTheme.labelLarge ?? const TextStyle()).copyWith(
             fontWeight: FontWeight.w700,
-            color: selected ? Colors.white : AppColors.textPrimary,
+            color: selected ? AppColors.onPrimary : AppColors.textPrimary,
           ),
           child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
@@ -444,7 +444,7 @@ class _PricePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.goldSoft,
+        color: AppColors.accentSoft,
         borderRadius: BorderRadius.circular(100),
       ),
       child: Text(
@@ -453,7 +453,7 @@ class _PricePill extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
           fontWeight: FontWeight.w800,
-          color: AppColors.goldDark,
+          color: AppColors.accentStrong,
         ),
       ),
     );

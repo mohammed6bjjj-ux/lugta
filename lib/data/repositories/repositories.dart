@@ -1,8 +1,29 @@
+import 'dart:typed_data';
+
 import '../models.dart';
 
 enum OtpPurpose { registration, passwordRecovery, phoneChange }
 
 enum OrderChangeRequestType { edit, cancel }
+
+enum ProfileAvatarChangeType { replace, remove }
+
+class ProfileAvatarChange {
+  ProfileAvatarChange.replace({
+    required Uint8List bytes,
+    required this.mimeType,
+  }) : type = ProfileAvatarChangeType.replace,
+       bytes = Uint8List.fromList(bytes);
+
+  const ProfileAvatarChange.remove()
+    : type = ProfileAvatarChangeType.remove,
+      bytes = null,
+      mimeType = null;
+
+  final ProfileAvatarChangeType type;
+  final Uint8List? bytes;
+  final String? mimeType;
+}
 
 class RegistrationRequest {
   const RegistrationRequest({
@@ -219,6 +240,7 @@ abstract interface class ProfileRepository {
     required String name,
     required String storeName,
     required String instagramUrl,
+    ProfileAvatarChange? avatarChange,
   });
   Future<Seller> updateSettings({
     required String locale,
@@ -243,7 +265,10 @@ abstract interface class CatalogRepository {
   Stream<void> watchCatalogChanges();
   Future<List<Governorate>> fetchDeliveryZones();
   Future<List<PackagingBox>> fetchPackagingBoxes();
-  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId);
+  Future<DeliveryQuote> quoteDeliveryFee(
+    String deliveryZoneId, {
+    required int orderSubtotal,
+  });
   Future<PublicContentSnapshot> fetchPublicContent();
   Future<Set<String>> fetchFavoriteProductIds();
   Future<Set<String>> fetchStockAlertProductIds();
@@ -299,6 +324,22 @@ abstract interface class PromotionsRepository {
   Stream<void> watchPromotionGrantChanges();
 }
 
+abstract interface class LoyaltyRepository {
+  Future<LoyaltySummary> fetchLoyaltySummary();
+  Stream<void> watchLoyaltyChanges();
+}
+
+class EmptyLoyaltyRepository implements LoyaltyRepository {
+  const EmptyLoyaltyRepository();
+
+  @override
+  Future<LoyaltySummary> fetchLoyaltySummary() async =>
+      const LoyaltySummary.disabled();
+
+  @override
+  Stream<void> watchLoyaltyChanges() => const Stream<void>.empty();
+}
+
 class EmptyPromotionsRepository implements PromotionsRepository {
   const EmptyPromotionsRepository();
 
@@ -322,6 +363,7 @@ class AppRepositories {
     required this.wallet,
     required this.notifications,
     this.promotions = const EmptyPromotionsRepository(),
+    this.loyalty = const EmptyLoyaltyRepository(),
     required this.isDemo,
   });
 
@@ -332,6 +374,7 @@ class AppRepositories {
   final WalletRepository wallet;
   final NotificationsRepository notifications;
   final PromotionsRepository promotions;
+  final LoyaltyRepository loyalty;
   final bool isDemo;
 }
 

@@ -14,6 +14,8 @@ import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
 import '../catalog/home_screen.dart';
 import '../catalog/products_screen.dart';
+import '../auth/guest_access_screen.dart';
+import '../auth/guest_strings.dart';
 import '../orders/orders_screen.dart';
 import '../promotions/promotion_notification_popup.dart';
 import '../profile/profile_screen.dart';
@@ -39,23 +41,28 @@ class _MainShellState extends State<MainShell> {
   VoidCallback? _popupWaiter;
   bool _popupShownThisShell = false;
   bool _popupDialogOpen = false;
+  late final bool _guestSession;
 
-  late final List<Widget?> _tabs = <Widget?>[
-    const HomeScreen(),
-    null,
-    null,
-    null,
-    null,
-  ];
+  late final List<Widget?> _tabs;
 
-  Widget _createTab(int index) => switch (index) {
-    0 => const HomeScreen(),
-    1 => const ProductsScreen(),
-    2 => const OrdersScreen(),
-    3 => const WalletScreen(),
-    4 => const ProfileScreen(),
-    _ => const SizedBox.shrink(),
-  };
+  Widget _createTab(int index) {
+    if (_guestSession) {
+      return switch (index) {
+        0 => const HomeScreen(),
+        1 => const ProductsScreen(),
+        2 => const GuestAccessScreen(embedded: true),
+        _ => const SizedBox.shrink(),
+      };
+    }
+    return switch (index) {
+      0 => const HomeScreen(),
+      1 => const ProductsScreen(),
+      2 => const OrdersScreen(),
+      3 => const WalletScreen(),
+      4 => const ProfileScreen(),
+      _ => const SizedBox.shrink(),
+    };
+  }
 
   void _selectTab(int index) {
     if (_index == index) return;
@@ -68,6 +75,10 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    _guestSession = session.isGuest;
+    _tabs = List<Widget?>.filled(_guestSession ? 3 : 5, null);
+    _tabs[0] = const HomeScreen();
+    if (_guestSession) return;
     final deviceTokens = widget.deviceTokens ?? appBackend.deviceTokens;
     // Subscribe before draining the terminated-state queue so a platform event
     // arriving between those operations cannot be lost.
@@ -127,6 +138,11 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _openNotificationTarget(AppNotification notification) async {
     final type = notification.targetType?.trim().toLowerCase();
+    if (type == 'loyalty') {
+      unawaited(session.refreshLoyaltySummary().catchError((_) {}));
+      await Navigator.of(context).pushNamed(Routes.loyalty);
+      return;
+    }
     if (type == 'referral' || notification.type == NotificationType.referral) {
       _refreshPromotionEngagement(includeReferralSummary: true);
       await Navigator.of(context).pushNamed(Routes.referrals);
@@ -182,6 +198,11 @@ class _MainShellState extends State<MainShell> {
     }
 
     if (!mounted) return;
+    if (deepTarget?.kind == NotificationDeepLinkKind.loyalty) {
+      unawaited(session.refreshLoyaltySummary().catchError((_) {}));
+      await Navigator.of(context).pushNamed(Routes.loyalty);
+      return;
+    }
     if (deepTarget?.kind == NotificationDeepLinkKind.referrals) {
       _refreshPromotionEngagement(includeReferralSummary: true);
       await Navigator.of(context).pushNamed(Routes.referrals);
@@ -274,6 +295,11 @@ class _MainShellState extends State<MainShell> {
           await navigator.pushNamed(Routes.referrals);
           continue;
         }
+        if (targetType == 'loyalty') {
+          unawaited(session.refreshLoyaltySummary().catchError((_) {}));
+          await navigator.pushNamed(Routes.loyalty);
+          continue;
+        }
         if (targetPromotionId != null ||
             targetType == 'promotion' ||
             targetType == 'reward' ||
@@ -289,6 +315,11 @@ class _MainShellState extends State<MainShell> {
         final explicitOrderId = event.orderId ?? durable?.targetOrderId;
         final explicitProductId = event.productId ?? durable?.targetProductId;
         if (explicitOrderId == null && explicitProductId == null) {
+          if (deepTarget?.kind == NotificationDeepLinkKind.loyalty) {
+            unawaited(session.refreshLoyaltySummary().catchError((_) {}));
+            await navigator.pushNamed(Routes.loyalty);
+            continue;
+          }
           if (deepTarget?.kind == NotificationDeepLinkKind.referrals) {
             _refreshPromotionEngagement(includeReferralSummary: true);
             await navigator.pushNamed(Routes.referrals);
@@ -388,16 +419,61 @@ class _MainShellState extends State<MainShell> {
         children: [for (final tab in _tabs) tab ?? const SizedBox.shrink()],
       ),
       bottomNavigationBar: Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.md,
-          right: AppSpacing.md,
-          bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
+        padding: EdgeInsetsDirectional.fromSTEB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
         ),
         // الغلاف الزجاجي داخل المستمع نفسه: أي تغيير في الإعدادات
         // (لغة/داكن) أو الجلسة يعيد رسم الشريط كاملاً بلوحته الصحيحة.
         child: ListenableBuilder(
           listenable: Listenable.merge([session, appSettings]),
           builder: (context, _) {
+            if (_guestSession) {
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
+                  boxShadow: AppShadows.floating,
+                ),
+                child: FrostedPanel(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm - 2,
+                      vertical: AppSpacing.xs + 1,
+                    ),
+                    child: Row(
+                      children: [
+                        _NavItem(
+                          key: const ValueKey('home_nav_tab'),
+                          icon: Icons.storefront_outlined,
+                          activeIcon: Icons.storefront_rounded,
+                          label: CoreStrings.tabHome,
+                          selected: _index == 0,
+                          onTap: () => _selectTab(0),
+                        ),
+                        _NavItem(
+                          key: const ValueKey('products_nav_tab'),
+                          icon: Icons.grid_view_outlined,
+                          activeIcon: Icons.grid_view_rounded,
+                          label: CoreStrings.tabProducts,
+                          selected: _index == 1,
+                          onTap: () => _selectTab(1),
+                        ),
+                        _NavItem(
+                          key: const ValueKey('guest_nav_tab'),
+                          icon: Icons.person_outline_rounded,
+                          activeIcon: Icons.person_rounded,
+                          label: GuestStrings.guestBadge,
+                          selected: _index == 2,
+                          onTap: () => _selectTab(2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
             final activeOrders = session.orders
                 .where((o) => !o.status.isTerminal)
                 .length;
@@ -507,8 +583,8 @@ class _NavItem extends StatelessWidget {
               Badge(
                 isLabelVisible: badgeCount > 0,
                 label: Text('$badgeCount', style: const TextStyle(fontSize: 9)),
-                backgroundColor: AppColors.gold,
-                textColor: Colors.white,
+                backgroundColor: AppColors.accent,
+                textColor: AppColors.onAccent,
                 child: AnimatedSwitcher(
                   duration: AppDurations.fast,
                   transitionBuilder: (child, anim) =>
@@ -517,7 +593,9 @@ class _NavItem extends StatelessWidget {
                     selected ? activeIcon : icon,
                     key: ValueKey(selected),
                     size: 21,
-                    color: selected ? AppColors.gold : AppColors.textSecondary,
+                    color: selected
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
                   ),
                 ),
               ),

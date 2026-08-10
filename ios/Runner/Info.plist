@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>لُگطة</string>
+	<string>لكطة</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -27,9 +27,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>يحتاج تطبيق لُگطة إلى إذنك لحفظ صور وفيديوهات المنتجات في مكتبة الصور.</string>
+	<string>يحتاج تطبيق لكطة إلى إذنك لحفظ صور وفيديوهات المنتجات في مكتبة الصور.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>يحتاج تطبيق لُگطة إلى الوصول إلى مكتبة الصور لحفظ صور وفيديوهات المنتجات في جهازك.</string>
+	<string>يحتاج تطبيق لكطة إلى الوصول إلى مكتبة الصور لاختيار صورة ملفك الشخصي وحفظ وسائط المنتجات.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIApplicationSceneManifest</key>

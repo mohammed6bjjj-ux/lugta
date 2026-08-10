@@ -230,7 +230,7 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer>
         children: [
           ProductMediaThumbnail(item: widget.item, fit: BoxFit.contain),
           Container(color: Colors.black.withValues(alpha: .46)),
-          Center(child: CircularProgressIndicator(color: AppColors.gold)),
+          Center(child: CircularProgressIndicator(color: AppColors.accent)),
         ],
       );
     }
@@ -273,7 +273,7 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer>
               ),
             ),
           if (controller.isBuffering)
-            Center(child: CircularProgressIndicator(color: AppColors.gold)),
+            Center(child: CircularProgressIndicator(color: AppColors.accent)),
           PositionedDirectional(
             start: AppSpacing.md,
             end: AppSpacing.md,
@@ -285,7 +285,7 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer>
                   child: Slider(
                     value: positionMs.toDouble(),
                     max: durationMs > 0 ? durationMs.toDouble() : 1,
-                    activeColor: AppColors.gold,
+                    activeColor: AppColors.accent,
                     inactiveColor: Colors.white24,
                     onChanged: durationMs > 0
                         ? (value) => unawaited(_seek(value))

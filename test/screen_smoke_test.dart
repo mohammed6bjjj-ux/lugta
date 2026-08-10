@@ -8,12 +8,14 @@ import 'package:flutter_app/app/theme.dart';
 import 'package:flutter_app/data/app_settings.dart';
 import 'package:flutter_app/data/mock_data.dart';
 import 'package:flutter_app/features/auth/account_blocked_screen.dart';
+import 'package:flutter_app/features/auth/account_deleted_screen.dart';
 import 'package:flutter_app/features/auth/forgot_password_screen.dart';
 import 'package:flutter_app/features/auth/login_screen.dart';
 import 'package:flutter_app/features/auth/onboarding_screen.dart';
 import 'package:flutter_app/features/auth/otp_verification_screen.dart';
 import 'package:flutter_app/features/auth/pending_approval_screen.dart';
 import 'package:flutter_app/features/auth/register_screen.dart';
+import 'package:flutter_app/features/cart/cart_screen.dart';
 import 'package:flutter_app/features/catalog/category_products_screen.dart';
 import 'package:flutter_app/features/catalog/favorites_screen.dart';
 import 'package:flutter_app/features/catalog/products_screen.dart';
@@ -21,11 +23,13 @@ import 'package:flutter_app/features/catalog/search_screen.dart';
 import 'package:flutter_app/features/order_wizard/order_success_screen.dart';
 import 'package:flutter_app/features/order_wizard/order_wizard_screen.dart';
 import 'package:flutter_app/features/orders/order_detail_screen.dart';
+import 'package:flutter_app/features/orders/orders_screen.dart';
 import 'package:flutter_app/features/product/media_viewer_screen.dart';
 import 'package:flutter_app/features/product/product_detail_screen.dart';
 import 'package:flutter_app/features/profile/about_screen.dart';
 import 'package:flutter_app/features/profile/edit_profile_screen.dart';
 import 'package:flutter_app/features/profile/notifications_screen.dart';
+import 'package:flutter_app/features/profile/profile_screen.dart';
 import 'package:flutter_app/features/profile/policies_screen.dart';
 import 'package:flutter_app/features/profile/legal/legal_document_screen.dart';
 import 'package:flutter_app/features/profile/legal/legal_documents.dart';
@@ -33,10 +37,12 @@ import 'package:flutter_app/features/profile/settings_screen.dart';
 import 'package:flutter_app/features/profile/support_screen.dart';
 import 'package:flutter_app/features/promotions/promotions_screen.dart';
 import 'package:flutter_app/features/referrals/referral_screen.dart';
+import 'package:flutter_app/features/loyalty/loyalty_screen.dart';
 import 'package:flutter_app/features/shell/main_shell.dart';
 import 'package:flutter_app/features/wallet/withdraw_request_screen.dart';
 import 'package:flutter_app/features/wallet/withdrawals_history_screen.dart';
 import 'package:flutter_app/features/wallet/payout_accounts_screen.dart';
+import 'package:flutter_app/features/wallet/wallet_screen.dart';
 
 typedef ScreenFactory = Widget Function();
 
@@ -72,6 +78,7 @@ void main() {
       isRejected: false,
       reason: 'تم إيقاف الحساب مؤقتاً',
     ),
+    'deleted account': () => const AccountDeletedScreen(),
     'main shell': () => const MainShell(),
     'products': () => const ProductsScreen(),
     'category products': () =>
@@ -84,13 +91,18 @@ void main() {
     'order wizard': () => OrderWizardScreen(product: product),
     'order success': () => OrderSuccessScreen(order: order),
     'order details': () => OrderDetailScreen(order: order),
+    'orders': () => const OrdersScreen(),
+    'cart': () => const CartScreen(),
     'withdraw request': () => const WithdrawRequestScreen(),
     'withdrawals history': () => const WithdrawalsHistoryScreen(),
     'payout accounts': () => const PayoutAccountsScreen(),
+    'wallet': () => const WalletScreen(),
     'notifications': () => const NotificationsScreen(),
     'promotions': () => const PromotionsScreen(),
     'referrals': () => const ReferralScreen(),
+    'loyalty': () => const LoyaltyScreen(),
     'edit profile': () => const EditProfileScreen(),
+    'profile': () => const ProfileScreen(),
     'support': () => const SupportScreen(),
     'policies': () => const PoliciesScreen(),
     'long legal document': () =>
@@ -112,7 +124,7 @@ void main() {
       language: AppLanguage.en,
     ),
     _Scenario('dark compact', size: Size(320, 568), darkMode: true),
-    _Scenario('large text', size: Size(360, 640), textScale: 1.5),
+    _Scenario('200% text', size: Size(360, 640), textScale: 2),
     _Scenario('landscape', size: Size(568, 320)),
     _Scenario('desktop web', size: Size(1280, 720), language: AppLanguage.en),
   ];

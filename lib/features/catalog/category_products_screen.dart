@@ -66,7 +66,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
             icon: Badge(
               isLabelVisible: hasActiveFilters,
               smallSize: 8,
-              backgroundColor: AppColors.goldDark,
+              backgroundColor: AppColors.accentStrong,
               child: const Icon(Icons.tune_rounded),
             ),
           ),
@@ -204,7 +204,7 @@ class _ActiveFilterPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.goldSoft,
+        color: AppColors.accentSoft,
         borderRadius: BorderRadius.circular(100),
       ),
       child: Text(
@@ -213,7 +213,7 @@ class _ActiveFilterPill extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           fontWeight: FontWeight.w700,
-          color: AppColors.goldDark,
+          color: AppColors.accentStrong,
         ),
       ),
     );

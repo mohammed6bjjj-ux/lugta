@@ -167,6 +167,7 @@ Map<String, Object?> _categoryToJson(Category category) => {
   'name_en': category.nameEn,
   'image_url': category.imageUrl,
   'icon_code_point': category.icon.codePoint,
+  'sticker_key': category.stickerKey.wireValue,
 };
 
 Category _categoryFromJson(Map<String, dynamic> json) => Category(
@@ -176,14 +177,78 @@ Category _categoryFromJson(Map<String, dynamic> json) => Category(
   nameEn: json['name_en'] as String?,
   imageUrl: json['image_url'] as String? ?? '',
   icon: _categoryIcon(json['icon_code_point'] as int?),
+  stickerKey: categoryStickerKeyFromWire(json['sticker_key']),
 );
 
 IconData _categoryIcon(int? codePoint) => switch (codePoint) {
   final value when value == Icons.watch.codePoint => Icons.watch,
+  final value when value == Icons.watch_rounded.codePoint =>
+    Icons.watch_rounded,
+  final value when value == Icons.watch_outlined.codePoint =>
+    Icons.watch_outlined,
   final value when value == Icons.visibility_outlined.codePoint =>
     Icons.visibility_outlined,
   final value when value == Icons.diamond_outlined.codePoint =>
     Icons.diamond_outlined,
+  final value when value == Icons.inventory_2_outlined.codePoint =>
+    Icons.inventory_2_outlined,
+  final value when value == Icons.smartphone_rounded.codePoint =>
+    Icons.smartphone_rounded,
+  final value when value == Icons.laptop_mac_rounded.codePoint =>
+    Icons.laptop_mac_rounded,
+  final value when value == Icons.desktop_windows_rounded.codePoint =>
+    Icons.desktop_windows_rounded,
+  final value when value == Icons.tablet_mac_rounded.codePoint =>
+    Icons.tablet_mac_rounded,
+  final value when value == Icons.tv_rounded.codePoint => Icons.tv_rounded,
+  final value when value == Icons.photo_camera_rounded.codePoint =>
+    Icons.photo_camera_rounded,
+  final value when value == Icons.headphones_rounded.codePoint =>
+    Icons.headphones_rounded,
+  final value when value == Icons.sports_esports_rounded.codePoint =>
+    Icons.sports_esports_rounded,
+  final value when value == Icons.wifi_rounded.codePoint => Icons.wifi_rounded,
+  final value when value == Icons.electrical_services_rounded.codePoint =>
+    Icons.electrical_services_rounded,
+  final value when value == Icons.memory_rounded.codePoint =>
+    Icons.memory_rounded,
+  final value when value == Icons.kitchen_rounded.codePoint =>
+    Icons.kitchen_rounded,
+  final value when value == Icons.chair_rounded.codePoint =>
+    Icons.chair_rounded,
+  final value when value == Icons.home_rounded.codePoint => Icons.home_rounded,
+  final value when value == Icons.shopping_bag_rounded.codePoint =>
+    Icons.shopping_bag_rounded,
+  final value when value == Icons.hiking_rounded.codePoint =>
+    Icons.hiking_rounded,
+  final value when value == Icons.palette_rounded.codePoint =>
+    Icons.palette_rounded,
+  final value when value == Icons.checkroom_rounded.codePoint =>
+    Icons.checkroom_rounded,
+  final value when value == Icons.fitness_center_rounded.codePoint =>
+    Icons.fitness_center_rounded,
+  final value when value == Icons.toys_rounded.codePoint => Icons.toys_rounded,
+  final value when value == Icons.menu_book_rounded.codePoint =>
+    Icons.menu_book_rounded,
+  final value when value == Icons.pets_rounded.codePoint => Icons.pets_rounded,
+  final value when value == Icons.directions_car_rounded.codePoint =>
+    Icons.directions_car_rounded,
+  final value when value == Icons.build_rounded.codePoint =>
+    Icons.build_rounded,
+  final value when value == Icons.shopping_basket_rounded.codePoint =>
+    Icons.shopping_basket_rounded,
+  final value when value == Icons.restaurant_rounded.codePoint =>
+    Icons.restaurant_rounded,
+  final value when value == Icons.health_and_safety_rounded.codePoint =>
+    Icons.health_and_safety_rounded,
+  final value when value == Icons.business_center_rounded.codePoint =>
+    Icons.business_center_rounded,
+  final value when value == Icons.luggage_rounded.codePoint =>
+    Icons.luggage_rounded,
+  final value when value == Icons.devices_rounded.codePoint =>
+    Icons.devices_rounded,
+  final value when value == Icons.category_outlined.codePoint =>
+    Icons.category_outlined,
   _ => Icons.category_outlined,
 };
 

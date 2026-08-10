@@ -4,7 +4,9 @@ import '../../app/routes.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/entrance.dart';
 import '../../core/widgets/primary_button.dart';
+import '../../data/session.dart';
 import 'auth_strings.dart';
+import 'guest_strings.dart';
 
 /// شاشات التعريف — 3 شرائح تشرح فكرة المنصة مع مؤشر نقاط وزر تخطٍّ.
 class OnboardingScreen extends StatefulWidget {
@@ -37,6 +39,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   ];
 
   bool get _isLast => _page == _slides.length - 1;
+  bool _guestLoading = false;
 
   @override
   void dispose() {
@@ -45,6 +48,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _goToLast() {
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      _controller.jumpToPage(_slides.length - 1);
+      return;
+    }
     _controller.animateToPage(
       _slides.length - 1,
       duration: AppDurations.slow,
@@ -53,10 +60,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      _controller.jumpToPage((_page + 1).clamp(0, _slides.length - 1));
+      return;
+    }
     _controller.nextPage(
       duration: AppDurations.slow,
       curve: AppCurves.emphasized,
     );
+  }
+
+  Future<void> _continueAsGuest() async {
+    if (_guestLoading) return;
+    setState(() => _guestLoading = true);
+    try {
+      await session.enterGuestMode();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, Routes.shell, (_) => false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _guestLoading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
   }
 
   @override
@@ -93,7 +120,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   itemBuilder: (context, i) => _SlideView(slide: _slides[i]),
                 ),
               ),
-              // مؤشر النقاط — المختارة تتوسع إلى كبسولة ذهبية متدرجة.
+              // مؤشر صفحات واضح من ألوان الهوية.
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -106,7 +133,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       height: 8,
                       decoration: BoxDecoration(
                         color: i == _page ? null : AppColors.divider,
-                        gradient: i == _page ? AppColors.goldGradient : null,
+                        gradient: i == _page ? AppColors.accentGradient : null,
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
@@ -144,7 +171,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               ),
                               label: AuthStrings.createAccount,
                               icon: Icons.person_add_alt_1_outlined,
-                              gold: true,
+                              accented: true,
                               onPressed: () =>
                                   Navigator.pushNamed(context, Routes.register),
                             ),
@@ -154,6 +181,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               label: AuthStrings.haveAccount,
                               onPressed: () =>
                                   Navigator.pushNamed(context, Routes.login),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            TextButton.icon(
+                              key: const ValueKey('onboarding_guest_button'),
+                              onPressed: _guestLoading
+                                  ? null
+                                  : _continueAsGuest,
+                              icon: _guestLoading
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.visibility_outlined),
+                              label: Text(GuestStrings.continueAsGuest),
                             ),
                           ],
                         )
@@ -205,7 +248,7 @@ class _SlideView extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // دائرة ناعمة كبيرة بتدرج ذهبي هادئ تحتضن دائرة ذهبية متوهجة.
+                // مساحة رسم هادئة تستخدم البنفسجي للفعل والأصفر للإبراز.
                 Entrance(
                   child: Container(
                     width: artworkSize,
@@ -216,7 +259,7 @@ class _SlideView extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topRight,
                         end: Alignment.bottomLeft,
-                        colors: [Colors.white, AppColors.goldSoft],
+                        colors: [AppColors.surface, AppColors.accentSoft],
                       ),
                       boxShadow: AppShadows.card,
                     ),
@@ -225,13 +268,13 @@ class _SlideView extends StatelessWidget {
                       height: iconCircleSize,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: AppColors.goldGradient,
-                        boxShadow: AppShadows.goldGlow,
+                        gradient: AppColors.accentGradient,
+                        boxShadow: AppShadows.accentGlow,
                       ),
                       child: Icon(
                         slide.icon,
                         size: compact ? 40 : 52,
-                        color: Colors.white,
+                        color: AppColors.onAccent,
                       ),
                     ),
                   ),

@@ -24,13 +24,7 @@ class ProductMediaThumbnail extends StatelessWidget {
     }
 
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [Color(0xFF17261F), Color(0xFF080D0B)],
-        ),
-      ),
+      decoration: BoxDecoration(gradient: AppColors.darkGradient),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -46,7 +40,7 @@ class ProductMediaThumbnail extends StatelessWidget {
               child: Icon(
                 Icons.play_arrow_rounded,
                 size: 40,
-                color: AppColors.gold,
+                color: AppColors.accent,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),

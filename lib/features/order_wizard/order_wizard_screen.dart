@@ -31,6 +31,7 @@ class OrderWizardScreen extends StatefulWidget {
 }
 
 class _OrderWizardScreenState extends State<OrderWizardScreen> {
+  static const int _fixedDeliveryFee = 5000;
   static List<String> get _stepTitles => [
     WizardStrings.stepProduct,
     WizardStrings.stepPrice,
@@ -145,10 +146,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   int get _unitProfit => _salePrice - _averageWholesalePrice;
   int get _totalProfit => (_salePrice * _totalQuantity) - _wholesaleTotal;
 
-  int get _deliveryFee =>
-      _deliveryQuote?.deliveryFee ?? _governorate?.deliveryFee ?? 0;
+  int get _deliveryFee => _deliveryQuote?.deliveryFee ?? _fixedDeliveryFee;
   int get _baseDeliveryFee =>
-      _deliveryQuote?.baseDeliveryFee ?? _governorate?.deliveryFee ?? 0;
+      _deliveryQuote?.baseDeliveryFee ?? _fixedDeliveryFee;
   int get _packagingTotal => (_packagingBox?.price ?? 0) * _totalQuantity;
 
   bool get _nextEnabled {
@@ -177,7 +177,10 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     });
     if (governorate == null) return;
     try {
-      final quote = await session.quoteDeliveryFee(governorate.id);
+      final quote = await session.quoteDeliveryFee(
+        governorate.id,
+        orderSubtotal: _salePrice * _totalQuantity,
+      );
       if (!mounted || _governorate?.id != governorate.id) return;
       setState(() {
         _deliveryQuote = quote;
@@ -291,7 +294,10 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         _showSubmissionWarning(WizardStrings.deliveryZoneUnavailable);
         return;
       }
-      final latestQuote = await session.quoteDeliveryFee(latestGovernorate.id);
+      final latestQuote = await session.quoteDeliveryFee(
+        latestGovernorate.id,
+        orderSubtotal: _salePrice * _totalQuantity,
+      );
       if (!mounted) return;
       final deliveryFeeChanged =
           latestQuote.deliveryFee != _deliveryFee ||
@@ -530,7 +536,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     icon: _step == 3
                         ? Icons.check_circle_outline_rounded
                         : null,
-                    gold: _step == 3,
+                    accented: _step == 3,
                     loading: _submitting,
                     onPressed: _nextEnabled ? _goNext : null,
                   ),
@@ -672,8 +678,8 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                       : WizardStrings.changePackaging,
                 ),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.gold,
-                  side: BorderSide(color: AppColors.gold, width: 1.4),
+                  foregroundColor: AppColors.accent,
+                  side: BorderSide(color: AppColors.accent, width: 1.4),
                   minimumSize: const Size.fromHeight(50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppRadius.md),
@@ -743,15 +749,15 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       curve: AppCurves.emphasized,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: hasSelection ? AppColors.goldSoft : AppColors.surface,
+        color: hasSelection ? AppColors.accentSoft : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
           color: hasSelection
-              ? AppColors.gold.withValues(alpha: .55)
+              ? AppColors.accent.withValues(alpha: .55)
               : Colors.transparent,
           width: 1.4,
         ),
-        boxShadow: hasSelection ? AppShadows.goldGlow : AppShadows.card,
+        boxShadow: hasSelection ? AppShadows.accentGlow : AppShadows.card,
       ),
       child: Row(
         children: [
@@ -761,13 +767,15 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
             height: 42,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: hasSelection ? AppColors.goldGradient : null,
+              gradient: hasSelection ? AppColors.accentGradient : null,
               color: hasSelection ? null : AppColors.surfaceAlt,
             ),
             child: Icon(
               Icons.shopping_bag_outlined,
               size: 22,
-              color: hasSelection ? Colors.white : AppColors.textSecondary,
+              color: hasSelection
+                  ? AppColors.onAccent
+                  : AppColors.textSecondary,
             ),
           ),
           const SizedBox(width: AppSpacing.sm + 4),
@@ -943,10 +951,12 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(0, 44),
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                foregroundColor: AppColors.goldDark,
+                foregroundColor: AppColors.accentStrong,
                 backgroundColor: AppColors.surface,
                 shape: const StadiumBorder(),
-                side: BorderSide(color: AppColors.gold.withValues(alpha: .55)),
+                side: BorderSide(
+                  color: AppColors.accent.withValues(alpha: .55),
+                ),
               ),
               icon: const Icon(Icons.auto_awesome_rounded, size: 18),
               label: Text(
@@ -985,7 +995,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           value,
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: emphasized ? AppColors.goldDark : AppColors.textPrimary,
+            color: emphasized ? AppColors.accentStrong : AppColors.textPrimary,
           ),
         ),
       ],
@@ -1284,17 +1294,17 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     vertical: AppSpacing.sm + 2,
                   ),
                   decoration: BoxDecoration(
-                    gradient: AppColors.goldGradient,
+                    gradient: AppColors.accentGradient,
                     borderRadius: BorderRadius.circular(100),
-                    boxShadow: AppShadows.goldGlow,
+                    boxShadow: AppShadows.accentGlow,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.local_shipping_outlined,
                         size: 18,
-                        color: Colors.white,
+                        color: AppColors.onAccent,
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Flexible(
@@ -1309,7 +1319,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.labelLarge?.copyWith(
-                            color: Colors.white,
+                            color: AppColors.onAccent,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -1323,12 +1333,15 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
               const SizedBox(height: AppSpacing.sm),
               AppCard(
                 key: const ValueKey('delivery_offer_details'),
-                color: AppColors.goldSoft,
+                color: AppColors.accentSoft,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.celebration_outlined, color: AppColors.goldDark),
+                    Icon(
+                      Icons.celebration_outlined,
+                      color: AppColors.accentStrong,
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
@@ -1340,7 +1353,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                                 ? _deliveryQuote!.campaignName!.trim()
                                 : WizardStrings.deliveryOffer,
                             style: theme.textTheme.titleSmall?.copyWith(
-                              color: AppColors.goldDark,
+                              color: AppColors.accentStrong,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -1585,7 +1598,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
-                colors: [AppColors.goldSoft, AppColors.surface],
+                colors: [AppColors.accentSoft, AppColors.surface],
               ),
               child: Row(
                 children: [
@@ -1594,11 +1607,11 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     height: 46,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: AppColors.goldGradient,
+                      gradient: AppColors.accentGradient,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.storefront_outlined,
-                      color: Colors.white,
+                      color: AppColors.onAccent,
                       size: 24,
                     ),
                   ),
@@ -1607,7 +1620,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     child: Text(
                       WizardStrings.storeNameNotice(session.seller.storeName),
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.goldDark,
+                        color: AppColors.accentStrong,
                         fontWeight: FontWeight.w700,
                         height: 1.6,
                       ),
@@ -1680,9 +1693,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 height: 34,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.goldSoft,
+                  color: AppColors.accentSoft,
                 ),
-                child: Icon(icon, size: 18, color: AppColors.goldDark),
+                child: Icon(icon, size: 18, color: AppColors.accentStrong),
               ),
               const SizedBox(width: AppSpacing.sm + 2),
               Expanded(
@@ -1818,7 +1831,9 @@ class _ProgressLine extends StatelessWidget {
                     child: child,
                   ),
                   child: DecoratedBox(
-                    decoration: BoxDecoration(gradient: AppColors.goldGradient),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.accentGradient,
+                    ),
                   ),
                 ),
               ),
@@ -1854,7 +1869,7 @@ class _StepDot extends StatelessWidget {
       height: 32,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: state == _StepDotState.done ? AppColors.goldGradient : null,
+        gradient: state == _StepDotState.done ? AppColors.accentGradient : null,
         color: switch (state) {
           _StepDotState.done => null,
           _StepDotState.current => AppColors.primary,
@@ -1864,7 +1879,7 @@ class _StepDot extends StatelessWidget {
             ? Border.all(color: AppColors.divider, width: 1.4)
             : null,
         boxShadow: switch (state) {
-          _StepDotState.done => AppShadows.goldGlow,
+          _StepDotState.done => AppShadows.accentGlow,
           _StepDotState.current => AppShadows.card,
           _StepDotState.upcoming => null,
         },
@@ -1879,11 +1894,11 @@ class _StepDot extends StatelessWidget {
             child: FadeTransition(opacity: animation, child: child),
           ),
           child: state == _StepDotState.done
-              ? const Icon(
+              ? Icon(
                   Icons.check_rounded,
                   key: ValueKey('check'),
                   size: 17,
-                  color: Colors.white,
+                  color: AppColors.onAccent,
                 )
               : Text(
                   formatNumber(index + 1),
@@ -1891,7 +1906,7 @@ class _StepDot extends StatelessWidget {
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: state == _StepDotState.current
-                        ? Colors.white
+                        ? AppColors.onPrimary
                         : AppColors.textSecondary,
                   ),
                 ),
@@ -1947,7 +1962,19 @@ class _PulseRingState extends State<_PulseRing>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1500),
-  )..repeat();
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller
+        ..stop()
+        ..value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -1970,7 +1997,7 @@ class _PulseRingState extends State<_PulseRing>
               height: 32,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.gold, width: 2),
+                border: Border.all(color: AppColors.accent, width: 2),
               ),
             ),
           ),
@@ -2008,10 +2035,10 @@ class _SelectedPackagingCard extends StatelessWidget {
         curve: AppCurves.emphasized,
         padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
-          color: AppColors.goldSoft,
+          color: AppColors.accentSoft,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: AppColors.gold.withValues(alpha: .7),
+            color: AppColors.accent.withValues(alpha: .7),
             width: 1.5,
           ),
         ),
@@ -2064,13 +2091,13 @@ class _SelectedPackagingCard extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.gold,
+                      color: AppColors.accent,
                       borderRadius: BorderRadius.circular(100),
                     ),
                     child: Text(
                       WizardStrings.selectedPackaging,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.white,
+                        color: AppColors.onAccent,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -2091,7 +2118,7 @@ class _SelectedPackagingCard extends StatelessWidget {
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: box.isFree
                           ? AppColors.success
-                          : AppColors.goldDark,
+                          : AppColors.accentStrong,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -2200,7 +2227,7 @@ class _PackagingPickerSheet extends StatelessWidget {
                       child: Material(
                         key: const ValueKey('packaging_none'),
                         color: selected
-                            ? AppColors.goldSoft
+                            ? AppColors.accentSoft
                             : AppColors.surfaceAlt,
                         borderRadius: BorderRadius.circular(AppRadius.md),
                         child: InkWell(
@@ -2224,7 +2251,7 @@ class _PackagingPickerSheet extends StatelessWidget {
                                   child: Icon(
                                     Icons.block_rounded,
                                     color: selected
-                                        ? AppColors.goldDark
+                                        ? AppColors.accentStrong
                                         : AppColors.textSecondary,
                                   ),
                                 ),
@@ -2292,10 +2319,10 @@ class _PackagingPickerTile extends StatelessWidget {
         duration: AppDurations.base,
         curve: AppCurves.emphasized,
         decoration: BoxDecoration(
-          color: selected ? AppColors.goldSoft : AppColors.surface,
+          color: selected ? AppColors.accentSoft : AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: selected ? AppColors.gold : AppColors.divider,
+            color: selected ? AppColors.accent : AppColors.divider,
             width: selected ? 1.8 : 1,
           ),
         ),
@@ -2339,7 +2366,7 @@ class _PackagingPickerTile extends StatelessWidget {
                           style: theme.textTheme.labelLarge?.copyWith(
                             color: box.isFree
                                 ? AppColors.success
-                                : AppColors.goldDark,
+                                : AppColors.accentStrong,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
@@ -2370,15 +2397,15 @@ class _PackagingSelectionMark extends StatelessWidget {
       width: 30,
       height: 30,
       decoration: BoxDecoration(
-        color: selected ? AppColors.gold : AppColors.surface,
+        color: selected ? AppColors.accent : AppColors.surface,
         shape: BoxShape.circle,
         border: Border.all(
-          color: selected ? AppColors.gold : AppColors.divider,
+          color: selected ? AppColors.accent : AppColors.divider,
           width: 1.4,
         ),
       ),
       child: selected
-          ? const Icon(Icons.check_rounded, color: Colors.white, size: 19)
+          ? Icon(Icons.check_rounded, color: AppColors.onAccent, size: 19)
           : null,
     );
   }
@@ -2478,8 +2505,8 @@ class _PackagingPreviewScreen extends StatelessWidget {
                       priceLabel,
                       style: theme.textTheme.titleSmall?.copyWith(
                         color: AppColors.p.brightness == Brightness.dark
-                            ? AppColors.goldDark
-                            : AppColors.gold,
+                            ? AppColors.accentStrong
+                            : AppColors.accent,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -2516,15 +2543,15 @@ class _VariantTile extends StatelessWidget {
         curve: AppCurves.emphasized,
         padding: const EdgeInsets.all(AppSpacing.sm + 4),
         decoration: BoxDecoration(
-          color: selected ? AppColors.goldSoft : AppColors.surface,
+          color: selected ? AppColors.accentSoft : AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: selected
-                ? AppColors.gold.withValues(alpha: .65)
+                ? AppColors.accent.withValues(alpha: .65)
                 : Colors.transparent,
             width: 1.4,
           ),
-          boxShadow: selected ? AppShadows.goldGlow : AppShadows.card,
+          boxShadow: selected ? AppShadows.accentGlow : AppShadows.card,
         ),
         child: Row(
           children: [

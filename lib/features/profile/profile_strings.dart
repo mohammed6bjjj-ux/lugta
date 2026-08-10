@@ -271,7 +271,7 @@ class ProfileStrings {
   // ── حول التطبيق ──
   static String get brandTagline => _t(
     'كل يوم لكطة جديدة',
-    'هەموو ڕۆژێک لقطةیەکی نوێ',
+    'هەموو ڕۆژێک لكطةیەکی نوێ',
     'A new find every day',
   );
   static String get aboutTitle => _t(
@@ -312,8 +312,8 @@ class ProfileStrings {
   );
   static String get copyright => _t(
     '© 2026 لكطة — جميع الحقوق محفوظة',
-    '© 2026 لقطة — هەموو مافەکان پارێزراون',
-    '© 2026 Luqta — All rights reserved',
+    '© 2026 لكطة — هەموو مافەکان پارێزراون',
+    '© 2026 Lugta — All rights reserved',
   );
   static String get madeInIraq =>
       _t('صُنع في العراق', 'لە عێراق دروستکراوە', 'Made in Iraq');
@@ -369,5 +369,31 @@ class ProfileStrings {
     'تم حفظ التغييرات بنجاح',
     'گۆڕانکارییەکان بە سەرکەوتوویی پاشەکەوتکران',
     'Changes saved successfully',
+  );
+  static String get profilePhoto =>
+      _t('صورة الملف الشخصي', 'وێنەی پرۆفایل', 'Profile photo');
+  static String get profilePhotoHint => _t(
+    'استخدم صورة JPG أو PNG أو WebP بحجم لا يتجاوز 5 ميغابايت.',
+    'وێنەی JPG یان PNG یان WebP بە قەبارەی کەمتر لە 5 مێگابایت بەکاربهێنە.',
+    'Use a JPG, PNG, or WebP image up to 5 MB.',
+  );
+  static String get choosePhoto =>
+      _t('اختيار صورة', 'هەڵبژاردنی وێنە', 'Choose photo');
+  static String get removePhoto =>
+      _t('إزالة الصورة', 'سڕینەوەی وێنە', 'Remove photo');
+  static String get avatarTooLarge => _t(
+    'حجم الصورة أكبر من 5 ميغابايت. اختر صورة أصغر.',
+    'قەبارەی وێنەکە لە 5 مێگابایت زیاترە. وێنەیەکی بچووکتر هەڵبژێرە.',
+    'The image is larger than 5 MB. Choose a smaller image.',
+  );
+  static String get avatarUnsupported => _t(
+    'صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WebP.',
+    'جۆری وێنەکە پشتگیری ناکرێت. JPG یان PNG یان WebP بەکاربهێنە.',
+    'Unsupported image type. Use JPG, PNG, or WebP.',
+  );
+  static String get avatarSelectionFailed => _t(
+    'تعذر قراءة الصورة المختارة. حاول بصورة أخرى.',
+    'خوێندنەوەی وێنە هەڵبژێردراوەکە سەرکەوتوو نەبوو. وێنەیەکی تر هەڵبژێرە.',
+    'Could not read the selected image. Try another image.',
   );
 }

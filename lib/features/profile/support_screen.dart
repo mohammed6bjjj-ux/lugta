@@ -221,13 +221,13 @@ class _FaqCardState extends State<_FaqCard> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: AppColors.goldSoft,
+              color: AppColors.accentSoft,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.help_outline_rounded,
               size: 20,
-              color: AppColors.goldDark,
+              color: AppColors.accentStrong,
             ),
           ),
           trailing: AnimatedRotation(
@@ -236,7 +236,9 @@ class _FaqCardState extends State<_FaqCard> {
             curve: AppCurves.emphasized,
             child: Icon(
               Icons.keyboard_arrow_down_rounded,
-              color: _expanded ? AppColors.goldDark : AppColors.textSecondary,
+              color: _expanded
+                  ? AppColors.accentStrong
+                  : AppColors.textSecondary,
             ),
           ),
           title: Text(

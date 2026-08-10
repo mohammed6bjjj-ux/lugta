@@ -241,7 +241,7 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
                         child: PrimaryButton(
                           label: ProductStrings.downloadToDevice,
                           icon: Icons.download_rounded,
-                          gold: true,
+                          accented: true,
                           onPressed: _selectedIds.isEmpty
                               ? null
                               : _downloadSelected,
@@ -274,7 +274,7 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
                       vertical: AppSpacing.sm + 2,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.goldSoft,
+                      color: AppColors.accentSoft,
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     child: Row(
@@ -282,14 +282,14 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
                         Icon(
                           Icons.shield_outlined,
                           size: 16,
-                          color: AppColors.goldDark,
+                          color: AppColors.accentStrong,
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Text(
                             ProductStrings.safeContentNote,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppColors.goldDark,
+                              color: AppColors.accentStrong,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -329,10 +329,10 @@ class _MediaTile extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: selected ? AppColors.gold : Colors.transparent,
+            color: selected ? AppColors.accent : Colors.transparent,
             width: 2,
           ),
-          boxShadow: selected ? AppShadows.goldGlow : AppShadows.card,
+          boxShadow: selected ? AppShadows.accentGlow : AppShadows.card,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.md - 2),
@@ -343,7 +343,9 @@ class _MediaTile extends StatelessWidget {
               AnimatedOpacity(
                 opacity: selected ? 1 : 0,
                 duration: AppDurations.fast,
-                child: Container(color: AppColors.gold.withValues(alpha: .18)),
+                child: Container(
+                  color: AppColors.accent.withValues(alpha: .18),
+                ),
               ),
               PositionedDirectional(
                 top: 6,
@@ -359,17 +361,17 @@ class _MediaTile extends StatelessWidget {
                     height: 22,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: selected ? AppColors.goldGradient : null,
+                      gradient: selected ? AppColors.accentGradient : null,
                       color: selected
                           ? null
                           : Colors.black.withValues(alpha: .35),
                       border: Border.all(color: Colors.white, width: 1.5),
                     ),
                     child: selected
-                        ? const Icon(
+                        ? Icon(
                             Icons.check_rounded,
                             size: 15,
-                            color: Colors.white,
+                            color: AppColors.onAccent,
                           )
                         : null,
                   ),

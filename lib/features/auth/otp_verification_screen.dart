@@ -145,13 +145,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     height: 92,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: AppColors.goldGradient,
-                      boxShadow: AppShadows.goldGlow,
+                      gradient: AppColors.accentGradient,
+                      boxShadow: AppShadows.accentGlow,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.sms_outlined,
                       size: 42,
-                      color: Colors.white,
+                      color: AppColors.onAccent,
                     ),
                   ),
                 ),
@@ -209,7 +209,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.2,
-                        color: AppColors.goldDark,
+                        color: AppColors.accentStrong,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),

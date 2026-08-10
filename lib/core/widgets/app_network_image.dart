@@ -30,6 +30,12 @@ class AppNetworkImage extends StatefulWidget {
   final BorderRadius? borderRadius;
   final IconData fallbackIcon;
 
+  /// Deterministic image source for visual tests and store screenshots.
+  /// Production code leaves this null and always uses the cache-first network
+  /// pipeline below.
+  @visibleForTesting
+  static ImageProvider<Object>? Function(String url)? debugImageProvider;
+
   @override
   State<AppNetworkImage> createState() => _AppNetworkImageState();
 }
@@ -197,7 +203,7 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
             gradient: LinearGradient(
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
-              colors: [AppColors.goldSoft, AppColors.surfaceAlt],
+              colors: [AppColors.accentSoft, AppColors.surfaceAlt],
             ),
           ),
           child: Stack(
@@ -209,7 +215,7 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
                   Icon(
                     widget.fallbackIcon,
                     size: compact ? 28 : 44,
-                    color: AppColors.goldDark.withValues(alpha: .5),
+                    color: AppColors.accentStrong.withValues(alpha: .5),
                   ),
                   // A tile too small for a label keeps the corner glyph below.
                   if (canRetry && !compact) ...[
@@ -221,7 +227,7 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
                         fontSize: 12,
                         height: 1.5,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.goldDark.withValues(alpha: .85),
+                        color: AppColors.accentStrong.withValues(alpha: .85),
                       ),
                     ),
                   ],
@@ -234,7 +240,7 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
                   child: Icon(
                     Icons.refresh_rounded,
                     size: 18,
-                    color: AppColors.goldDark.withValues(alpha: .78),
+                    color: AppColors.accentStrong.withValues(alpha: .78),
                   ),
                 ),
             ],
@@ -245,6 +251,18 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
 
     Widget buildImage(BoxConstraints constraints) {
       if (widget.url.isEmpty) return fallback(constraints);
+      final debugProvider = AppNetworkImage.debugImageProvider?.call(
+        widget.url,
+      );
+      if (debugProvider != null) {
+        return Image(
+          image: debugProvider,
+          width: widget.width,
+          height: widget.height,
+          fit: widget.fit,
+          gaplessPlayback: true,
+        );
+      }
       final pixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1;
       final boxWidth = _pixelDimension(
         widget.width,

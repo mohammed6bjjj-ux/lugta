@@ -7,7 +7,7 @@ import '../../core/widgets/brand_logo.dart';
 import '../../core/widgets/entrance.dart';
 import 'profile_strings.dart';
 
-/// شاشة حول التطبيق — هوية لُگطة ونبذة عن المنصة والإصدار.
+/// شاشة حول التطبيق — هوية لكطة ونبذة عن المنصة والإصدار.
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
@@ -102,13 +102,13 @@ class AboutScreen extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: AppColors.goldSoft,
+                      color: AppColors.accentSoft,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.info_outline_rounded,
                       size: 21,
-                      color: AppColors.goldDark,
+                      color: AppColors.accentStrong,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -182,10 +182,10 @@ class _FeatureRow extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.goldSoft,
+              color: AppColors.accentSoft,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 20, color: AppColors.goldDark),
+            child: Icon(icon, size: 20, color: AppColors.accentStrong),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(

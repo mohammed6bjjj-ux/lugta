@@ -478,10 +478,10 @@ class _SectionCard extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: AppColors.goldSoft,
+                  color: AppColors.accentSoft,
                   borderRadius: BorderRadius.circular(AppRadius.sm - 2),
                 ),
-                child: Icon(icon, size: 18, color: AppColors.goldDark),
+                child: Icon(icon, size: 18, color: AppColors.accentStrong),
               ),
               const SizedBox(width: AppSpacing.sm + 2),
               Expanded(
@@ -580,19 +580,28 @@ class _TimelineTileState extends State<_TimelineTile>
       vsync: this,
       duration: const Duration(milliseconds: 1700),
     );
-    if (widget.isCurrent) _pulse.repeat();
+  }
+
+  void _syncPulse() {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (widget.isCurrent && !reduceMotion && !_pulse.isAnimating) {
+      _pulse.repeat();
+    } else if ((!widget.isCurrent || reduceMotion) && _pulse.isAnimating) {
+      _pulse.stop();
+    }
+    if (!widget.isCurrent || reduceMotion) _pulse.value = 0;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPulse();
   }
 
   @override
   void didUpdateWidget(covariant _TimelineTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isCurrent && !_pulse.isAnimating) {
-      _pulse.repeat();
-    } else if (!widget.isCurrent && _pulse.isAnimating) {
-      _pulse
-        ..stop()
-        ..reset();
-    }
+    _syncPulse();
   }
 
   @override
@@ -923,13 +932,13 @@ class _ProductItemsCard extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.goldSoft,
+                  color: AppColors.accentSoft,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Text(
                   '× ${formatNumber(order.items[i].quantity)}',
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: AppColors.goldDark,
+                    color: AppColors.accentStrong,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1122,7 +1131,7 @@ class _StoreNameNotice extends StatelessWidget {
       gradient: LinearGradient(
         begin: Alignment.topRight,
         end: Alignment.bottomLeft,
-        colors: [AppColors.goldSoft, const Color(0xFFFDFBF7)],
+        colors: [AppColors.accentSoft, AppColors.surface],
       ),
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
@@ -1139,7 +1148,7 @@ class _StoreNameNotice extends StatelessWidget {
             child: Icon(
               Icons.storefront_outlined,
               size: 21,
-              color: AppColors.goldDark,
+              color: AppColors.accentStrong,
             ),
           ),
           const SizedBox(width: AppSpacing.sm + 4),
@@ -1152,7 +1161,7 @@ class _StoreNameNotice extends StatelessWidget {
                     text: storeName,
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: AppColors.goldDark,
+                      color: AppColors.accentStrong,
                     ),
                   ),
                 ],
@@ -1191,7 +1200,7 @@ class _ComplaintsCard extends StatelessWidget {
               Text(
                 OrdersStrings.complaintStatus(complaint.status),
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: AppColors.goldDark,
+                  color: AppColors.accentStrong,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -1446,10 +1455,10 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
           curve: AppCurves.emphasized,
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 4),
           decoration: BoxDecoration(
-            color: selected ? AppColors.goldSoft : AppColors.surface,
+            color: selected ? AppColors.accentSoft : AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(
-              color: selected ? AppColors.gold : AppColors.divider,
+              color: selected ? AppColors.accent : AppColors.divider,
               width: selected ? 1.4 : 1,
             ),
             boxShadow: selected ? AppShadows.card : null,
@@ -1459,7 +1468,9 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
               Icon(
                 icon,
                 size: 22,
-                color: selected ? AppColors.goldDark : AppColors.textSecondary,
+                color: selected
+                    ? AppColors.accentStrong
+                    : AppColors.textSecondary,
               ),
               const SizedBox(height: 6),
               Text(
@@ -1469,7 +1480,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
                 style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: selected
-                      ? AppColors.goldDark
+                      ? AppColors.accentStrong
                       : AppColors.textSecondary,
                 ),
               ),
@@ -1587,7 +1598,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
               PrimaryButton(
                 label: OrdersStrings.sendToAdmin,
                 icon: Icons.send_rounded,
-                gold: true,
+                accented: true,
                 loading: _submitting,
                 onPressed: _submit,
               ),

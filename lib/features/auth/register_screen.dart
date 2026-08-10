@@ -346,7 +346,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           children: [
                             Checkbox(
                               value: _acceptedTerms,
-                              activeColor: AppColors.goldDark,
+                              activeColor: AppColors.accentStrong,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -384,11 +384,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       AuthStrings.termsAndPolicies,
                                       style: theme.textTheme.bodyMedium
                                           ?.copyWith(
-                                            color: AppColors.goldDark,
+                                            color: AppColors.accentStrong,
                                             fontWeight: FontWeight.w800,
                                             decoration:
                                                 TextDecoration.underline,
-                                            decorationColor: AppColors.goldDark,
+                                            decorationColor:
+                                                AppColors.accentStrong,
                                           ),
                                     ),
                                   ),
@@ -472,10 +473,10 @@ class _CardHeader extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: AppColors.goldSoft,
+            color: AppColors.accentSoft,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, size: 20, color: AppColors.goldDark),
+          child: Icon(icon, size: 20, color: AppColors.accentStrong),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(

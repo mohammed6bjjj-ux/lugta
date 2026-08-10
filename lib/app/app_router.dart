@@ -7,6 +7,7 @@ import '../l10n/core_strings.dart';
 import '../features/auth/account_blocked_screen.dart';
 import '../features/auth/account_deleted_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
+import '../features/auth/guest_access_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/onboarding_screen.dart';
 import '../features/auth/otp_verification_screen.dart';
@@ -31,6 +32,7 @@ import '../features/profile/settings_screen.dart';
 import '../features/profile/support_screen.dart';
 import '../features/promotions/promotions_screen.dart';
 import '../features/referrals/referral_screen.dart';
+import '../features/loyalty/loyalty_screen.dart';
 import '../features/shell/main_shell.dart';
 import '../features/wallet/withdraw_request_screen.dart';
 import '../features/wallet/withdrawals_history_screen.dart';
@@ -77,11 +79,14 @@ class AppRouter {
       Routes.notifications ||
       Routes.promotions ||
       Routes.referrals ||
+      Routes.loyalty ||
       Routes.editProfile ||
       Routes.settings => true,
       _ => false,
     };
-    return requiresApprovedSession ? _ApprovedSessionGate(child: child) : child;
+    return requiresApprovedSession
+        ? _ApprovedSessionGate(routeName: routeName, child: child)
+        : child;
   }
 
   static Widget _screenFor(RouteSettings settings) {
@@ -94,6 +99,7 @@ class AppRouter {
       Routes.register => const RegisterScreen(),
       Routes.otp => _otp(args),
       Routes.forgotPassword => const ForgotPasswordScreen(),
+      Routes.guestAccess => const GuestAccessScreen(),
       Routes.pendingApproval => const PendingApprovalScreen(),
       Routes.accountBlocked => _blocked(args),
       Routes.accountDeleted => const AccountDeletedScreen(),
@@ -129,6 +135,7 @@ class AppRouter {
       Routes.notifications => const NotificationsScreen(),
       Routes.promotions => const PromotionsScreen(),
       Routes.referrals => const ReferralScreen(),
+      Routes.loyalty => const LoyaltyScreen(),
       Routes.editProfile => const EditProfileScreen(),
       Routes.support => const SupportScreen(),
       Routes.policies => const PoliciesScreen(),
@@ -183,9 +190,22 @@ class AppRouter {
 /// open detail screen is replaced immediately when the local session is lost
 /// or the backend changes the seller to pending/blocked/deleted.
 class _ApprovedSessionGate extends StatelessWidget {
-  const _ApprovedSessionGate({required this.child});
+  const _ApprovedSessionGate({required this.routeName, required this.child});
 
+  final String? routeName;
   final Widget child;
+
+  bool get _guestSafeRoute => switch (routeName) {
+    Routes.shell ||
+    Routes.products ||
+    Routes.categoryProducts ||
+    Routes.search ||
+    Routes.favorites ||
+    Routes.productDetail ||
+    Routes.mediaViewer ||
+    Routes.cart => true,
+    _ => false,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -198,6 +218,9 @@ class _ApprovedSessionGate extends StatelessWidget {
         // bundled design/demo state before the real session boundary exists.
         if (!session.isConfigured) {
           return const _SessionInitializationScreen();
+        }
+        if (session.isGuest) {
+          return _guestSafeRoute ? child : const GuestAccessScreen();
         }
         // Configured demo sessions remain useful for widget/integration tests.
         // AppConfig separately makes demo mode impossible in release builds.

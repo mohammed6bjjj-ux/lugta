@@ -24,6 +24,7 @@ class MediaViewerScreen extends StatefulWidget {
   @override
   State<MediaViewerScreen> createState() => _MediaViewerScreenState();
 }
+
 class _MediaViewerScreenState extends State<MediaViewerScreen> {
   late final int _safeInitialIndex = widget.media.isEmpty
       ? 0

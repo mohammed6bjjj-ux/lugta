@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/category_sticker_icons.dart';
 import 'package:flutter_app/data/catalog_snapshot_cache.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +20,7 @@ void main() {
       nameEn: 'Watches',
       icon: Icons.watch,
       imageUrl: 'https://example.com/category.jpg',
+      stickerKey: CategoryStickerKey.premium,
     );
     final product = Product(
       id: 'product-1',
@@ -53,6 +57,7 @@ void main() {
     expect(restored, isNotNull);
     expect(restored!.categories.single.nameEn, 'Watches');
     expect(restored.categories.single.icon.codePoint, Icons.watch.codePoint);
+    expect(restored.categories.single.stickerKey, CategoryStickerKey.premium);
     expect(restored.products.single.media.single.url, contains('token=one'));
     expect(restored.products.single.variants.single.stock, 3);
     expect(restored.products.single.specs['الخامة'], 'فولاذ');
@@ -72,6 +77,127 @@ void main() {
 
     await store.setString(store.values.keys.single, '{broken');
     expect(await cache.read(now: savedAt), isNull);
+  });
+
+  test('keeps every supported category icon after cache restoration', () async {
+    final store = _MemoryCatalogSnapshotStore();
+    final cache = CatalogSnapshotCache(store: store);
+    final savedAt = DateTime.utc(2026, 8, 9);
+    const icons = [
+      Icons.watch,
+      Icons.watch_rounded,
+      Icons.watch_outlined,
+      Icons.visibility_outlined,
+      Icons.diamond_outlined,
+      Icons.inventory_2_outlined,
+      Icons.smartphone_rounded,
+      Icons.laptop_mac_rounded,
+      Icons.desktop_windows_rounded,
+      Icons.tablet_mac_rounded,
+      Icons.tv_rounded,
+      Icons.photo_camera_rounded,
+      Icons.headphones_rounded,
+      Icons.sports_esports_rounded,
+      Icons.wifi_rounded,
+      Icons.electrical_services_rounded,
+      Icons.memory_rounded,
+      Icons.kitchen_rounded,
+      Icons.chair_rounded,
+      Icons.home_rounded,
+      Icons.shopping_bag_rounded,
+      Icons.hiking_rounded,
+      Icons.palette_rounded,
+      Icons.checkroom_rounded,
+      Icons.fitness_center_rounded,
+      Icons.toys_rounded,
+      Icons.menu_book_rounded,
+      Icons.pets_rounded,
+      Icons.directions_car_rounded,
+      Icons.build_rounded,
+      Icons.shopping_basket_rounded,
+      Icons.restaurant_rounded,
+      Icons.health_and_safety_rounded,
+      Icons.business_center_rounded,
+      Icons.luggage_rounded,
+      Icons.devices_rounded,
+      Icons.category_outlined,
+    ];
+    final categories = [
+      for (var index = 0; index < icons.length; index++)
+        Category(
+          id: 'category-$index',
+          nameAr: 'تصنيف $index',
+          icon: icons[index],
+          imageUrl: '',
+        ),
+    ];
+
+    await cache.write(
+      categories: categories,
+      products: const [],
+      savedAt: savedAt,
+    );
+    final restored = await cache.read(now: savedAt);
+
+    expect(
+      restored!.categories.map((category) => category.icon.codePoint),
+      icons.map((icon) => icon.codePoint),
+    );
+  });
+
+  test(
+    'category sticker wire contract is complete and backwards compatible',
+    () {
+      for (final sticker in CategoryStickerKey.values) {
+        expect(categoryStickerKeyFromWire(sticker.wireValue), sticker);
+      }
+      expect(categoryStickerKeyFromWire(null), CategoryStickerKey.auto);
+      expect(categoryStickerKeyFromWire('unknown'), CategoryStickerKey.auto);
+    },
+  );
+
+  test('every explicit category sticker has a material icon', () {
+    expect(categoryStickerIconFor(CategoryStickerKey.auto), isNull);
+    expect(categoryStickerIconFor(CategoryStickerKey.none), isNull);
+    for (final sticker in CategoryStickerKey.values.where(
+      (value) =>
+          value != CategoryStickerKey.auto && value != CategoryStickerKey.none,
+    )) {
+      expect(
+        categoryStickerIconFor(sticker),
+        isNotNull,
+        reason: sticker.wireValue,
+      );
+    }
+  });
+
+  test('restores a legacy snapshot without a category sticker key', () async {
+    final store = _MemoryCatalogSnapshotStore();
+    final cache = CatalogSnapshotCache(store: store);
+    final savedAt = DateTime.utc(2026, 8, 9);
+
+    await cache.write(
+      categories: const [
+        Category(
+          id: 'legacy-category',
+          nameAr: 'ساعات ذكية',
+          icon: Icons.watch,
+          imageUrl: '',
+        ),
+      ],
+      products: const [],
+      savedAt: savedAt,
+    );
+
+    final storageKey = store.values.keys.single;
+    final payload =
+        jsonDecode(store.values[storageKey]!) as Map<String, dynamic>;
+    final categories = payload['categories'] as List<dynamic>;
+    (categories.single as Map<String, dynamic>).remove('sticker_key');
+    await store.setString(storageKey, jsonEncode(payload));
+
+    final restored = await cache.read(now: savedAt);
+    expect(restored!.categories.single.stickerKey, CategoryStickerKey.auto);
   });
 
   test('bounds the first-paint snapshot for very large catalogs', () async {

@@ -11,6 +11,10 @@ void main() {
       parseTrustedNotificationDeepLink('nawl://referrals')?.kind,
       NotificationDeepLinkKind.referrals,
     );
+    expect(
+      parseTrustedNotificationDeepLink('/loyalty')?.kind,
+      NotificationDeepLinkKind.loyalty,
+    );
     final product = parseTrustedNotificationDeepLink(
       'nawl://products/product_42',
     );

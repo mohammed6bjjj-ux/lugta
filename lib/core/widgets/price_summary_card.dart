@@ -33,15 +33,14 @@ class PriceSummaryCard extends StatelessWidget {
     return discount > 0 ? discount : 0;
   }
 
+  int get displayedDeliveryFee =>
+      deliveryDiscount > 0 ? (baseDeliveryFee ?? deliveryFee) : deliveryFee;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final headerBackground = AppColors.isDark
-        ? AppColors.primary
-        : AppColors.goldDark;
-    final headerForeground = AppColors.isDark
-        ? AppColors.onPrimary
-        : AppColors.onGold;
+    final headerBackground = AppColors.primary;
+    final headerForeground = AppColors.onPrimary;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -115,13 +114,15 @@ class PriceSummaryCard extends StatelessWidget {
                 _row(
                   context,
                   CoreStrings.deliveryFeeOnCustomer,
-                  formatIqd(deliveryFee),
+                  formatIqd(displayedDeliveryFee),
+                  rowKey: const ValueKey('price_summary_delivery_fee'),
                 ),
                 if (deliveryDiscount > 0)
                   _row(
                     context,
                     CoreStrings.deliveryDiscount,
                     '- ${formatIqd(deliveryDiscount)}',
+                    rowKey: const ValueKey('price_summary_delivery_discount'),
                     valueColor: AppColors.success,
                     bold: true,
                   ),
@@ -154,12 +155,14 @@ class PriceSummaryCard extends StatelessWidget {
     BuildContext context,
     String label,
     String value, {
+    Key? rowKey,
     Color? valueColor,
     bool bold = false,
     bool large = false,
   }) {
     final theme = Theme.of(context);
     return Padding(
+      key: rowKey,
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
@@ -178,16 +181,19 @@ class PriceSummaryCard extends StatelessWidget {
                       ),
             ),
           ),
-          Text(
-            value,
-            style:
-                (large
-                        ? theme.textTheme.titleMedium
-                        : theme.textTheme.titleSmall)
-                    ?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: valueColor ?? AppColors.textPrimary,
-                    ),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              value,
+              style:
+                  (large
+                          ? theme.textTheme.titleMedium
+                          : theme.textTheme.titleSmall)
+                      ?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: valueColor ?? AppColors.textPrimary,
+                      ),
+            ),
           ),
         ],
       ),

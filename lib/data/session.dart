@@ -37,6 +37,8 @@ class AppSession extends ChangeNotifier {
 
   static final AppSession instance = AppSession._();
   static const String _cartStoragePrefix = 'lugta.cart.v1.';
+  static const String _guestModeStorageKey = 'lugta.guest-mode.v1';
+  static const String _guestCatalogCacheScope = 'public-guest';
 
   AppRepositories _repositories;
   DeviceTokenRegistrar _deviceTokens = const NoopDeviceTokenRegistrar();
@@ -45,16 +47,20 @@ class AppSession extends ChangeNotifier {
   StreamSubscription<void>? _catalogSubscription;
   StreamSubscription<void>? _walletSubscription;
   StreamSubscription<void>? _promotionGrantsSubscription;
+  StreamSubscription<void>? _loyaltySubscription;
   StreamSubscription<void>? _foregroundPushSubscription;
   Timer? _catalogRefreshTimer;
   Timer? _walletRefreshTimer;
   Timer? _promotionGrantsRefreshTimer;
+  Timer? _loyaltyRefreshTimer;
   bool _catalogRealtimeDirty = false;
   bool _catalogRealtimeWorkerRunning = false;
   bool _walletRealtimeDirty = false;
   bool _walletRealtimeWorkerRunning = false;
   bool _promotionGrantsRealtimeDirty = false;
   bool _promotionGrantsRealtimeWorkerRunning = false;
+  bool _loyaltyRealtimeDirty = false;
+  bool _loyaltyRealtimeWorkerRunning = false;
   DateTime? _lastActiveTouch;
   final AsyncRequestDeduplicator _publicRefresh = AsyncRequestDeduplicator();
   final Random _realtimeJitter = Random();
@@ -69,6 +75,7 @@ class AppSession extends ChangeNotifier {
   AsyncRequestDeduplicator _notificationsRefresh = AsyncRequestDeduplicator();
   AsyncRequestDeduplicator _promotionGrantsRefresh = AsyncRequestDeduplicator();
   AsyncRequestDeduplicator _referralSummaryRefresh = AsyncRequestDeduplicator();
+  AsyncRequestDeduplicator _loyaltySummaryRefresh = AsyncRequestDeduplicator();
   AsyncRequestDeduplicator _resumeReconciliation = AsyncRequestDeduplicator();
   final CatalogSnapshotCache _catalogSnapshotCache = CatalogSnapshotCache();
   Future<Seller>? _profileRefresh;
@@ -97,12 +104,16 @@ class AppSession extends ChangeNotifier {
   List<AppNotification> notifications = List.of(MockData.notifications);
   List<PromotionGrant> promotionGrants = List.of(MockData.promotionGrants);
   ReferralSummary? referralSummary = MockData.referralSummary;
+  LoyaltySummary? loyaltySummary = MockData.loyaltySummary;
   bool promotionGrantsLoading = false;
   bool promotionGrantsLoaded = true;
   String? promotionGrantsError;
   bool referralSummaryLoading = false;
   bool referralSummaryLoaded = true;
   String? referralSummaryError;
+  bool loyaltySummaryLoading = false;
+  bool loyaltySummaryLoaded = true;
+  String? loyaltySummaryError;
   final Set<String> _popupSeenNotificationIds = {};
 
   Set<String> favoriteIds = {'p-smart-pro', 'p-sun-lady', 'p-classic-leather'};
@@ -129,11 +140,13 @@ class AppSession extends ChangeNotifier {
   bool isBootstrapping = false;
   String? lastError;
   bool _isConfigured = false;
+  bool _isGuest = false;
 
   AuthRepository get auth => _repositories.auth;
   bool get isConfigured => _isConfigured;
   bool get isDemo => _repositories.isDemo;
   bool get isAuthenticated => auth.hasSession;
+  bool get isGuest => _isGuest && !auth.hasSession;
   bool get isRefreshing => _activeRefreshes > 0;
 
   int get availableBalance => _availableBalance;
@@ -201,7 +214,9 @@ class AppSession extends ChangeNotifier {
     await _stopCatalogListener();
     await _stopWalletListener();
     await _stopPromotionGrantsListener();
+    await _stopLoyaltyListener();
     await _foregroundPushSubscription?.cancel();
+    _isGuest = false;
     _foregroundPushSubscription = _deviceTokens.foregroundMessages.listen(
       _handleForegroundPush,
     );
@@ -237,8 +252,10 @@ class AppSession extends ChangeNotifier {
       notifications = [];
       promotionGrants = [];
       referralSummary = null;
+      loyaltySummary = null;
       promotionGrantsLoaded = false;
       referralSummaryLoaded = false;
+      loyaltySummaryLoaded = false;
       promotionGrants = [];
       referralSummary = null;
       promotionGrantsLoading = false;
@@ -247,6 +264,10 @@ class AppSession extends ChangeNotifier {
       referralSummaryLoading = false;
       referralSummaryLoaded = false;
       referralSummaryError = null;
+      loyaltySummary = null;
+      loyaltySummaryLoading = false;
+      loyaltySummaryLoaded = false;
+      loyaltySummaryError = null;
       _popupSeenNotificationIds.clear();
       favoriteIds = {};
       stockAlertIds = {};
@@ -259,6 +280,13 @@ class AppSession extends ChangeNotifier {
       _pendingBalance = 0;
       _totalEarned = 0;
       _withdrawalFees = const <String, int>{};
+    }
+
+    if (auth.hasSession) {
+      _isGuest = false;
+      await _persistGuestMode(false);
+    } else if (!repositories.isDemo) {
+      await _restoreGuestMode();
     }
 
     isBootstrapping = loadInitialData;
@@ -353,6 +381,23 @@ class AppSession extends ChangeNotifier {
   Future<void> reconcileAfterResume({
     Duration minimumInterval = const Duration(seconds: 45),
   }) {
+    if (isGuest) {
+      final refresh = _resumeReconciliation;
+      final current = refresh.inFlight;
+      if (current != null) return current;
+      final now = DateTime.now();
+      final previous = _lastResumeReconciliation;
+      if (previous != null) {
+        final age = now.difference(previous);
+        if (!age.isNegative && age < minimumInterval) {
+          return Future<void>.value();
+        }
+      }
+      return refresh.run(() async {
+        _lastResumeReconciliation = DateTime.now();
+        await refreshCatalog();
+      });
+    }
     final scope = _captureAuthenticatedScope();
     if (scope == null) return Future<void>.value();
     final refresh = _resumeReconciliation;
@@ -398,6 +443,7 @@ class AppSession extends ChangeNotifier {
         scope,
         includeReferralSummary: referralSummaryLoaded,
       ),
+      _refreshLoyaltySummaryForScopeBestEffort(scope),
       if (_catalogNeedsResumeRefresh())
         _refreshCatalogAfterResumeBestEffort(scope),
     ]);
@@ -442,6 +488,14 @@ class AppSession extends ChangeNotifier {
   /// notifications on every gesture. The shared deduplicator also lets a
   /// Realtime invalidation and a manual refresh join the same request.
   Future<void> refreshCatalog() {
+    if (isGuest) {
+      final generation = _authGeneration;
+      final repositories = _repositories;
+      return _catalogRefresh.run(
+        () =>
+            _runRefresh(() => _loadGuestCatalogData(generation, repositories)),
+      );
+    }
     final scope = _captureAuthenticatedScope();
     if (scope == null || seller.status != AccountStatus.approved) {
       return Future<void>.value();
@@ -519,6 +573,51 @@ class AppSession extends ChangeNotifier {
     return _refreshReferralSummaryForScope(scope);
   }
 
+  Future<void> refreshLoyaltySummary() {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null || seller.status != AccountStatus.approved) {
+      return Future<void>.value();
+    }
+    return _refreshLoyaltySummaryForScope(scope);
+  }
+
+  Future<void> _refreshLoyaltySummaryForScope(
+    _AuthenticatedRequestScope scope,
+  ) {
+    _listenForLoyaltyChanges(scope);
+    return _loyaltySummaryRefresh.run(() async {
+      loyaltySummaryLoading = true;
+      loyaltySummaryError = null;
+      notifyListeners();
+      try {
+        final summary = await scope.repositories.loyalty.fetchLoyaltySummary();
+        if (!_isCurrent(scope)) return;
+        loyaltySummary = summary;
+        loyaltySummaryLoaded = true;
+      } catch (error) {
+        if (!_isCurrent(scope)) rethrow;
+        loyaltySummaryError = _messageFor(error);
+        rethrow;
+      } finally {
+        if (_isCurrent(scope)) {
+          loyaltySummaryLoading = false;
+          notifyListeners();
+        }
+      }
+    });
+  }
+
+  Future<void> _refreshLoyaltySummaryForScopeBestEffort(
+    _AuthenticatedRequestScope scope,
+  ) async {
+    try {
+      await _refreshLoyaltySummaryForScope(scope);
+    } catch (_) {
+      // Keep the previous usable snapshot. Realtime, resume, and the loyalty
+      // screen's pull-to-refresh remain independent retry paths.
+    }
+  }
+
   Future<void> _refreshReferralSummaryForScope(
     _AuthenticatedRequestScope scope,
   ) {
@@ -581,8 +680,12 @@ class AppSession extends ChangeNotifier {
       withdrawalSources = [];
       promotionGrants = [];
       referralSummary = null;
+      loyaltySummary = null;
       promotionGrantsLoaded = false;
       referralSummaryLoaded = false;
+      loyaltySummaryLoaded = false;
+      loyaltySummaryLoading = false;
+      loyaltySummaryError = null;
       notifications = [];
       favoriteIds = {};
       stockAlertIds = {};
@@ -596,6 +699,7 @@ class AppSession extends ChangeNotifier {
       await _stopCatalogListener();
       await _stopWalletListener();
       await _stopPromotionGrantsListener();
+      await _stopLoyaltyListener();
       return;
     }
     _registerDeviceBestEffort();
@@ -615,6 +719,10 @@ class AppSession extends ChangeNotifier {
       payoutAccounts = [];
       statementLines = [];
       withdrawalSources = [];
+      loyaltySummary = null;
+      loyaltySummaryLoading = false;
+      loyaltySummaryLoaded = false;
+      loyaltySummaryError = null;
       favoriteIds = {};
       stockAlertIds = {};
       _resetCartMemory();
@@ -626,6 +734,7 @@ class AppSession extends ChangeNotifier {
       await _stopCatalogListener();
       await _stopWalletListener();
       await _stopPromotionGrantsListener();
+      await _stopLoyaltyListener();
       return;
     }
 
@@ -923,6 +1032,120 @@ class AppSession extends ChangeNotifier {
     ]);
   }
 
+  Future<void> _loadGuestCatalogData(
+    int generation,
+    AppRepositories repositories,
+  ) async {
+    if (!_isCurrentGuest(generation, repositories)) return;
+    _listenForGuestCatalogChanges(generation, repositories);
+
+    List<Category>? fetchedCategories;
+    List<Product>? fetchedProducts;
+    List<PackagingBox>? fetchedPackagingBoxes;
+    Object? categoriesError;
+    StackTrace? categoriesStackTrace;
+    Object? productsError;
+    StackTrace? productsStackTrace;
+    Object? packagingError;
+    StackTrace? packagingStackTrace;
+
+    await Future.wait<void>([
+      repositories.catalog.fetchCategories().then<void>(
+        (value) => fetchedCategories = value,
+        onError: (Object error, StackTrace stackTrace) {
+          categoriesError = error;
+          categoriesStackTrace = stackTrace;
+        },
+      ),
+      repositories.catalog.fetchProducts().then<void>(
+        (value) => fetchedProducts = value,
+        onError: (Object error, StackTrace stackTrace) {
+          productsError = error;
+          productsStackTrace = stackTrace;
+        },
+      ),
+      repositories.catalog.fetchPackagingBoxes().then<void>(
+        (value) => fetchedPackagingBoxes = value,
+        onError: (Object error, StackTrace stackTrace) {
+          packagingError = error;
+          packagingStackTrace = stackTrace;
+        },
+      ),
+    ]);
+
+    if (!_isCurrentGuest(generation, repositories)) return;
+    if (fetchedCategories != null) categories = fetchedCategories!;
+    if (fetchedProducts != null) {
+      products = fetchedProducts!;
+      _reconcileCartWithCatalog();
+    }
+    if (fetchedPackagingBoxes != null) {
+      packagingBoxes = fetchedPackagingBoxes!;
+    }
+    if (fetchedCategories != null ||
+        fetchedProducts != null ||
+        fetchedPackagingBoxes != null) {
+      notifyListeners();
+    }
+    if (fetchedCategories != null && fetchedProducts != null) {
+      _lastCatalogRefresh = DateTime.now();
+      _cacheGuestCatalogBestEffort(repositories);
+    }
+
+    if (categoriesError != null) {
+      Error.throwWithStackTrace(categoriesError!, categoriesStackTrace!);
+    }
+    if (productsError != null) {
+      Error.throwWithStackTrace(productsError!, productsStackTrace!);
+    }
+    if (packagingError != null) {
+      Error.throwWithStackTrace(packagingError!, packagingStackTrace!);
+    }
+  }
+
+  Future<void> _restoreGuestCatalogSnapshotIfNeeded(
+    int generation,
+    AppRepositories repositories,
+  ) async {
+    if (repositories.isDemo ||
+        !_isCurrentGuest(generation, repositories) ||
+        (products.isNotEmpty && categories.isNotEmpty)) {
+      return;
+    }
+    try {
+      final snapshot = await _catalogSnapshotCache.read(
+        scopeKey: _guestCatalogCacheScope,
+      );
+      if (snapshot == null || !_isCurrentGuest(generation, repositories)) {
+        return;
+      }
+      if (snapshot.categories.isNotEmpty) {
+        categories = snapshot.categories;
+      }
+      if (snapshot.products.isNotEmpty) products = snapshot.products;
+      notifyListeners();
+    } catch (_) {
+      // A guest cache is only an offline acceleration for the live catalog.
+    }
+  }
+
+  void _cacheGuestCatalogBestEffort(AppRepositories repositories) {
+    if (repositories.isDemo || !isGuest) return;
+    final categorySnapshot = List<Category>.of(categories);
+    final productSnapshot = List<Product>.of(products);
+    unawaited(
+      _catalogSnapshotCache
+          .write(
+            categories: categorySnapshot,
+            products: productSnapshot,
+            scopeKey: _guestCatalogCacheScope,
+          )
+          .catchError((_) {
+            // The live catalog is already visible; disk caching is optional.
+          }),
+    );
+  }
+
   Future<void> _loadCatalogEntities(_AuthenticatedRequestScope scope) async {
     _listenForCatalogChanges(scope);
     List<Category>? fetchedCategories;
@@ -1005,10 +1228,12 @@ class AppSession extends ChangeNotifier {
     _AuthenticatedRequestScope scope,
   ) async {
     _listenForPromotionGrantChanges(scope);
+    _listenForLoyaltyChanges(scope);
     await Future.wait<void>([
       _ordersRefresh.run(() => _loadApprovedOrders(scope)),
       _loadApprovedWallet(scope),
       _notificationsRefresh.run(() => _loadApprovedNotifications(scope)),
+      _refreshLoyaltySummaryForScopeBestEffort(scope),
     ]);
   }
 
@@ -1176,6 +1401,41 @@ class AppSession extends ChangeNotifier {
   /// Fetches one active product and replaces its cached snapshot before a
   /// notification opens product details.
   Future<Product> refreshProductById(String productId) {
+    if (isGuest) {
+      final id = productId.trim();
+      if (id.isEmpty) {
+        throw const BackendException('Product id is required.');
+      }
+      final existing = _productRefreshes[id];
+      if (existing != null) return existing;
+      final generation = _authGeneration;
+      final repositories = _repositories;
+      late final Future<Product> next;
+      next =
+          Future<Product>.sync(() async {
+            final product = await repositories.catalog.fetchProduct(id);
+            if (!_isCurrentGuest(generation, repositories)) {
+              throw const BackendException(
+                'Guest session changed while loading the product.',
+                code: 'guest_session_changed',
+              );
+            }
+            final index = products.indexWhere((item) => item.id == product.id);
+            if (index == -1) {
+              products.insert(0, product);
+            } else {
+              products[index] = product;
+            }
+            notifyListeners();
+            return product;
+          }).whenComplete(() {
+            if (identical(_productRefreshes[id], next)) {
+              _productRefreshes.remove(id);
+            }
+          });
+      _productRefreshes[id] = next;
+      return next;
+    }
     final scope = _requireAuthenticatedScope();
     if (seller.status != AccountStatus.approved) {
       throw const BackendException('Seller account is not approved.');
@@ -1560,12 +1820,18 @@ class AppSession extends ChangeNotifier {
     return order;
   }
 
-  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) {
+  Future<DeliveryQuote> quoteDeliveryFee(
+    String deliveryZoneId, {
+    required int orderSubtotal,
+  }) {
     final scope = _requireAuthenticatedScope();
     if (seller.status != AccountStatus.approved) {
       throw const BackendException('Seller account is not approved.');
     }
-    return scope.repositories.catalog.quoteDeliveryFee(deliveryZoneId);
+    return scope.repositories.catalog.quoteDeliveryFee(
+      deliveryZoneId,
+      orderSubtotal: orderSubtotal,
+    );
   }
 
   Future<OrderComplaint> createOrderComplaint({
@@ -1760,12 +2026,14 @@ class AppSession extends ChangeNotifier {
     String? name,
     String? storeName,
     String? instagramUrl,
+    ProfileAvatarChange? avatarChange,
   }) async {
     final scope = _requireAuthenticatedScope();
     final profile = await scope.repositories.profile.updateCurrentProfile(
       name: name ?? seller.name,
       storeName: storeName ?? seller.storeName,
       instagramUrl: instagramUrl ?? seller.instagramUrl,
+      avatarChange: avatarChange,
     );
     _ensureCurrent(scope);
     _setSeller(profile);
@@ -1885,6 +2153,104 @@ class AppSession extends ChangeNotifier {
     }
   }
 
+  /// Opens the live, read-only public catalog without creating an Auth user.
+  ///
+  /// Guest mode intentionally never calls Supabase anonymous Auth: anonymous
+  /// users receive the `authenticated` Postgres role and would therefore widen
+  /// the account-facing RLS surface. Guests use the narrow `anon` catalog
+  /// policies while every account, order, wallet, and notification collection
+  /// remains empty.
+  Future<void> enterGuestMode() async {
+    if (auth.hasSession) {
+      throw const BackendException(
+        'سجل الخروج من الحساب الحالي قبل فتح وضع الضيف.',
+        code: 'guest_requires_signed_out_session',
+      );
+    }
+    await _stopCatalogListener();
+    _invalidateAuthenticatedRequests();
+    _isGuest = true;
+    seller = _emptySeller();
+    accountDeletionRequest = null;
+    categories = const <Category>[];
+    products = const <Product>[];
+    packagingBoxes = const <PackagingBox>[];
+    orders = const <Order>[];
+    transactions = const <WalletTransaction>[];
+    withdrawals = const <Withdrawal>[];
+    payoutAccounts = const <PayoutAccount>[];
+    statementLines = const <AccountStatementLine>[];
+    withdrawalSources = const <WithdrawalSourceLine>[];
+    notifications = const <AppNotification>[];
+    promotionGrants = const <PromotionGrant>[];
+    referralSummary = null;
+    loyaltySummary = null;
+    favoriteIds = <String>{};
+    stockAlertIds = <String>{};
+    _resetCartMemory();
+    _availableBalance = 0;
+    _pendingBalance = 0;
+    _totalEarned = 0;
+    lastError = null;
+    await _persistGuestMode(true);
+    notifyListeners();
+
+    final generation = _authGeneration;
+    final repositories = _repositories;
+    await _restoreGuestCatalogSnapshotIfNeeded(generation, repositories);
+    try {
+      await _catalogRefresh.run(
+        () =>
+            _runRefresh(() => _loadGuestCatalogData(generation, repositories)),
+      );
+    } catch (_) {
+      // Enter guest mode even while offline. A cached live snapshot stays
+      // visible, and pull-to-refresh retries the public catalog later.
+    }
+  }
+
+  Future<void> leaveGuestMode() async {
+    if (!_isGuest) {
+      await _persistGuestMode(false);
+      return;
+    }
+    final catalogCleanup = _stopCatalogListener();
+    _isGuest = false;
+    _clearAuthenticatedFields();
+    await _persistGuestMode(false);
+    notifyListeners();
+    unawaited(
+      catalogCleanup.catchError((_) {
+        // Guest exit and authentication navigation must not wait on a remote
+        // Realtime channel teardown.
+      }),
+    );
+  }
+
+  Future<void> _restoreGuestMode() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (preferences.getBool(_guestModeStorageKey) == true) {
+        await enterGuestMode();
+      }
+    } catch (_) {
+      // Guest persistence is a convenience; login remains usable without it.
+    }
+  }
+
+  Future<void> _persistGuestMode(bool enabled) async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (enabled) {
+        await preferences.setBool(_guestModeStorageKey, true);
+      } else {
+        await preferences.remove(_guestModeStorageKey);
+      }
+    } catch (_) {
+      // Failure to persist a non-authenticated preview must not block the UI.
+    }
+  }
+
   Future<void> clearAuthenticatedData() async {
     await _transitionAuthenticatedIdentity(null, force: true);
     await _clearCachedMedia();
@@ -1936,12 +2302,16 @@ class AppSession extends ChangeNotifier {
     notifications = [];
     promotionGrants = [];
     referralSummary = null;
+    loyaltySummary = null;
     promotionGrantsLoading = false;
     promotionGrantsLoaded = false;
     promotionGrantsError = null;
     referralSummaryLoading = false;
     referralSummaryLoaded = false;
     referralSummaryError = null;
+    loyaltySummaryLoading = false;
+    loyaltySummaryLoaded = false;
+    loyaltySummaryError = null;
     _popupSeenNotificationIds.clear();
     favoriteIds = {};
     stockAlertIds = {};
@@ -1968,6 +2338,11 @@ class AppSession extends ChangeNotifier {
     final lostAuthenticatedIdentity =
         normalizedUserId == null && _observedUserId != null;
 
+    if (normalizedUserId != null && _isGuest) {
+      _isGuest = false;
+      await _persistGuestMode(false);
+    }
+
     _observedUserId = normalizedUserId;
     _invalidateAuthenticatedRequests();
     final notificationsSubscription = _notificationsSubscription;
@@ -1975,6 +2350,7 @@ class AppSession extends ChangeNotifier {
     final catalogCleanup = _stopCatalogListener();
     final walletCleanup = _stopWalletListener();
     final promotionGrantsCleanup = _stopPromotionGrantsListener();
+    final loyaltyCleanup = _stopLoyaltyListener();
     _clearAuthenticatedFields();
     lastError = null;
     notifyListeners();
@@ -1985,6 +2361,7 @@ class AppSession extends ChangeNotifier {
       catalogCleanup,
       walletCleanup,
       promotionGrantsCleanup,
+      loyaltyCleanup,
     ]);
   }
 
@@ -2013,6 +2390,7 @@ class AppSession extends ChangeNotifier {
     _notificationsRefresh = AsyncRequestDeduplicator();
     _promotionGrantsRefresh = AsyncRequestDeduplicator();
     _referralSummaryRefresh = AsyncRequestDeduplicator();
+    _loyaltySummaryRefresh = AsyncRequestDeduplicator();
     _resumeReconciliation = AsyncRequestDeduplicator();
     _catalogRealtimeDirty = false;
     _catalogRealtimeWorkerRunning = false;
@@ -2020,6 +2398,8 @@ class AppSession extends ChangeNotifier {
     _walletRealtimeWorkerRunning = false;
     _promotionGrantsRealtimeDirty = false;
     _promotionGrantsRealtimeWorkerRunning = false;
+    _loyaltyRealtimeDirty = false;
+    _loyaltyRealtimeWorkerRunning = false;
     _profileRefresh = null;
     _orderRefreshes.clear();
     _productRefreshes.clear();
@@ -2161,6 +2541,32 @@ class AppSession extends ChangeNotifier {
     );
   }
 
+  void _listenForGuestCatalogChanges(
+    int generation,
+    AppRepositories repositories,
+  ) {
+    if (_catalogSubscription != null ||
+        !_isCurrentGuest(generation, repositories)) {
+      return;
+    }
+    _catalogSubscription = repositories.catalog.watchCatalogChanges().listen(
+      (_) {
+        if (!_isCurrentGuest(generation, repositories)) return;
+        _catalogRealtimeDirty = true;
+        if (_catalogRealtimeWorkerRunning) return;
+        _catalogRefreshTimer?.cancel();
+        final spread = _realtimeJitter.nextInt(1201);
+        _catalogRefreshTimer = Timer(
+          Duration(milliseconds: 700 + spread),
+          () => unawaited(_drainCatalogRealtimeRefreshes()),
+        );
+      },
+      onError: (_) {
+        // Pull-to-refresh remains available when Realtime is unavailable.
+      },
+    );
+  }
+
   Future<void> _stopCatalogListener() async {
     _catalogRefreshTimer?.cancel();
     _catalogRefreshTimer = null;
@@ -2225,6 +2631,36 @@ class AppSession extends ChangeNotifier {
     _promotionGrantsRealtimeDirty = false;
     final subscription = _promotionGrantsSubscription;
     _promotionGrantsSubscription = null;
+    await subscription?.cancel();
+  }
+
+  void _listenForLoyaltyChanges(_AuthenticatedRequestScope scope) {
+    if (_loyaltySubscription != null || !_isCurrent(scope)) return;
+    _loyaltySubscription = scope.repositories.loyalty
+        .watchLoyaltyChanges()
+        .listen(
+          (_) {
+            if (!_isCurrent(scope)) return;
+            _loyaltyRealtimeDirty = true;
+            if (_loyaltyRealtimeWorkerRunning) return;
+            _loyaltyRefreshTimer?.cancel();
+            _loyaltyRefreshTimer = Timer(
+              const Duration(milliseconds: 350),
+              () => unawaited(_drainLoyaltyRealtimeRefreshes()),
+            );
+          },
+          onError: (_) {
+            // Resume and the screen's explicit refresh remain reliable fallbacks.
+          },
+        );
+  }
+
+  Future<void> _stopLoyaltyListener() async {
+    _loyaltyRefreshTimer?.cancel();
+    _loyaltyRefreshTimer = null;
+    _loyaltyRealtimeDirty = false;
+    final subscription = _loyaltySubscription;
+    _loyaltySubscription = null;
     await subscription?.cancel();
   }
 
@@ -2303,14 +2739,44 @@ class AppSession extends ChangeNotifier {
     }
   }
 
+  Future<void> _drainLoyaltyRealtimeRefreshes() async {
+    if (_loyaltyRealtimeWorkerRunning) return;
+    final generation = _authGeneration;
+    _loyaltyRealtimeWorkerRunning = true;
+    try {
+      while (_loyaltyRealtimeDirty) {
+        if (generation != _authGeneration ||
+            seller.status != AccountStatus.approved) {
+          _loyaltyRealtimeDirty = false;
+          return;
+        }
+        _loyaltyRealtimeDirty = false;
+        final joinedOlderSnapshot = _loyaltySummaryRefresh.inFlight != null;
+        try {
+          await refreshLoyaltySummary();
+        } catch (_) {
+          return;
+        }
+        if (generation != _authGeneration ||
+            seller.status != AccountStatus.approved) {
+          return;
+        }
+        if (joinedOlderSnapshot) _loyaltyRealtimeDirty = true;
+      }
+    } finally {
+      if (generation == _authGeneration) {
+        _loyaltyRealtimeWorkerRunning = false;
+      }
+    }
+  }
+
   Future<void> _drainCatalogRealtimeRefreshes() async {
     if (_catalogRealtimeWorkerRunning) return;
     final generation = _authGeneration;
     _catalogRealtimeWorkerRunning = true;
     try {
       while (_catalogRealtimeDirty) {
-        if (generation != _authGeneration ||
-            seller.status != AccountStatus.approved) {
+        if (!_canRefreshCatalogForGeneration(generation)) {
           _catalogRealtimeDirty = false;
           return;
         }
@@ -2321,8 +2787,7 @@ class AppSession extends ChangeNotifier {
         } catch (_) {
           return;
         }
-        if (generation != _authGeneration ||
-            seller.status != AccountStatus.approved) {
+        if (!_canRefreshCatalogForGeneration(generation)) {
           return;
         }
         // Preserve a trailing invalidation that arrived after the active
@@ -2335,6 +2800,15 @@ class AppSession extends ChangeNotifier {
       }
     }
   }
+
+  bool _isCurrentGuest(int generation, AppRepositories repositories) =>
+      generation == _authGeneration &&
+      identical(repositories, _repositories) &&
+      isGuest;
+
+  bool _canRefreshCatalogForGeneration(int generation) =>
+      generation == _authGeneration &&
+      (isGuest || (auth.hasSession && seller.status == AccountStatus.approved));
 
   void _applyWallet(WalletSnapshot snapshot) {
     _availableBalance = snapshot.available;
@@ -2432,6 +2906,9 @@ class AppSession extends ChangeNotifier {
     final event = message.openEvent;
     final type = event.targetType?.trim().toLowerCase();
     final deepTarget = parseTrustedNotificationDeepLink(event.deepLink);
+    final targetsLoyalty =
+        type == 'loyalty' ||
+        deepTarget?.kind == NotificationDeepLinkKind.loyalty;
     final targetsReferral =
         type == 'referral' ||
         deepTarget?.kind == NotificationDeepLinkKind.referrals;
@@ -2447,6 +2924,9 @@ class AppSession extends ChangeNotifier {
           includeReferralSummary: targetsReferral && referralSummaryLoaded,
         ),
       );
+    }
+    if (targetsLoyalty) {
+      unawaited(_refreshLoyaltySummaryBestEffort());
     }
   }
 
@@ -2503,6 +2983,14 @@ class AppSession extends ChangeNotifier {
       await refreshReferralSummary();
     } catch (_) {
       // A later grant event, resume or manual refresh will retry.
+    }
+  }
+
+  Future<void> _refreshLoyaltySummaryBestEffort() async {
+    try {
+      await refreshLoyaltySummary();
+    } catch (_) {
+      // Realtime, resume, and the loyalty screen remain fallback retry paths.
     }
   }
 

@@ -7,6 +7,7 @@ import '../../core/external_actions.dart';
 import '../../core/formatters.dart';
 import '../../core/request_id.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/app_network_image.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/entrance.dart';
 import '../../core/widgets/pressable.dart';
@@ -16,6 +17,7 @@ import '../../data/models.dart';
 import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
 import '../promotions/engagement_strings.dart';
+import '../loyalty/loyalty_strings.dart';
 import 'profile_strings.dart';
 import 'legal/legal_document_screen.dart';
 import 'legal/legal_documents.dart';
@@ -146,7 +148,7 @@ class ProfileScreen extends StatelessWidget {
             child: ListView(
               key: const ValueKey('profile_scroll_view'),
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(
+              padding: const EdgeInsetsDirectional.fromSTEB(
                 AppSpacing.md,
                 AppSpacing.sm,
                 AppSpacing.md,
@@ -160,45 +162,65 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Entrance(
-                        index: 1,
-                        child: _StatCard(
-                          icon: Icons.receipt_long_outlined,
-                          color: AppColors.info,
-                          value: session.orders.length,
-                          label: ProfileStrings.statTotalOrders,
-                        ),
-                      ),
+                if (session.loyaltySummary?.programEnabled == true) ...[
+                  Entrance(
+                    index: 1,
+                    child: _ProfileLoyaltyCard(
+                      summary: session.loyaltySummary!,
+                      onTap: () => Navigator.pushNamed(context, Routes.loyalty),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Entrance(
-                        index: 2,
-                        child: _StatCard(
-                          icon: Icons.verified_rounded,
-                          color: AppColors.success,
-                          value: completedCount,
-                          label: ProfileStrings.statCompletedOrders,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cardWidth = constraints.maxWidth < 520
+                        ? constraints.maxWidth
+                        : (constraints.maxWidth - AppSpacing.sm * 2) / 3;
+                    return Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        SizedBox(
+                          width: cardWidth,
+                          child: Entrance(
+                            index: 2,
+                            child: _StatCard(
+                              icon: Icons.receipt_long_outlined,
+                              color: AppColors.info,
+                              value: session.orders.length,
+                              label: ProfileStrings.statTotalOrders,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Entrance(
-                        index: 3,
-                        child: _StatCard(
-                          icon: Icons.trending_up_rounded,
-                          color: AppColors.goldDark,
-                          value: session.totalEarned,
-                          label: ProfileStrings.statTotalEarnings,
-                          format: formatIqd,
+                        SizedBox(
+                          width: cardWidth,
+                          child: Entrance(
+                            index: 3,
+                            child: _StatCard(
+                              icon: Icons.verified_rounded,
+                              color: AppColors.success,
+                              value: completedCount,
+                              label: ProfileStrings.statCompletedOrders,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                        SizedBox(
+                          width: cardWidth,
+                          child: Entrance(
+                            index: 4,
+                            child: _StatCard(
+                              icon: Icons.trending_up_rounded,
+                              color: AppColors.accentStrong,
+                              value: session.totalEarned,
+                              label: ProfileStrings.statTotalEarnings,
+                              format: formatIqd,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 Entrance(
@@ -230,6 +252,16 @@ class ProfileScreen extends StatelessWidget {
                         iconBackground: AppColors.successSoft,
                         onTap: () =>
                             Navigator.pushNamed(context, Routes.promotions),
+                      ),
+                      _MenuItem(
+                        key: const ValueKey('profile_loyalty_item'),
+                        icon: Icons.workspace_premium_outlined,
+                        title: LoyaltyStrings.profileTitle,
+                        subtitle: LoyaltyStrings.profileSubtitle,
+                        iconColor: AppColors.accentStrong,
+                        iconBackground: AppColors.accentSoft,
+                        onTap: () =>
+                            Navigator.pushNamed(context, Routes.loyalty),
                       ),
                       _MenuItem(
                         key: const ValueKey('profile_referrals_item'),
@@ -395,29 +427,38 @@ class _StoreCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // أفاتار بحلقة تدرج ذهبي متوهجة تلف دائرة بيضاء بالحرفين.
+              // أفاتار بحلقة من لون الإبراز وسطح داخلي ملائم للوضعين.
               Container(
                 width: 72,
                 height: 72,
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: AppColors.goldGradient,
-                  boxShadow: AppShadows.goldGlow,
+                  gradient: AppColors.accentGradient,
+                  boxShadow: AppShadows.accentGlow,
                 ),
                 child: Container(
                   alignment: Alignment.center,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white,
+                    color: AppColors.surface,
                   ),
-                  child: Text(
-                    initials,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: AppColors.goldDark,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: seller.avatarUrl.isEmpty
+                      ? Text(
+                          initials,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: AppColors.accentStrong,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                      : AppNetworkImage(
+                          seller.avatarUrl,
+                          width: 66,
+                          height: 66,
+                          fit: BoxFit.cover,
+                          fallbackIcon: Icons.person_outline_rounded,
+                        ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -436,20 +477,20 @@ class _StoreCard extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        // شارة «بائع معتمد» كبسولة بتدرج ذهبي.
+                        // شارة «بائع معتمد» بلون الإبراز ونص متباين.
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            gradient: AppColors.goldGradient,
+                            gradient: AppColors.accentGradient,
                             borderRadius: BorderRadius.circular(100),
                           ),
                           child: Text(
                             ProfileStrings.verifiedSeller,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.white,
+                              color: AppColors.onAccent,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -474,7 +515,7 @@ class _StoreCard extends StatelessWidget {
                       child: _InfoRow(
                         icon: Icons.camera_alt_outlined,
                         text: seller.instagramUrl,
-                        color: AppColors.goldDark,
+                        color: AppColors.accentStrong,
                       ),
                     ),
                   ],
@@ -491,7 +532,7 @@ class _StoreCard extends StatelessWidget {
               Icon(
                 Icons.calendar_month_outlined,
                 size: 16,
-                color: AppColors.goldDark,
+                color: AppColors.accentStrong,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -526,7 +567,7 @@ class _InfoRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         // أيقونات اتصال ذهبية صغيرة.
-        Icon(icon, size: 15, color: AppColors.goldDark),
+        Icon(icon, size: 15, color: AppColors.accentStrong),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
@@ -541,6 +582,97 @@ class _InfoRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ProfileLoyaltyCard extends StatelessWidget {
+  const _ProfileLoyaltyCard({required this.summary, required this.onTap});
+
+  final LoyaltySummary summary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tier = summary.currentTier;
+    final next = summary.nextTier;
+    final progressLabel = next == null
+        ? LoyaltyStrings.highestLevel
+        : LoyaltyStrings.pointsRemaining(
+            summary.effectivePointsToNextTier,
+            next.localizedName,
+          );
+    return AppCard(
+      onTap: onTap,
+      color: AppColors.surfaceAlt,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(
+                  Icons.workspace_premium_outlined,
+                  color: AppColors.accentStrong,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      LoyaltyStrings.profileTitle,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${tier?.localizedName ?? '—'} · ${formatNumber(summary.totalPoints)} ${LoyaltyStrings.point}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Semantics(
+            label: progressLabel,
+            value: '${(summary.progressToNextTier * 100).round()}%',
+            child: LinearProgressIndicator(
+              value: summary.progressToNextTier,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              color: AppColors.accentStrong,
+              backgroundColor: AppColors.divider,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            progressLabel,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -662,6 +794,7 @@ class _MenuItem extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
+    this.subtitle,
     this.iconColor,
     this.iconBackground,
     this.titleColor,
@@ -670,6 +803,7 @@ class _MenuItem extends StatelessWidget {
 
   final IconData icon;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
   final Color? iconColor;
   final Color? iconBackground;
@@ -692,39 +826,49 @@ class _MenuItem extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: iconBackground ?? AppColors.goldSoft,
+                color: iconBackground ?? AppColors.accentSoft,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 icon,
                 size: 21,
-                color: iconColor ?? AppColors.goldDark,
+                color: iconColor ?? AppColors.accentStrong,
               ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: titleColor,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: titleColor,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                ],
               ),
             ),
             if (badgeCount > 0) ...[
-              // شارة إشعارات كبسولة بتدرج ذهبي.
+              // شارة إشعارات من لون الإبراز.
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  gradient: AppColors.goldGradient,
+                  gradient: AppColors.accentGradient,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Text(
                   formatNumber(badgeCount),
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
+                    color: AppColors.onAccent,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -796,7 +940,7 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
     final theme = Theme.of(context);
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
+        padding: EdgeInsetsDirectional.fromSTEB(
           AppSpacing.md,
           AppSpacing.sm,
           AppSpacing.md,

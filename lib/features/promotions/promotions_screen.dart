@@ -207,7 +207,7 @@ class _RewardCard extends StatelessWidget {
                     Text(
                       _rewardValue(grant),
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.goldDark,
+                        color: AppColors.accentStrong,
                         fontWeight: FontWeight.w800,
                       ),
                     ),

@@ -107,13 +107,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                   child: Row(
                     children: [
-                      Text(
-                        CoreStrings.tabOrders,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
+                      Expanded(
+                        child: Text(
+                          CoreStrings.tabOrders,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: AppSpacing.sm),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -248,7 +252,9 @@ class _FilterPill extends StatelessWidget {
               style: (theme.textTheme.labelMedium ?? const TextStyle())
                   .copyWith(
                     fontWeight: FontWeight.w800,
-                    color: selected ? Colors.white : AppColors.textSecondary,
+                    color: selected
+                        ? AppColors.onPrimary
+                        : AppColors.textSecondary,
                   ),
               child: Text(label),
             ),
@@ -259,7 +265,7 @@ class _FilterPill extends StatelessWidget {
                 fontWeight: FontWeight.w800,
                 fontFeatures: const [FontFeature.tabularFigures()],
                 color: selected
-                    ? AppColors.gold
+                    ? AppColors.accent
                     : AppColors.textSecondary.withValues(alpha: .7),
               ),
             ),
@@ -384,8 +390,8 @@ class _ProfitStrip extends StatelessWidget {
       OrderStatus.confirmed ||
       OrderStatus.shipped ||
       OrderStatus.delivered => (
-        AppColors.goldSoft,
-        AppColors.goldDark,
+        AppColors.accentSoft,
+        AppColors.accentStrong,
         Icons.schedule_rounded,
         OrdersStrings.profitPending(formatIqd(order.profit)),
       ),
@@ -418,11 +424,16 @@ class _ProfitStrip extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            OrdersStrings.totalAmount(formatIqd(order.customerTotal)),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              OrdersStrings.totalAmount(formatIqd(order.customerTotal)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

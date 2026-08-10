@@ -110,6 +110,139 @@ void main() {
   );
 
   test(
+    'obfuscated duplicate phone response is rejected and clears the draft',
+    () async {
+      const secureStorage = FlutterSecureStorage();
+      final auth = _FakeGoTrueClient()..signUpUser = _duplicateSignUpUser;
+      final client = _FakeSupabaseClient(auth);
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      final repository = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: secureStorage,
+      );
+
+      await expectLater(
+        repository.signUp(_registration()),
+        throwsA(
+          isA<BackendException>()
+              .having((error) => error.code, 'code', 'phone_already_registered')
+              .having(
+                (error) => error.message,
+                'message',
+                contains('مسجل مسبقاً'),
+              ),
+        ),
+      );
+
+      expect(auth.signUpCalls, 1);
+      expect(await secureStorage.read(key: pendingRegistrationKey), isNull);
+    },
+  );
+
+  test(
+    'an older unconfirmed phone is rejected instead of reused as a new account',
+    () async {
+      const secureStorage = FlutterSecureStorage();
+      final auth = _FakeGoTrueClient()
+        ..signUpUser = _olderUnconfirmedSignUpUser;
+      final client = _FakeSupabaseClient(auth);
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      final repository = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: secureStorage,
+      );
+
+      await expectLater(
+        repository.signUp(_registration()),
+        throwsA(
+          isA<BackendException>().having(
+            (error) => error.code,
+            'code',
+            'phone_already_registered',
+          ),
+        ),
+      );
+
+      expect(await secureStorage.read(key: pendingRegistrationKey), isNull);
+    },
+  );
+
+  test(
+    'a new phone response carries the matching registration attempt',
+    () async {
+      const secureStorage = FlutterSecureStorage();
+      final auth = _FakeGoTrueClient()
+        ..signUpUserFactory = _newSignUpUserWithAttempt;
+      final client = _FakeSupabaseClient(auth);
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      final repository = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: secureStorage,
+      );
+
+      await repository.signUp(_registration());
+
+      expect(auth.lastSignUpData?['registration_attempt_id'], isNotEmpty);
+      expect(await secureStorage.read(key: pendingRegistrationKey), isNotEmpty);
+    },
+  );
+
+  for (final duplicateCode in const ['user_already_exists', 'phone_exists']) {
+    test(
+      '$duplicateCode rejects the duplicate phone and clears the draft',
+      () async {
+        const secureStorage = FlutterSecureStorage();
+        final auth = _FakeGoTrueClient()
+          ..signUpError = AuthException(
+            'A user with this identifier already exists',
+            code: duplicateCode,
+          );
+        final client = _FakeSupabaseClient(auth);
+        addTearDown(() async {
+          await client.dispose();
+          auth.dispose();
+        });
+        final repository = SupabaseAuthRepository(
+          client,
+          const NoopDeviceTokenRegistrar(),
+          secureStorage: secureStorage,
+        );
+
+        await expectLater(
+          repository.signUp(_registration()),
+          throwsA(
+            isA<BackendException>()
+                .having(
+                  (error) => error.code,
+                  'code',
+                  'phone_already_registered',
+                )
+                .having(
+                  (error) => error.message,
+                  'message',
+                  contains('مسجل مسبقاً'),
+                ),
+          ),
+        );
+
+        expect(await secureStorage.read(key: pendingRegistrationKey), isNull);
+      },
+    );
+  }
+
+  test(
     'durable recovery gate signs out an interrupted recovery after restart',
     () async {
       const secureStorage = FlutterSecureStorage();
@@ -403,6 +536,47 @@ const _user = User(
   createdAt: '2026-07-21T00:00:00Z',
 );
 
+const _duplicateSignUpUser = User(
+  id: 'obfuscated-user',
+  appMetadata: {},
+  userMetadata: {},
+  aud: 'authenticated',
+  phone: '+9647712345678',
+  confirmationSentAt: '2026-08-07T00:00:00Z',
+  createdAt: '2026-08-07T00:00:00Z',
+  identities: <UserIdentity>[],
+);
+
+const _phoneIdentity = UserIdentity(
+  id: 'phone-identity',
+  userId: 'seller-a',
+  identityData: {},
+  identityId: 'phone-identity',
+  provider: 'phone',
+  createdAt: '2026-07-21T00:00:00Z',
+  lastSignInAt: null,
+);
+
+const _olderUnconfirmedSignUpUser = User(
+  id: 'seller-a',
+  appMetadata: {},
+  userMetadata: {'registration_attempt_id': 'an-older-attempt'},
+  aud: 'authenticated',
+  phone: '+9647712345678',
+  createdAt: '2026-07-21T00:00:00Z',
+  identities: <UserIdentity>[_phoneIdentity],
+);
+
+User _newSignUpUserWithAttempt(Map<String, dynamic>? data) => User(
+  id: 'new-seller',
+  appMetadata: const {},
+  userMetadata: data,
+  aud: 'authenticated',
+  phone: '+9647712345678',
+  createdAt: '2026-08-07T00:00:00Z',
+  identities: const <UserIdentity>[_phoneIdentity],
+);
+
 Session _session() => Session(
   accessToken: 'access-token',
   refreshToken: 'refresh-token',
@@ -430,6 +604,9 @@ class _FakeGoTrueClient extends GoTrueClient {
   User? _currentUser;
   Session? _currentSession;
   Object? signUpError;
+  User signUpUser = _user;
+  User Function(Map<String, dynamic>? data)? signUpUserFactory;
+  Map<String, dynamic>? lastSignUpData;
   Completer<void>? resendBarrier;
   int signUpCalls = 0;
   int passwordSignInCalls = 0;
@@ -459,9 +636,10 @@ class _FakeGoTrueClient extends GoTrueClient {
     OtpChannel channel = OtpChannel.sms,
   }) async {
     signUpCalls += 1;
+    lastSignUpData = data;
     final error = signUpError;
     if (error != null) throw error;
-    return AuthResponse(user: _user);
+    return AuthResponse(user: signUpUserFactory?.call(data) ?? signUpUser);
   }
 
   @override

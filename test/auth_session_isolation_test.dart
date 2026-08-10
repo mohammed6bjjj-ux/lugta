@@ -195,6 +195,7 @@ class _ControllableProfileRepository implements ProfileRepository {
     required String name,
     required String storeName,
     required String instagramUrl,
+    ProfileAvatarChange? avatarChange,
   }) async => _seller(
     auth.currentUserId!,
   ).copyWith(name: name, storeName: storeName, instagramUrl: instagramUrl);

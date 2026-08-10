@@ -14,6 +14,7 @@ AppRepositories createDemoRepositories() {
   final wallet = DemoWalletRepository(() => orders.currentOrders);
   final notifications = DemoNotificationsRepository();
   final promotions = DemoPromotionsRepository();
+  final loyalty = DemoLoyaltyRepository();
   return AppRepositories(
     auth: auth,
     profile: profile,
@@ -22,6 +23,7 @@ AppRepositories createDemoRepositories() {
     wallet: wallet,
     notifications: notifications,
     promotions: promotions,
+    loyalty: loyalty,
     isDemo: true,
   );
 }
@@ -128,6 +130,7 @@ class DemoProfileRepository implements ProfileRepository {
     required String name,
     required String storeName,
     required String instagramUrl,
+    ProfileAvatarChange? avatarChange,
   }) async {
     final normalizedInstagram = instagramUrl.trim().isEmpty
         ? ''
@@ -138,10 +141,23 @@ class DemoProfileRepository implements ProfileRepository {
         code: 'invalid_instagram_profile',
       );
     }
+    final avatarPath = switch (avatarChange?.type) {
+      ProfileAvatarChangeType.replace => 'demo/profile-avatar.jpg',
+      ProfileAvatarChangeType.remove => '',
+      null => seller.avatarPath,
+    };
+    final avatarUrl = switch (avatarChange?.type) {
+      ProfileAvatarChangeType.replace =>
+        'https://example.test/demo/profile-avatar.jpg',
+      ProfileAvatarChangeType.remove => '',
+      null => seller.avatarUrl,
+    };
     seller = seller.copyWith(
       name: name,
       storeName: storeName,
       instagramUrl: normalizedInstagram,
+      avatarPath: avatarPath,
+      avatarUrl: avatarUrl,
     );
     return seller;
   }
@@ -242,7 +258,10 @@ class DemoCatalogRepository implements CatalogRepository {
   ];
 
   @override
-  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) async {
+  Future<DeliveryQuote> quoteDeliveryFee(
+    String deliveryZoneId, {
+    required int orderSubtotal,
+  }) async {
     final governorate = MockData.governorates.firstWhere(
       (item) => item.id == deliveryZoneId,
     );
@@ -686,4 +705,12 @@ class DemoPromotionsRepository implements PromotionsRepository {
 
   @override
   Stream<void> watchPromotionGrantChanges() => const Stream.empty();
+}
+
+class DemoLoyaltyRepository implements LoyaltyRepository {
+  @override
+  Future<LoyaltySummary> fetchLoyaltySummary() async => MockData.loyaltySummary;
+
+  @override
+  Stream<void> watchLoyaltyChanges() => const Stream<void>.empty();
 }

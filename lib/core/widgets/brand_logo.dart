@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
-/// Official Luqta brand artwork exported from the supplied visual identity.
+/// Official Lugta artwork generated from the designer-supplied logo masters.
 abstract final class BrandAssets {
   static const String icon = 'assets/branding/lugta_icon_mark.png';
+  static const String appIcon = 'assets/branding/lugta_app_icon.png';
   static const String wordmarkInk = 'assets/branding/lugta_wordmark_ink.png';
   static const String wordmarkWhite =
       'assets/branding/lugta_wordmark_white.png';
+  static const String wordmarkMono = 'assets/branding/lugta_wordmark_mono.png';
 }
 
 class BrandIcon extends StatelessWidget {
@@ -17,7 +19,7 @@ class BrandIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       image: true,
-      label: 'Luqta',
+      label: 'Lugta',
       child: Image.asset(
         BrandAssets.icon,
         width: size,
@@ -42,7 +44,7 @@ class LugtaWordmark extends StatelessWidget {
         inverse ?? Theme.of(context).brightness == Brightness.dark;
     return Semantics(
       image: true,
-      label: 'Luqta',
+      label: 'Lugta',
       child: Image.asset(
         useInverse ? BrandAssets.wordmarkWhite : BrandAssets.wordmarkInk,
         height: height,

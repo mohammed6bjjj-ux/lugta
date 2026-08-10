@@ -1,16 +1,30 @@
-import 'dart:ui';
+/*
+THESIS: Lugta turns a dense reseller workflow into one bright, legible path; it refuses the previous green/cream visual world and generic card decoration.
+OWN-WORLD: PDF-authored royal purple, vivid yellow, white/lavender working surfaces, Zain type, compact rounded geometry, and the smiling bag mark.
+STORY: Sellers discover a product, understand price and profit, submit delivery details, and follow the order without losing context.
+FIRST VIEWPORT: A clear task title and high-value action lead; operational content stays above an ergonomic branded navigation dock.
+FORM: User-pinned Lugta identity, Operate mode, seed e3218c44.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+*/
 
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
-/// لوحة ألوان كاملة — نسختان من هوية لُگطة الرسمية.
+/// Lugta's complete colour system.
+///
+/// The two brand colours are fixed by the supplied identity. Semantic colours
+/// remain deliberately independent so success, warning, and error never rely
+/// on purple/yellow alone.
+@immutable
 class AppPalette {
   const AppPalette({
     required this.brightness,
     required this.primary,
     required this.onPrimary,
-    required this.gold,
-    required this.goldDark,
-    required this.goldSoft,
+    required this.accent,
+    required this.onAccent,
+    required this.accentStrong,
+    required this.accentSoft,
     required this.background,
     required this.surface,
     required this.surfaceAlt,
@@ -27,17 +41,17 @@ class AppPalette {
     required this.infoSoft,
     required this.neutralChip,
     required this.disabledFill,
-    required this.glassFill,
-    required this.glassBorder,
+    required this.navigation,
     required this.shadowBase,
   });
 
   final Brightness brightness;
   final Color primary;
   final Color onPrimary;
-  final Color gold;
-  final Color goldDark;
-  final Color goldSoft;
+  final Color accent;
+  final Color onAccent;
+  final Color accentStrong;
+  final Color accentSoft;
   final Color background;
   final Color surface;
   final Color surfaceAlt;
@@ -54,89 +68,78 @@ class AppPalette {
   final Color infoSoft;
   final Color neutralChip;
   final Color disabledFill;
-  final Color glassFill;
-  final Color glassBorder;
+  final Color navigation;
   final Color shadowBase;
 
-  /// اللوحة الفاتحة — حبر لُگطة، أخضر العلامة، والخلفية الكريمية.
   static const AppPalette light = AppPalette(
     brightness: Brightness.light,
-    primary: Color(0xFF191713),
-    onPrimary: Colors.white,
-    gold: Color(0xFF1B9E6A),
-    goldDark: Color(0xFF147B52),
-    goldSoft: Color(0xFFE8F4EF),
-    background: Color(0xFFFFFFFF),
+    primary: Color(0xFF37379B),
+    onPrimary: Color(0xFFFFFFFF),
+    accent: Color(0xFFFCC803),
+    onAccent: Color(0xFF201D12),
+    // Contrast-safe yellow ink for text/icons on pale yellow surfaces.
+    accentStrong: Color(0xFF6A5600),
+    accentSoft: Color(0xFFFFF4BF),
+    background: Color(0xFFF8F8FD),
     surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFF3EFE7),
-    textPrimary: Color(0xFF191713),
-    textSecondary: Color(0xFF6D6861),
-    divider: Color(0xFFE8E3D7),
-    success: Color(0xFF1B9E6A),
-    successSoft: Color(0xFFE8F4EF),
-    error: Color(0xFFD64545),
-    errorSoft: Color(0xFFFBE9E9),
-    warning: Color(0xFFE08F1F),
-    warningSoft: Color(0xFFFCF1DF),
-    info: Color(0xFF3B82C4),
-    infoSoft: Color(0xFFE7F0F9),
-    neutralChip: Color(0xFFEDE8DD),
-    disabledFill: Color(0xFFD9D4C9),
-    // شبه معتم — مظهر زجاجي خفيف بلا مفاجآت رندرة.
-    glassFill: Color(0xF5FFFFFF),
-    glassBorder: Color(0x8CFFFFFF),
-    shadowBase: Color(0xFF191713),
+    surfaceAlt: Color(0xFFF0EFF9),
+    textPrimary: Color(0xFF202035),
+    textSecondary: Color(0xFF67667A),
+    divider: Color(0xFFE2E1EE),
+    success: Color(0xFF167A52),
+    successSoft: Color(0xFFE4F4EC),
+    error: Color(0xFFC53D4B),
+    errorSoft: Color(0xFFFCE9EC),
+    warning: Color(0xFF9A5A00),
+    warningSoft: Color(0xFFFFF0D2),
+    info: Color(0xFF3566C2),
+    infoSoft: Color(0xFFE8EFFC),
+    neutralChip: Color(0xFFECEBF5),
+    disabledFill: Color(0xFFD8D7E3),
+    navigation: Color(0xFFFFFFFF),
+    shadowBase: Color(0xFF24213B),
   );
 
-  /// اللوحة الداكنة — أسود دافئ بنفس أخضر العلامة.
   static const AppPalette dark = AppPalette(
     brightness: Brightness.dark,
-    // في الداكن: الزر الرئيسي عاجي فاتح بنص داكن (انعكاس أنيق).
-    primary: Color(0xFFFAF6ED),
-    onPrimary: Color(0xFF191713),
-    gold: Color(0xFF1B9E6A),
-    goldDark: Color(0xFF59D29D),
-    goldSoft: Color(0xFF15392B),
-    background: Color(0xFF191713),
-    surface: Color(0xFF23211D),
-    surfaceAlt: Color(0xFF2D2A24),
-    textPrimary: Color(0xFFFAF6ED),
-    textSecondary: Color(0xFFB6AFA3),
-    divider: Color(0xFF3B3730),
-    success: Color(0xFF59D29D),
-    successSoft: Color(0xFF15392B),
-    error: Color(0xFFE36A6A),
-    errorSoft: Color(0xFF33201F),
-    warning: Color(0xFFE8A23D),
-    warningSoft: Color(0xFF32291B),
-    info: Color(0xFF6BA6E3),
-    infoSoft: Color(0xFF1C2733),
-    neutralChip: Color(0xFF333029),
-    disabledFill: Color(0xFF48433A),
-    // رصاصي داكن شبه معتم — أفتح قليلاً من الخلفية ليتمايز الشريط.
-    glassFill: Color(0xF72D2A24),
-    glassBorder: Color(0x1FFFFFFF),
-    shadowBase: Colors.black,
+    primary: Color(0xFFBEB8FF),
+    onPrimary: Color(0xFF19162E),
+    accent: Color(0xFFFCCD27),
+    onAccent: Color(0xFF211D0B),
+    accentStrong: Color(0xFFFFDC55),
+    accentSoft: Color(0xFF3B3210),
+    background: Color(0xFF11111A),
+    surface: Color(0xFF191925),
+    surfaceAlt: Color(0xFF242438),
+    textPrimary: Color(0xFFF6F5FC),
+    textSecondary: Color(0xFFBDBBCC),
+    divider: Color(0xFF37364A),
+    success: Color(0xFF62CEA0),
+    successSoft: Color(0xFF15372A),
+    error: Color(0xFFFF7C88),
+    errorSoft: Color(0xFF401F26),
+    warning: Color(0xFFFFBE5C),
+    warningSoft: Color(0xFF3C2D16),
+    info: Color(0xFF8DB4FF),
+    infoSoft: Color(0xFF1C2B49),
+    neutralChip: Color(0xFF2B2A40),
+    disabledFill: Color(0xFF464559),
+    navigation: Color(0xFF1E1D2D),
+    shadowBase: Color(0xFF000000),
   );
 }
 
-/// رموز الألوان الموحّدة — تقرأ من اللوحة الحالية [p] التي يبدّلها
-/// جذر التطبيق عند تغيير الوضع الداكن. (الأسماء gold* تاريخية —
-/// تحمل أخضر العلامة والكريمي، انظر هوية لُگطة.)
-class AppColors {
-  AppColors._();
-
-  /// اللوحة الحالية — يضبطها جذر التطبيق قبل بناء الشجرة.
+/// Semantic access to the active palette.
+abstract final class AppColors {
   static AppPalette p = AppPalette.light;
 
   static bool get isDark => p.brightness == Brightness.dark;
-
   static Color get primary => p.primary;
   static Color get onPrimary => p.onPrimary;
-  static Color get gold => p.gold;
-  static Color get onGold => Colors.white;
-  static Color get goldDark => p.goldDark;
-  static Color get goldSoft => p.goldSoft;
+  static Color get accent => p.accent;
+  static Color get onAccent => p.onAccent;
+  static Color get accentStrong => p.accentStrong;
+  static Color get accentSoft => p.accentSoft;
   static Color get background => p.background;
   static Color get surface => p.surface;
   static Color get surfaceAlt => p.surfaceAlt;
@@ -152,40 +155,39 @@ class AppColors {
   static Color get info => p.info;
   static Color get infoSoft => p.infoSoft;
   static Color get neutralChip => p.neutralChip;
+  static Color get disabledFill => p.disabledFill;
 
-  /// كبسولة التبويب المختار في شريط التنقل السفلي:
-  /// سوداء في الفاتح، ورصاصية فاتحة (لا بيضاء) في الداكن.
   static Color get selectedNavPill =>
-      isDark ? const Color(0xFF3D372E) : p.primary;
+      isDark ? const Color(0xFF37379B) : const Color(0xFF37379B);
+  static Color get onSelectedNavPill => const Color(0xFFFFFFFF);
 
-  /// لون نص/أيقونة الكبسولة المختارة — أبيض في الوضعين
-  /// (الكبسولة داكنة/رصاصية دائماً).
-  static Color get onSelectedNavPill => isDark ? Colors.white : p.onPrimary;
-
-  /// تعبئة خضراء مسطّحة. أبقينا النوع Gradient لتوافق المكوّنات الحالية.
-  static LinearGradient get goldGradient => LinearGradient(
-    begin: Alignment.topRight,
-    end: Alignment.bottomLeft,
-    colors: [p.gold, p.gold],
+  static LinearGradient get accentGradient => LinearGradient(
+    // Physical alignment also works when callers paint the gradient directly
+    // inside a ShaderMask without a Directionality ancestor (e.g. tests).
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      accent,
+      isDark ? const Color(0xFFE6B700) : const Color(0xFFEAB900),
+    ],
   );
 
-  /// حبر العلامة المسطّح لبطاقات الرصيد والترويسات.
-  static LinearGradient get darkGradient => const LinearGradient(
-    begin: Alignment.topRight,
-    end: Alignment.bottomLeft,
-    colors: [Color(0xFF191713), Color(0xFF191713)],
+  static LinearGradient get darkGradient => LinearGradient(
+    begin: AlignmentDirectional.topStart,
+    end: AlignmentDirectional.bottomEnd,
+    colors: isDark
+        ? const [Color(0xFF2E2B78), Color(0xFF1C1A49)]
+        : const [Color(0xFF37379B), Color(0xFF5555B6)],
   );
 
-  /// تدرج خفيف لخلفيات الشاشات.
   static LinearGradient get pageGradient => LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [p.surface, p.background],
+    colors: [surface, background],
   );
 }
 
-class AppSpacing {
-  AppSpacing._();
+abstract final class AppSpacing {
   static const double xs = 4;
   static const double sm = 8;
   static const double md = 16;
@@ -194,172 +196,210 @@ class AppSpacing {
   static const double xxl = 48;
 }
 
-class AppRadius {
-  AppRadius._();
-  static const double sm = 14;
-  static const double md = 18;
-  static const double lg = 24;
-  static const double xl = 32;
+abstract final class AppRadius {
+  static const double sm = 10;
+  static const double md = 14;
+  static const double lg = 16;
+  static const double xl = 22;
 }
 
-/// مدد وحركات موحّدة للأنيميشن.
-class AppDurations {
-  AppDurations._();
+abstract final class AppDurations {
   static const Duration fast = Duration(milliseconds: 160);
-  static const Duration base = Duration(milliseconds: 280);
-  static const Duration slow = Duration(milliseconds: 450);
+  static const Duration base = Duration(milliseconds: 260);
+  static const Duration slow = Duration(milliseconds: 420);
 }
 
-class AppCurves {
-  AppCurves._();
+abstract final class AppCurves {
   static const Curve emphasized = Curves.easeOutCubic;
   static const Curve spring = Curves.easeOutBack;
 }
 
-/// ظلال ناعمة متكيفة مع الوضع (أقوى قليلاً في الداكن لتبقى محسوسة).
-class AppShadows {
-  AppShadows._();
-
+abstract final class AppShadows {
   static List<BoxShadow> get card => [
     BoxShadow(
       color: AppColors.p.shadowBase.withValues(
-        alpha: AppColors.isDark ? .4 : .05,
+        alpha: AppColors.isDark ? .24 : .075,
       ),
-      blurRadius: 24,
-      offset: const Offset(0, 8),
-    ),
-    BoxShadow(
-      color: AppColors.p.shadowBase.withValues(
-        alpha: AppColors.isDark ? .25 : .03,
-      ),
-      blurRadius: 4,
-      offset: const Offset(0, 1),
+      blurRadius: 20,
+      offset: const Offset(0, 7),
     ),
   ];
 
   static List<BoxShadow> get floating => [
     BoxShadow(
       color: AppColors.p.shadowBase.withValues(
-        alpha: AppColors.isDark ? .55 : .14,
+        alpha: AppColors.isDark ? .38 : .14,
       ),
-      blurRadius: 32,
+      blurRadius: 28,
       offset: const Offset(0, 12),
     ),
   ];
 
-  static List<BoxShadow> get goldGlow => [
+  static List<BoxShadow> get accentGlow => [
     BoxShadow(
-      color: AppColors.gold.withValues(alpha: .35),
-      blurRadius: 20,
-      offset: const Offset(0, 8),
+      color: AppColors.accent.withValues(alpha: .26),
+      blurRadius: 18,
+      offset: const Offset(0, 7),
     ),
   ];
 }
 
-/// انتقال صفحات حديث: تلاشٍ + انزلاق طفيف للأعلى + تكبير ناعم.
-class _ModernPageTransitionsBuilder extends PageTransitionsBuilder {
-  const _ModernPageTransitionsBuilder();
-
-  @override
-  Widget buildTransitions<T>(
-    PageRoute<T> route,
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: AppCurves.emphasized,
-      reverseCurve: Curves.easeInCubic,
-    );
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, .04),
-          end: Offset.zero,
-        ).animate(curved),
-        child: ScaleTransition(
-          scale: Tween<double>(begin: .985, end: 1).animate(curved),
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
-class AppTheme {
-  AppTheme._();
-
+abstract final class AppTheme {
   static ThemeData light() => _from(AppPalette.light);
-
   static ThemeData dark() => _from(AppPalette.dark);
 
   static ThemeData _from(AppPalette c) {
-    final scheme = ColorScheme(
+    final generated = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF37379B),
       brightness: c.brightness,
+    );
+    final scheme = generated.copyWith(
       primary: c.primary,
       onPrimary: c.onPrimary,
-      secondary: c.gold,
-      onSecondary: Colors.white,
+      primaryContainer: c.brightness == Brightness.light
+          ? const Color(0xFFE8E6FF)
+          : const Color(0xFF343274),
+      onPrimaryContainer: c.brightness == Brightness.light
+          ? const Color(0xFF25236A)
+          : const Color(0xFFF0EFFF),
+      secondary: c.accent,
+      onSecondary: c.onAccent,
+      secondaryContainer: c.accentSoft,
+      onSecondaryContainer: c.brightness == Brightness.light
+          ? const Color(0xFF3C3100)
+          : const Color(0xFFFFE68C),
       surface: c.surface,
       onSurface: c.textPrimary,
+      surfaceContainerLowest: c.surface,
+      surfaceContainerLow: c.surface,
+      surfaceContainer: c.surfaceAlt,
+      surfaceContainerHigh: c.surfaceAlt,
+      surfaceContainerHighest: c.neutralChip,
+      outline: c.textSecondary,
+      outlineVariant: c.divider,
       error: c.error,
-      onError: Colors.white,
+      onError: const Color(0xFFFFFFFF),
+      errorContainer: c.errorSoft,
+      onErrorContainer: c.error,
     );
 
-    // خط الواجهة الرسمي مضمن محلياً كي لا يعتمد أول تشغيل على الشبكة.
-    final typography = Typography.material2021();
-    final base =
-        (c.brightness == Brightness.dark ? typography.white : typography.black)
-            .apply(
-              fontFamily: 'IBMPlexSansArabic',
-              bodyColor: c.textPrimary,
-              displayColor: c.textPrimary,
-            );
+    const baseText = TextTheme(
+      displayLarge: TextStyle(
+        fontSize: 48,
+        fontWeight: FontWeight.w700,
+        height: 1.25,
+        letterSpacing: 0,
+      ),
+      displayMedium: TextStyle(
+        fontSize: 40,
+        fontWeight: FontWeight.w700,
+        height: 1.28,
+        letterSpacing: 0,
+      ),
+      displaySmall: TextStyle(
+        fontSize: 34,
+        fontWeight: FontWeight.w700,
+        height: 1.3,
+        letterSpacing: 0,
+      ),
+      headlineLarge: TextStyle(
+        fontSize: 30,
+        fontWeight: FontWeight.w700,
+        height: 1.34,
+        letterSpacing: 0,
+      ),
+      headlineMedium: TextStyle(
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+        height: 1.36,
+        letterSpacing: 0,
+      ),
+      headlineSmall: TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        height: 1.4,
+        letterSpacing: 0,
+      ),
+      titleLarge: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        height: 1.42,
+        letterSpacing: 0,
+      ),
+      titleMedium: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        height: 1.5,
+        letterSpacing: 0,
+      ),
+      titleSmall: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        height: 1.52,
+        letterSpacing: 0,
+      ),
+      bodyLarge: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        height: 1.65,
+        letterSpacing: 0,
+      ),
+      bodyMedium: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        height: 1.62,
+        letterSpacing: 0,
+      ),
+      bodySmall: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        height: 1.58,
+        letterSpacing: 0,
+      ),
+      labelLarge: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        height: 1.45,
+        letterSpacing: 0,
+      ),
+      labelMedium: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        height: 1.45,
+        letterSpacing: 0,
+      ),
+      labelSmall: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        height: 1.45,
+        letterSpacing: 0,
+      ),
+    );
+    final textTheme = baseText.apply(
+      fontFamily: 'Zain',
+      bodyColor: c.textPrimary,
+      displayColor: c.textPrimary,
+    );
 
-    final textTheme = base.copyWith(
-      headlineMedium: base.headlineMedium?.copyWith(
-        fontWeight: FontWeight.w800,
-        height: 1.3,
-      ),
-      headlineSmall: base.headlineSmall?.copyWith(
-        fontWeight: FontWeight.w800,
-        height: 1.3,
-      ),
-      titleLarge: base.titleLarge?.copyWith(
-        fontWeight: FontWeight.w800,
-        height: 1.35,
-      ),
-      titleMedium: base.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        height: 1.4,
-      ),
-      titleSmall: base.titleSmall?.copyWith(
-        fontWeight: FontWeight.w700,
-        height: 1.4,
-      ),
-      bodyMedium: base.bodyMedium?.copyWith(height: 1.55),
-      bodySmall: base.bodySmall?.copyWith(height: 1.5, color: c.textSecondary),
-      labelLarge: base.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+    final compactShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
     );
 
     return ThemeData(
       useMaterial3: true,
-      // تعميم خط IBM Plex Sans Arabic الرسمي على كل نصوص الواجهة.
-      fontFamily: 'IBMPlexSansArabic',
+      brightness: c.brightness,
       colorScheme: scheme,
+      fontFamily: 'Zain',
       scaffoldBackgroundColor: c.background,
+      canvasColor: c.background,
       textTheme: textTheme,
+      visualDensity: VisualDensity.standard,
       splashFactory: InkRipple.splashFactory,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: _ModernPageTransitionsBuilder(),
-          TargetPlatform.iOS: _ModernPageTransitionsBuilder(),
-          TargetPlatform.windows: _ModernPageTransitionsBuilder(),
-          TargetPlatform.macOS: _ModernPageTransitionsBuilder(),
-          TargetPlatform.linux: _ModernPageTransitionsBuilder(),
+          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
         },
       ),
       appBarTheme: AppBarTheme(
@@ -368,9 +408,21 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        titleTextStyle: textTheme.titleLarge?.copyWith(
-          fontSize: 18,
-          color: c.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: textTheme.titleLarge,
+        iconTheme: IconThemeData(color: c.textPrimary),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: c.primary,
+          foregroundColor: c.onPrimary,
+          disabledBackgroundColor: c.disabledFill,
+          disabledForegroundColor: c.textSecondary,
+          minimumSize: const Size(64, 52),
+          padding: const EdgeInsetsDirectional.symmetric(horizontal: 20),
+          shape: compactShape,
+          textStyle: textTheme.labelLarge,
+          elevation: 0,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -378,67 +430,78 @@ class AppTheme {
           backgroundColor: c.primary,
           foregroundColor: c.onPrimary,
           disabledBackgroundColor: c.disabledFill,
-          disabledForegroundColor: c.onPrimary,
-          minimumSize: const Size.fromHeight(56),
+          disabledForegroundColor: c.textSecondary,
+          minimumSize: const Size(64, 52),
+          padding: const EdgeInsetsDirectional.symmetric(horizontal: 20),
+          shape: compactShape,
+          textStyle: textTheme.labelLarge,
           elevation: 0,
-          shape: const StadiumBorder(),
-          textStyle: textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: c.textPrimary,
+          foregroundColor: c.primary,
           backgroundColor: c.surface,
-          minimumSize: const Size.fromHeight(56),
-          side: BorderSide(color: c.divider, width: 1.2),
-          shape: const StadiumBorder(),
-          textStyle: textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
+          minimumSize: const Size(64, 52),
+          padding: const EdgeInsetsDirectional.symmetric(horizontal: 20),
+          side: BorderSide(color: c.divider),
+          shape: compactShape,
+          textStyle: textTheme.labelLarge,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: c.goldDark,
-          textStyle: textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w700,
+          foregroundColor: c.primary,
+          minimumSize: const Size(48, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+          textStyle: textTheme.labelLarge,
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: c.textPrimary,
+          minimumSize: const Size.square(48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: c.surfaceAlt,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 16,
-        ),
+        contentPadding: const EdgeInsetsDirectional.fromSTEB(16, 15, 16, 15),
         hintStyle: textTheme.bodyMedium?.copyWith(color: c.textSecondary),
         labelStyle: textTheme.bodyMedium?.copyWith(color: c.textSecondary),
+        floatingLabelStyle: textTheme.bodySmall?.copyWith(
+          color: c.primary,
+          fontWeight: FontWeight.w700,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: c.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: c.gold, width: 1.6),
+          borderSide: BorderSide(color: c.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: c.error, width: 1.2),
+          borderSide: BorderSide(color: c.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: c.error, width: 1.6),
+          borderSide: BorderSide(color: c.error, width: 2),
         ),
       ),
       cardTheme: CardThemeData(
         color: c.surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
@@ -448,22 +511,31 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: c.neutralChip,
         selectedColor: c.primary,
-        labelStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-        side: BorderSide.none,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        shape: const StadiumBorder(),
+        secondarySelectedColor: c.primary,
+        labelStyle: textTheme.labelLarge,
+        secondaryLabelStyle: textTheme.labelLarge?.copyWith(color: c.onPrimary),
+        side: BorderSide(color: c.divider),
+        padding: const EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.transparent,
-        indicatorColor: c.goldSoft,
-        height: 68,
-        labelTextStyle: WidgetStatePropertyAll(
-          textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+        backgroundColor: c.navigation,
+        indicatorColor: c.primary,
+        elevation: 0,
+        height: 72,
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => textTheme.labelSmall?.copyWith(
+            color: states.contains(WidgetState.selected)
+                ? c.primary
+                : c.textSecondary,
+          ),
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? c.goldDark
+                ? c.accent
                 : c.textSecondary,
           ),
         ),
@@ -471,8 +543,9 @@ class AppTheme {
       dividerTheme: DividerThemeData(color: c.divider, thickness: 1, space: 1),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: c.surface,
+        surfaceTintColor: Colors.transparent,
         showDragHandle: true,
-        shape: const RoundedRectangleBorder(
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppRadius.xl),
           ),
@@ -482,79 +555,103 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         backgroundColor: c.brightness == Brightness.dark
             ? c.surfaceAlt
-            : c.primary,
+            : const Color(0xFF26233B),
         contentTextStyle: textTheme.bodyMedium?.copyWith(
-          color: c.brightness == Brightness.dark ? c.textPrimary : Colors.white,
+          color: const Color(0xFFFFFFFF),
         ),
+        actionTextColor: c.accent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderRadius: BorderRadius.circular(AppRadius.md),
         ),
       ),
       tabBarTheme: TabBarThemeData(
-        labelColor: c.textPrimary,
+        labelColor: c.primary,
         unselectedLabelColor: c.textSecondary,
-        indicatorColor: c.gold,
+        indicatorColor: c.accent,
         indicatorSize: TabBarIndicatorSize.label,
         dividerColor: Colors.transparent,
-        labelStyle: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+        labelStyle: textTheme.titleSmall,
         unselectedLabelStyle: textTheme.titleSmall,
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: c.surface,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg + 4),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
         ),
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: c.textPrimary),
+        titleTextStyle: textTheme.titleLarge,
         contentTextStyle: textTheme.bodyMedium?.copyWith(
           color: c.textSecondary,
         ),
       ),
       listTileTheme: ListTileThemeData(
-        iconColor: c.textSecondary,
+        iconColor: c.primary,
         textColor: c.textPrimary,
+        contentPadding: const EdgeInsetsDirectional.symmetric(horizontal: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        titleTextStyle: textTheme.bodyLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        subtitleTextStyle: textTheme.bodyMedium?.copyWith(
+          color: c.textSecondary,
+        ),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: c.primary,
+        linearTrackColor: c.surfaceAlt,
+        circularTrackColor: c.surfaceAlt,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? c.onPrimary
+              : c.textSecondary,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? c.primary : c.neutralChip,
+        ),
+      ),
+      badgeTheme: BadgeThemeData(
+        backgroundColor: c.accent,
+        textColor: c.onAccent,
+        textStyle: textTheme.labelSmall,
       ),
     );
   }
 }
 
-/// لوحة زجاجية مموّهة (Glassmorphism) — تتكيف مع الوضع الداكن.
+/// Compatibility wrapper retained for existing call sites.
+///
+/// The previous implementation used decorative blur. The rebrand uses an
+/// opaque, readable navigation surface so lower-end Android devices avoid an
+/// unnecessary backdrop-filter cost.
 class FrostedPanel extends StatelessWidget {
   const FrostedPanel({
     super.key,
     required this.child,
     this.borderRadius,
     this.fillAlpha,
-    this.blur = 18,
+    this.blur = 0,
   });
 
   final Widget child;
   final BorderRadius? borderRadius;
-
-  /// شفافية التعبئة — الافتراضي من اللوحة الحالية.
   final double? fillAlpha;
   final double blur;
 
   @override
   Widget build(BuildContext context) {
     final radius = borderRadius ?? BorderRadius.circular(AppRadius.xl);
-    final fill = fillAlpha == null
-        ? AppColors.p.glassFill
-        : (AppColors.isDark ? Colors.black : Colors.white).withValues(
-            alpha: fillAlpha!,
-          );
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: fill,
-            borderRadius: radius,
-            border: Border.all(color: AppColors.p.glassBorder, width: 1),
-          ),
-          child: child,
-        ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.p.navigation.withValues(alpha: fillAlpha ?? 1),
+        borderRadius: radius,
+        border: Border.all(color: AppColors.divider),
       ),
+      child: ClipRRect(borderRadius: radius, child: child),
     );
   }
 }

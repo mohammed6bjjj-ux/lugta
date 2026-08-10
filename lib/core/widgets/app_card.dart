@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import 'pressable.dart';
 
-/// البطاقة الحديثة الموحّدة: سطح أبيض بظل ناعم بدل الحدود الصلبة،
+/// بطاقة سطح موحّدة بخط فصل خفيف وظل وظيفي.
 /// مع تفاعل ضغط اختياري.
 class AppCard extends StatelessWidget {
   const AppCard({
@@ -38,6 +38,7 @@ class AppCard extends StatelessWidget {
         color: gradient == null ? null : color,
         gradient: gradient,
         borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: AppColors.divider.withValues(alpha: .72)),
         boxShadow: shadows ?? AppShadows.card,
       ),
       child: Material(

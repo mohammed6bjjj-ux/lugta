@@ -15,6 +15,7 @@ abstract class Routes {
   static const register = '/register';
   static const otp = '/otp';
   static const forgotPassword = '/forgot-password';
+  static const guestAccess = '/guest-access';
   static const pendingApproval = '/pending-approval';
   static const accountBlocked = '/account-blocked';
   static const accountDeleted = '/account-deleted';
@@ -42,6 +43,7 @@ abstract class Routes {
   static const notifications = '/notifications';
   static const promotions = '/promotions';
   static const referrals = '/referrals';
+  static const loyalty = '/loyalty';
   static const editProfile = '/edit-profile';
   static const support = '/support';
   static const policies = '/policies';

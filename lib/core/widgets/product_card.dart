@@ -92,8 +92,9 @@ class ProductCard extends StatelessWidget {
                         else if (product.isNew)
                           _CardBadge(
                             label: CoreStrings.badgeNew,
-                            background: AppColors.goldDark,
-                            gradient: AppColors.goldGradient,
+                            background: AppColors.accentStrong,
+                            gradient: AppColors.accentGradient,
+                            foreground: AppColors.onAccent,
                           )
                         else if (product.lowStock)
                           _CardBadge(
@@ -180,7 +181,7 @@ class ProductCard extends StatelessWidget {
                             maxLines: 1,
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: AppColors.goldDark,
+                              color: AppColors.primary,
                             ),
                           ),
                         ),
@@ -233,11 +234,13 @@ class _CardBadge extends StatelessWidget {
     required this.label,
     required this.background,
     this.gradient,
+    this.foreground = Colors.white,
   });
 
   final String label;
   final Color background;
   final Gradient? gradient;
+  final Color foreground;
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +254,7 @@ class _CardBadge extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Colors.white,
+          color: foreground,
           fontWeight: FontWeight.w800,
           fontSize: 10,
         ),

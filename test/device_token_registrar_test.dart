@@ -305,6 +305,19 @@ void main() {
     expect(different.localNotificationId, isNot(first.localNotificationId));
   });
 
+  test('rich image participates in fallback presentation identity', () {
+    final plain = PushMessage(title: 'A', body: 'B');
+    final rich = PushMessage(
+      title: 'A',
+      body: 'B',
+      imageUrl: 'https://example.test/product.webp',
+    );
+
+    expect(rich.imageUrl, 'https://example.test/product.webp');
+    expect(rich.presentationKey, isNot(plain.presentationKey));
+    expect(rich.localNotificationId, isNot(plain.localNotificationId));
+  });
+
   test('failed Firebase deletion retains a durable retry marker', () async {
     final messaging = _FakeMessaging()..deleteThrows = true;
     final store = _FakeStore()..lastToken = 'old-token';

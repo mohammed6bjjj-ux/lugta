@@ -84,41 +84,56 @@ class _WalletScreenState extends State<WalletScreen>
                 ),
                 children: [
                   // ── الرأس ──
-                  Row(
-                    children: [
-                      Text(
-                        CoreStrings.tabWallet,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const Spacer(),
-                      Pressable(
-                        onTap: () => Navigator.pushNamed(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final stackHeader =
+                          constraints.maxWidth < 330 ||
+                          MediaQuery.textScalerOf(context).scale(1) > 1.3;
+                      final historyAction = TextButton.icon(
+                        onPressed: () => Navigator.pushNamed(
                           context,
                           Routes.withdrawalsHistory,
                         ),
-                        child: Row(
+                        icon: Icon(
+                          Directionality.of(context) == TextDirection.rtl
+                              ? Icons.chevron_left_rounded
+                              : Icons.chevron_right_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          WalletStrings.withdrawalsHistory,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                      final title = Text(
+                        CoreStrings.tabWallet,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      );
+                      if (stackHeader) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              WalletStrings.withdrawalsHistory,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: AppColors.goldDark,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            Icon(
-                              // سهم «المزيد» يتبع اتجاه اللغة تلقائياً.
-                              Directionality.of(context) == TextDirection.rtl
-                                  ? Icons.chevron_left_rounded
-                                  : Icons.chevron_right_rounded,
-                              size: 18,
-                              color: AppColors.goldDark,
+                            title,
+                            Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: historyAction,
                             ),
                           ],
-                        ),
-                      ),
-                    ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: title),
+                          const SizedBox(width: AppSpacing.sm),
+                          Flexible(child: historyAction),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   const Entrance(child: _BalanceCard()),
@@ -180,14 +195,18 @@ class _BalanceCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(
-                WalletStrings.availableBalance,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: .65),
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: Text(
+                  WalletStrings.availableBalance,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: Colors.white.withValues(alpha: .75),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: AppSpacing.sm),
               Container(
                 width: 34,
                 height: 34,
@@ -198,7 +217,7 @@ class _BalanceCard extends StatelessWidget {
                 child: Icon(
                   Icons.account_balance_wallet_rounded,
                   size: 17,
-                  color: AppColors.gold,
+                  color: AppColors.accent,
                 ),
               ),
             ],
@@ -226,7 +245,7 @@ class _BalanceCard extends StatelessWidget {
                 child: _InlineMetric(
                   label: WalletStrings.pendingProfit,
                   value: session.pendingBalance,
-                  valueColor: AppColors.gold,
+                  valueColor: AppColors.accent,
                 ),
               ),
               Container(
@@ -248,7 +267,7 @@ class _BalanceCard extends StatelessWidget {
           PrimaryButton(
             label: WalletStrings.withdrawRequest,
             icon: Icons.payments_outlined,
-            gold: true,
+            accented: true,
             onPressed: session.canWithdraw
                 ? () => Navigator.pushNamed(context, Routes.withdrawRequest)
                 : null,
@@ -377,7 +396,11 @@ class _SegmentedTabs extends StatelessWidget {
                                 ? AppColors.textPrimary
                                 : AppColors.textSecondary,
                           ),
-                      child: Text(label),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ),
@@ -512,7 +535,7 @@ class _SalesStatementSummary extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.analytics_outlined, color: AppColors.goldDark),
+                Icon(Icons.analytics_outlined, color: AppColors.accentStrong),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
@@ -683,7 +706,7 @@ class _TransactionRow extends StatelessWidget {
     WalletTxType.adjustmentDebit => ('-', AppColors.error),
     WalletTxType.reversal => ('-', AppColors.error),
     WalletTxType.profitReleased => ('+', AppColors.success),
-    WalletTxType.pendingProfit => ('+', AppColors.goldDark),
+    WalletTxType.pendingProfit => ('+', AppColors.accentStrong),
   };
 
   @override

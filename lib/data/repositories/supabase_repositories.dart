@@ -9,8 +9,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/external_actions.dart';
 import '../../core/phone_number.dart';
+import '../../core/request_id.dart';
 import '../app_settings.dart';
 import '../content_parser.dart';
+import '../loyalty_mapper.dart';
 import '../models.dart';
 import '../promotion_mapper.dart';
 import '../wallet_ledger_mapper.dart';
@@ -30,6 +32,7 @@ AppRepositories createSupabaseRepositories(
     wallet: SupabaseWalletRepository(client),
     notifications: SupabaseNotificationsRepository(client),
     promotions: SupabasePromotionsRepository(client),
+    loyalty: SupabaseLoyaltyRepository(client),
     isDemo: false,
   );
 }
@@ -107,30 +110,67 @@ class SupabaseAuthRepository implements AuthRepository {
         code: 'invalid_instagram_profile',
       );
     }
-    // Keep only the non-credential registration fields. Authorization and
-    // role/status assignment happen exclusively inside the server RPC after
-    // phone confirmation; raw_user_meta_data is intentionally not trusted.
+    final previousDraft = await _readPendingRegistration();
+    final registrationAttemptId = previousDraft?.phone == normalizedPhone
+        ? previousDraft!.registrationAttemptId
+        : _newRegistrationAttemptId();
+    // Keep only the non-credential registration fields. The opaque attempt ID
+    // lets the client distinguish a new/uninterrupted signup from an older
+    // unconfirmed Auth user, without relying on metadata for authorization.
+    // Role/status assignment still happens exclusively inside the server RPC.
     final draft = _PendingRegistrationDraft.fromRequest(
       request,
       normalizedPhone: normalizedPhone,
       locale: appSettings.language.name,
       instagramHandle: normalizedInstagram,
+      registrationAttemptId: registrationAttemptId,
     );
     await _writePendingRegistration(draft);
     _pendingRegistration = draft;
+    late final AuthResponse response;
     try {
-      await _guard(() async {
-        await _client.auth.signUp(
+      response = await _guard(() async {
+        return _client.auth.signUp(
           phone: normalizedPhone,
           password: request.password,
           channel: OtpChannel.sms,
+          data: {'registration_attempt_id': draft.registrationAttemptId},
         );
       });
-    } catch (_) {
+    } on BackendException catch (error) {
+      if (_isDuplicateAuthFailure(error)) {
+        await _clearPendingRegistration();
+        throw const BackendException(
+          'رقم الهاتف مسجل مسبقاً. سجل الدخول أو استخدم نسيت كلمة المرور.',
+          code: 'phone_already_registered',
+        );
+      }
       // The request may have reached Auth even when the response was lost.
       // Keeping the verified encrypted draft makes retrying or completing the
       // already-sent OTP safe; it expires automatically after 24 hours.
       rethrow;
+    }
+    // With both phone and email confirmation enabled, Supabase deliberately
+    // returns an obfuscated user instead of `user_already_exists`. The stable
+    // signal on that response is a present-but-empty identities collection.
+    // Treat only that exact shape as a duplicate; `null` is retained for
+    // compatibility with older GoTrue responses and test doubles.
+    final identities = response.user?.identities;
+    final returnedAttemptId = response
+        .user
+        ?.userMetadata?['registration_attempt_id']
+        ?.toString();
+    final isObfuscatedConfirmedUser = identities != null && identities.isEmpty;
+    final isOlderUnconfirmedUser =
+        identities != null &&
+        identities.isNotEmpty &&
+        returnedAttemptId != draft.registrationAttemptId;
+    if (isObfuscatedConfirmedUser || isOlderUnconfirmedUser) {
+      await _clearPendingRegistration();
+      throw const BackendException(
+        'رقم الهاتف مسجل مسبقاً. سجل الدخول أو استخدم نسيت كلمة المرور.',
+        code: 'phone_already_registered',
+      );
     }
   }
 
@@ -607,6 +647,7 @@ class _PendingRegistrationDraft {
     required this.termsVersion,
     required this.locale,
     required this.createdAt,
+    required this.registrationAttemptId,
     this.instagramHandle,
     this.referralCode,
   });
@@ -616,6 +657,7 @@ class _PendingRegistrationDraft {
     required String normalizedPhone,
     required String locale,
     required String? instagramHandle,
+    required String registrationAttemptId,
   }) => _PendingRegistrationDraft(
     phone: normalizedPhone,
     fullName: request.fullName,
@@ -624,6 +666,7 @@ class _PendingRegistrationDraft {
     termsVersion: request.termsVersion,
     locale: locale,
     createdAt: DateTime.now().toUtc(),
+    registrationAttemptId: registrationAttemptId,
     instagramHandle: instagramHandle,
     referralCode: _normalizeReferralCode(request.referralCode),
   );
@@ -649,6 +692,9 @@ class _PendingRegistrationDraft {
       createdAt:
           DateTime.tryParse(json['created_at'] as String? ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
+      registrationAttemptId:
+          _nullableText(json['registration_attempt_id']) ??
+          _newRegistrationAttemptId(),
       instagramHandle: normalizedInstagram,
       referralCode: _normalizeReferralCode(json['referral_code']?.toString()),
     );
@@ -661,6 +707,7 @@ class _PendingRegistrationDraft {
   final String termsVersion;
   final String locale;
   final DateTime createdAt;
+  final String registrationAttemptId;
   final String? instagramHandle;
   final String? referralCode;
 
@@ -672,6 +719,7 @@ class _PendingRegistrationDraft {
     'terms_version': termsVersion,
     'locale': locale,
     'created_at': createdAt.toIso8601String(),
+    'registration_attempt_id': registrationAttemptId,
     'instagram_handle': instagramHandle,
     'referral_code': referralCode,
   };
@@ -680,6 +728,12 @@ class _PendingRegistrationDraft {
 String? _normalizeReferralCode(String? value) {
   final normalized = value?.trim().toUpperCase() ?? '';
   return normalized.isEmpty ? null : normalized;
+}
+
+String _newRegistrationAttemptId() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(24, (_) => random.nextInt(256));
+  return base64UrlEncode(bytes).replaceAll('=', '');
 }
 
 class _PasswordRecoveryGate {
@@ -706,6 +760,9 @@ class _PasswordRecoveryGate {
 class SupabaseProfileRepository implements ProfileRepository {
   SupabaseProfileRepository(this._client);
 
+  static const _avatarBucket = 'profile-avatars';
+  static const _maxAvatarBytes = 5 * 1024 * 1024;
+
   final SupabaseClient _client;
 
   @override
@@ -716,7 +773,7 @@ class SupabaseProfileRepository implements ProfileRepository {
         .select()
         .eq('id', userId)
         .single();
-    return _sellerFromJson(_map(row));
+    return _sellerFromJson(_client, _map(row));
   });
 
   @override
@@ -724,6 +781,7 @@ class SupabaseProfileRepository implements ProfileRepository {
     required String name,
     required String storeName,
     required String instagramUrl,
+    ProfileAvatarChange? avatarChange,
   }) async => _guard(() async {
     final normalizedInstagram = instagramUrl.trim().isEmpty
         ? ''
@@ -735,21 +793,82 @@ class SupabaseProfileRepository implements ProfileRepository {
       );
     }
     final userId = _requireUserId(_client);
-    final row = await _client
+    final current = await _client
         .from('profiles')
-        .update({
-          'full_name': name,
-          'store_name': storeName,
-          'instagram_handle': normalizedInstagram.isEmpty
-              ? null
-              : normalizedInstagram,
-          'locale': appSettings.language.name,
-        })
+        .select('avatar_path')
         .eq('id', userId)
-        .select()
         .single();
-    return _sellerFromJson(_map(row));
+    final previousAvatarPath = _text(_map(current)['avatar_path']);
+    String? uploadedAvatarPath;
+    final updates = <String, dynamic>{
+      'full_name': name,
+      'store_name': storeName,
+      'instagram_handle': normalizedInstagram.isEmpty
+          ? null
+          : normalizedInstagram,
+      'locale': appSettings.language.name,
+    };
+
+    if (avatarChange?.type == ProfileAvatarChangeType.replace) {
+      final bytes = avatarChange!.bytes!;
+      final mimeType = _normalizedAvatarMimeType(avatarChange.mimeType);
+      if (bytes.isEmpty || bytes.length > _maxAvatarBytes) {
+        throw const BackendException(
+          'حجم صورة الحساب يجب ألا يتجاوز 5 ميغابايت.',
+          code: 'avatar_too_large',
+        );
+      }
+      final extension = _avatarExtension(mimeType);
+      uploadedAvatarPath = 'profiles/$userId/${newUuidV4()}.$extension';
+      await _client.storage
+          .from(_avatarBucket)
+          .uploadBinary(
+            uploadedAvatarPath,
+            bytes,
+            fileOptions: FileOptions(
+              cacheControl: '31536000',
+              upsert: false,
+              contentType: mimeType,
+            ),
+          );
+      updates['avatar_path'] = uploadedAvatarPath;
+    } else if (avatarChange?.type == ProfileAvatarChangeType.remove) {
+      updates['avatar_path'] = null;
+    }
+
+    Object? row;
+    try {
+      row = await _client
+          .from('profiles')
+          .update(updates)
+          .eq('id', userId)
+          .select()
+          .single();
+    } catch (_) {
+      if (uploadedAvatarPath != null) {
+        await _removeAvatarBestEffort(uploadedAvatarPath);
+      }
+      rethrow;
+    }
+
+    final next = _sellerFromJson(_client, _map(row));
+    final replacedOrRemoved = avatarChange != null;
+    if (replacedOrRemoved &&
+        previousAvatarPath.isNotEmpty &&
+        previousAvatarPath != next.avatarPath) {
+      await _removeAvatarBestEffort(previousAvatarPath);
+    }
+    return next;
   });
+
+  Future<void> _removeAvatarBestEffort(String objectPath) async {
+    try {
+      await _client.storage.from(_avatarBucket).remove([objectPath]);
+    } catch (_) {
+      // The profile already points at the new image (or no image). A stale
+      // object can be removed by a maintenance job without undoing the save.
+    }
+  }
 
   @override
   Future<Seller> updateSettings({
@@ -766,7 +885,7 @@ class SupabaseProfileRepository implements ProfileRepository {
         .eq('id', userId)
         .select()
         .single();
-    return _sellerFromJson(_map(row));
+    return _sellerFromJson(_client, _map(row));
   });
 
   @override
@@ -822,6 +941,10 @@ class SupabaseCatalogRepository implements CatalogRepository {
   static const _catalogPageSize = 200;
   static const _relatedPageSize = 500;
   static const _productIdChunkSize = 40;
+  static const _categoryColumns = '''
+    id, slug, name_ar, name_ckb, name_en, image_path, sort_order,
+    sticker_key, is_active
+  ''';
   static const _productColumns = '''
     id, category_id, name_ar, name_ckb, name_en,
     description_ar, description_ckb, description_en, specifications,
@@ -847,7 +970,7 @@ class SupabaseCatalogRepository implements CatalogRepository {
       await _readRetry.run(
         () => _client
             .from('categories')
-            .select()
+            .select(_categoryColumns)
             .eq('is_active', true)
             .order('sort_order')
             .retry(enabled: false),
@@ -869,7 +992,15 @@ class SupabaseCatalogRepository implements CatalogRepository {
           nameAr: _text(row['name_ar']),
           nameCkb: _nullableText(row['name_ckb']),
           nameEn: _nullableText(row['name_en']),
-          icon: _categoryIcon(_text(row['slug'])),
+          stickerKey: categoryStickerKeyFromWire(row['sticker_key']),
+          icon: _categoryIcon(
+            [
+              _text(row['slug']),
+              _text(row['name_ar']),
+              _text(row['name_ckb']),
+              _text(row['name_en']),
+            ].join(' '),
+          ),
           imageUrl: urls['catalog-media|${_text(row['image_path'])}'] ?? '',
         ),
     ];
@@ -1140,25 +1271,30 @@ class SupabaseCatalogRepository implements CatalogRepository {
   });
 
   @override
-  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) async =>
-      _guard(() async {
-        final row = _singleMap(
-          await _readRetry.run(
-            () => _client.rpc(
-              'quote_delivery_fee',
-              params: {'p_delivery_zone_id': deliveryZoneId},
-            ),
-          ),
-        );
-        return DeliveryQuote(
-          baseDeliveryFee: _int(row['base_delivery_fee']),
-          deliveryFee: _int(row['delivery_fee']),
-          deliveryDiscount: _int(row['delivery_discount']),
-          freeDeliveryReason: _nullableText(row['free_delivery_reason']),
-          campaignName: _nullableText(row['campaign_name']),
-          validUntil: _dateOrNull(row['valid_until']),
-        );
-      });
+  Future<DeliveryQuote> quoteDeliveryFee(
+    String deliveryZoneId, {
+    required int orderSubtotal,
+  }) async => _guard(() async {
+    final row = _singleMap(
+      await _readRetry.run(
+        () => _client.rpc(
+          'quote_delivery_fee',
+          params: {
+            'p_delivery_zone_id': deliveryZoneId,
+            'p_order_sale_total': orderSubtotal,
+          },
+        ),
+      ),
+    );
+    return DeliveryQuote(
+      baseDeliveryFee: _int(row['base_delivery_fee']),
+      deliveryFee: _int(row['delivery_fee']),
+      deliveryDiscount: _int(row['delivery_discount']),
+      freeDeliveryReason: _nullableText(row['free_delivery_reason']),
+      campaignName: _nullableText(row['campaign_name']),
+      validUntil: _dateOrNull(row['valid_until']),
+    );
+  });
 
   @override
   Future<PublicContentSnapshot> fetchPublicContent() async => _guard(() async {
@@ -1725,7 +1861,7 @@ class SupabaseNotificationsRepository implements NotificationsRepository {
           .order('created_at', ascending: false)
           .limit(200),
     );
-    return rows.map(_notificationFromJson).toList();
+    return rows.map((row) => _notificationFromJson(_client, row)).toList();
   });
 
   @override
@@ -1928,24 +2064,116 @@ class SupabasePromotionsRepository implements PromotionsRepository {
   }
 }
 
-Seller _sellerFromJson(Map<String, dynamic> row) => Seller(
-  id: _text(row['id']),
-  name: _text(row['full_name']),
-  phone: _text(row['display_phone']),
-  storeName: _text(row['store_name']),
-  instagramUrl: _text(row['instagram_handle']),
-  governorateId: _text(row['governorate']),
-  status: _accountStatus(_text(row['status'])),
-  joinedAt: _date(row['created_at']),
-  statusReason: _nullableText(row['review_reason']),
-  referralCode: _nullableText(row['referral_code']),
-  referredBy: _nullableText(row['referred_by']),
-  activatedAt: _dateOrNull(row['activated_at']),
-  locale: _text(row['locale'], fallback: 'ar'),
-  notificationPreferences: _jsonMap(
-    row['notification_preferences'],
-  ).map((key, value) => MapEntry(key, _bool(value))),
-);
+class SupabaseLoyaltyRepository implements LoyaltyRepository {
+  SupabaseLoyaltyRepository(this._client);
+
+  final SupabaseClient _client;
+
+  @override
+  Future<LoyaltySummary> fetchLoyaltySummary() async {
+    try {
+      return await _guard(() async {
+        final value = await _client.rpc('get_my_loyalty_summary');
+        return loyaltySummaryFromRpc(value);
+      });
+    } on BackendException catch (error) {
+      if (_isMissingBackendFeature(error)) {
+        return const LoyaltySummary.disabled();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Stream<void> watchLoyaltyChanges() {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return const Stream<void>.empty();
+
+    late RealtimeChannel channel;
+    late final StreamController<void> controller;
+    controller = StreamController<void>.broadcast(
+      onListen: () {
+        void emit() {
+          if (!controller.isClosed) controller.add(null);
+        }
+
+        channel = _client
+            .channel('phone-loyalty-${DateTime.now().microsecondsSinceEpoch}')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'seller_points_ledger',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'seller_id',
+                value: userId,
+              ),
+              callback: (_) => emit(),
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'loyalty_program_settings',
+              callback: (_) => emit(),
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'promotions',
+              callback: (_) => emit(),
+            )
+            .subscribe();
+      },
+      onCancel: () async {
+        await _client.removeChannel(channel);
+      },
+    );
+    return controller.stream;
+  }
+}
+
+String _normalizedAvatarMimeType(String? value) {
+  final mimeType = value?.trim().toLowerCase().split(';').first ?? '';
+  if (const {'image/jpeg', 'image/png', 'image/webp'}.contains(mimeType)) {
+    return mimeType;
+  }
+  throw const BackendException(
+    'صيغة صورة الحساب غير مدعومة. استخدم JPG أو PNG أو WebP.',
+    code: 'invalid_avatar_type',
+  );
+}
+
+String _avatarExtension(String mimeType) => switch (mimeType) {
+  'image/png' => 'png',
+  'image/webp' => 'webp',
+  _ => 'jpg',
+};
+
+Seller _sellerFromJson(SupabaseClient client, Map<String, dynamic> row) {
+  final avatarPath = _text(row['avatar_path']);
+  return Seller(
+    id: _text(row['id']),
+    name: _text(row['full_name']),
+    phone: _text(row['display_phone']),
+    storeName: _text(row['store_name']),
+    instagramUrl: _text(row['instagram_handle']),
+    governorateId: _text(row['governorate']),
+    status: _accountStatus(_text(row['status'])),
+    joinedAt: _date(row['created_at']),
+    statusReason: _nullableText(row['review_reason']),
+    referralCode: _nullableText(row['referral_code']),
+    referredBy: _nullableText(row['referred_by']),
+    activatedAt: _dateOrNull(row['activated_at']),
+    avatarPath: avatarPath,
+    avatarUrl: avatarPath.isEmpty
+        ? ''
+        : _authenticatedStorageObjectUrl(client, 'profile-avatars', avatarPath),
+    locale: _text(row['locale'], fallback: 'ar'),
+    notificationPreferences: _jsonMap(
+      row['notification_preferences'],
+    ).map((key, value) => MapEntry(key, _bool(value))),
+  );
+}
 
 AccountDeletionRequest _accountDeletionFromJson(Map<String, dynamic> row) =>
     AccountDeletionRequest(
@@ -2244,13 +2472,24 @@ WithdrawalSourceLine _withdrawalSourceFromJson(Map<String, dynamic> row) =>
       createdAt: _date(row['created_at']),
     );
 
-AppNotification _notificationFromJson(Map<String, dynamic> row) {
+AppNotification _notificationFromJson(
+  SupabaseClient client,
+  Map<String, dynamic> row,
+) {
   final payload = _jsonMap(row['payload']);
   final showInbox = row['show_inbox'] ?? payload['show_inbox'];
+  final imageBucket = _nullableText(payload['image_bucket']);
+  final imagePath = _nullableText(payload['image_path']);
+  final explicitImageUrl = _safeHttpsUrl(payload['image_url']);
+  final imageUrl =
+      explicitImageUrl ??
+      (imageBucket != null && imagePath != null
+          ? _authenticatedStorageObjectUrl(client, imageBucket, imagePath)
+          : null);
   return AppNotification(
     id: _text(row['id']),
-    title: _localized(row, 'title'),
-    body: _localized(row, 'body'),
+    title: _compactNotificationText(_localized(row, 'title')),
+    body: _compactNotificationText(_localized(row, 'body')),
     type: switch (_text(row['notification_type'])) {
       final type when type.contains('order') => NotificationType.order,
       final type when type.contains('wallet') || type.contains('withdrawal') =>
@@ -2290,7 +2529,31 @@ AppNotification _notificationFromJson(Map<String, dynamic> row) {
     expiresAt: _dateOrNull(row['expires_at'] ?? payload['expires_at']),
     deepLink:
         _nullableText(row['deep_link']) ?? _nullableText(payload['deep_link']),
+    imageUrl: imageUrl,
+    imageAlt: _localizedPayloadText(payload, 'image_alt'),
   );
+}
+
+String _compactNotificationText(String value) =>
+    value.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+String? _safeHttpsUrl(dynamic value) {
+  final text = _nullableText(value);
+  if (text == null || text.length > 4096) return null;
+  final uri = Uri.tryParse(text);
+  return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty
+      ? uri.toString()
+      : null;
+}
+
+String? _localizedPayloadText(Map<String, dynamic> payload, String field) {
+  final locale = switch (appSettings.language) {
+    AppLanguage.ckb => 'ckb',
+    AppLanguage.en => 'en',
+    AppLanguage.ar => 'ar',
+  };
+  return _nullableText(payload['${field}_$locale']) ??
+      _nullableText(payload['${field}_ar']);
 }
 
 Map<String, String> _resolveAuthenticatedMediaUrls(
@@ -2346,14 +2609,68 @@ OrderStatus _orderStatus(String value) => switch (value) {
   _ => OrderStatus.pendingReview,
 };
 
-IconData _categoryIcon(String slug) {
-  if (slug.contains('watch') || slug.contains('ساع')) return Icons.watch;
-  if (slug.contains('glass') || slug.contains('نظر')) {
-    return Icons.visibility_outlined;
+IconData _categoryIcon(String identity) {
+  final value = identity.toLowerCase();
+  for (final rule in _categoryIconRules) {
+    if (_containsAnyText(value, rule.$1)) return rule.$2;
   }
-  if (slug.contains('access')) return Icons.diamond_outlined;
   return Icons.category_outlined;
 }
+
+const List<(List<String>, IconData)> _categoryIconRules = [
+  (
+    ['هاتف', 'موبايل', 'جوال', 'phone', 'mobile', 'مۆبایل'],
+    Icons.smartphone_rounded,
+  ),
+  (['لابتوب', 'laptop', 'notebook'], Icons.laptop_mac_rounded),
+  (
+    ['حاسب', 'كمبيوتر', 'computer', 'desktop', 'کۆمپیوتەر'],
+    Icons.desktop_windows_rounded,
+  ),
+  (['تابلت', 'لوحي', 'tablet', 'ipad'], Icons.tablet_mac_rounded),
+  (['تلفاز', 'تلفزيون', 'شاشة', 'tv', 'television'], Icons.tv_rounded),
+  (['كاميرا', 'camera', 'تصوير'], Icons.photo_camera_rounded),
+  (
+    ['سماعة', 'سماعات', 'صوت', 'audio', 'headphone', 'speaker'],
+    Icons.headphones_rounded,
+  ),
+  (
+    ['gaming', 'game console', 'ألعاب إلكترونية', 'العاب إلكترونية'],
+    Icons.sports_esports_rounded,
+  ),
+  (['راوتر', 'شبكات', 'network', 'wifi', 'router'], Icons.wifi_rounded),
+  (['شاحن', 'كابل', 'charger', 'cable'], Icons.electrical_services_rounded),
+  (['أجهزة منزلية', 'اجهزة منزلية', 'appliances'], Icons.kitchen_rounded),
+  (
+    ['إلكترون', 'الكترون', 'electronics', 'devices', 'أجهزة'],
+    Icons.memory_rounded,
+  ),
+  (['أثاث', 'اثاث', 'furniture'], Icons.chair_rounded),
+  (['منزل', 'home', 'house'], Icons.home_rounded),
+  (['حقائب', 'حقيبة', 'bags', 'bag'], Icons.shopping_bag_rounded),
+  (['أحذية', 'احذية', 'حذاء', 'shoes', 'footwear'], Icons.hiking_rounded),
+  (['تجميل', 'عناية', 'beauty', 'cosmetic'], Icons.palette_rounded),
+  (['ملابس', 'أزياء', 'ازياء', 'fashion', 'clothes'], Icons.checkroom_rounded),
+  (['watch', 'ساع', 'کاتژمێر'], Icons.watch_rounded),
+  (['glass', 'نظر', 'چاویلکە'], Icons.visibility_outlined),
+  (['access', 'اكسس', 'إكسس', 'ئێکسس'], Icons.diamond_outlined),
+  (['رياض', 'sport', 'fitness'], Icons.fitness_center_rounded),
+  (['ألعاب أطفال', 'العاب اطفال', 'toys'], Icons.toys_rounded),
+  (['كتب', 'كتاب', 'books'], Icons.menu_book_rounded),
+  (['حيوانات', 'pets'], Icons.pets_rounded),
+  (['سيارات', 'سيارة', 'automotive', 'car'], Icons.directions_car_rounded),
+  (['أدوات', 'ادوات', 'معدات', 'tools'], Icons.build_rounded),
+  (['بقالة', 'grocery'], Icons.shopping_basket_rounded),
+  (['أطعمة', 'اطعمة', 'طعام', 'food'], Icons.restaurant_rounded),
+  (['صحة', 'health', 'medical'], Icons.health_and_safety_rounded),
+  (['مكتب', 'مكتبية', 'office'], Icons.business_center_rounded),
+  (['سفر', 'رحلات', 'travel'], Icons.luggage_rounded),
+  (['gift', 'box', 'علب', 'تغليف'], Icons.inventory_2_outlined),
+  (['smart', 'ذكي', 'زیرەک'], Icons.devices_rounded),
+];
+
+bool _containsAnyText(String value, List<String> needles) =>
+    needles.any(value.contains);
 
 String _providerCode(String label) {
   final value = label.toLowerCase();
@@ -2475,6 +2792,21 @@ bool _isMissingBackendFeature(BackendException error) {
       message.contains('schema cache');
 }
 
+bool _isDuplicateAuthFailure(BackendException error) {
+  const duplicateCodes = {
+    'phone_already_registered',
+    'phone_exists',
+    'user_already_exists',
+  };
+  if (duplicateCodes.contains(error.code)) return true;
+  final cause = error.cause;
+  final rawMessage = cause is AuthException ? cause.message : error.message;
+  final message = rawMessage.toLowerCase();
+  return message.contains('already registered') ||
+      message.contains('user already exists') ||
+      message.contains('phone exists');
+}
+
 Future<T> _guard<T>(Future<T> Function() action) async {
   try {
     return await action();
@@ -2482,7 +2814,7 @@ Future<T> _guard<T>(Future<T> Function() action) async {
     rethrow;
   } on AuthException catch (error) {
     throw BackendException(
-      _authMessage(error.message),
+      _authMessage(error.message, code: error.code),
       code: error.code ?? error.statusCode,
       cause: error,
     );
@@ -2586,8 +2918,11 @@ String _postgrestMessage(PostgrestException error) {
   return 'تعذر تنفيذ العملية على الخادم. حاول مرة أخرى.';
 }
 
-String _authMessage(String message) {
+String _authMessage(String message, {String? code}) {
   final normalized = message.toLowerCase();
+  if (code == 'user_already_exists') {
+    return 'رقم الهاتف مسجل مسبقاً. سجل الدخول أو استخدم نسيت كلمة المرور.';
+  }
   if (normalized.contains('invalid login credentials')) {
     return 'رقم الهاتف أو كلمة المرور غير صحيحة.';
   }
@@ -2595,7 +2930,7 @@ String _authMessage(String message) {
     return 'رمز التحقق غير صحيح أو انتهت صلاحيته.';
   }
   if (normalized.contains('already registered')) {
-    return 'رقم الهاتف مسجل مسبقاً.';
+    return 'رقم الهاتف مسجل مسبقاً. سجل الدخول أو استخدم نسيت كلمة المرور.';
   }
   if (normalized.contains('rate limit')) {
     return 'محاولات كثيرة. انتظر قليلاً ثم حاول مجدداً.';

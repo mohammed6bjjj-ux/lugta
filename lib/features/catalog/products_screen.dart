@@ -192,7 +192,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                     prefixIcon: Icon(
                                       Icons.search_rounded,
                                       size: 21,
-                                      color: AppColors.goldDark,
+                                      color: AppColors.accentStrong,
                                     ),
                                     suffixIcon: _query.isEmpty
                                         ? null
@@ -353,7 +353,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                   vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.goldSoft,
+                                  color: AppColors.accentSoft,
                                   borderRadius: BorderRadius.circular(100),
                                 ),
                                 child: Text(
@@ -362,7 +362,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                   ),
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     fontWeight: FontWeight.w800,
-                                    color: AppColors.goldDark,
+                                    color: AppColors.accentStrong,
                                   ),
                                 ),
                               ),
@@ -454,8 +454,8 @@ class _CircleBubble extends StatelessWidget {
         child: Badge(
           isLabelVisible: badgeCount > 0,
           label: Text('$badgeCount', style: const TextStyle(fontSize: 9)),
-          backgroundColor: AppColors.goldDark,
-          textColor: Colors.white,
+          backgroundColor: AppColors.accent,
+          textColor: AppColors.onAccent,
           child: Icon(icon, size: 21, color: AppColors.textPrimary),
         ),
       ),
@@ -501,7 +501,7 @@ class _FilterBarButton extends StatelessWidget {
             Icon(
               icon,
               size: 17,
-              color: active ? AppColors.gold : AppColors.textSecondary,
+              color: active ? AppColors.accent : AppColors.textSecondary,
             ),
             const SizedBox(width: 5),
             Flexible(
@@ -510,7 +510,9 @@ class _FilterBarButton extends StatelessWidget {
                 style: (theme.textTheme.labelMedium ?? const TextStyle())
                     .copyWith(
                       fontWeight: FontWeight.w800,
-                      color: active ? Colors.white : AppColors.textPrimary,
+                      color: active
+                          ? AppColors.onPrimary
+                          : AppColors.textPrimary,
                     ),
                 child: Text(
                   label,
@@ -525,7 +527,7 @@ class _FilterBarButton extends StatelessWidget {
                 width: 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: AppColors.gold,
+                  color: AppColors.accent,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -604,7 +606,7 @@ class _OptionsSheet<T> extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: option.value == selected
-                          ? AppColors.goldSoft
+                          ? AppColors.accentSoft
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
@@ -616,7 +618,7 @@ class _OptionsSheet<T> extends StatelessWidget {
                               : Icons.radio_button_off_rounded,
                           size: 22,
                           color: option.value == selected
-                              ? AppColors.goldDark
+                              ? AppColors.accentStrong
                               : AppColors.textSecondary,
                         ),
                         const SizedBox(width: AppSpacing.sm),

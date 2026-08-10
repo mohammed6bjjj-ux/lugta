@@ -133,12 +133,12 @@ class OtpCodeInputState extends State<OtpCodeInput> {
                             borderRadius: BorderRadius.circular(AppRadius.sm),
                             border: Border.all(
                               color: _nodes[i].hasFocus
-                                  ? AppColors.gold
+                                  ? AppColors.accent
                                   : Colors.transparent,
                               width: 1.6,
                             ),
                             boxShadow: _nodes[i].hasFocus
-                                ? AppShadows.goldGlow
+                                ? AppShadows.accentGlow
                                 : null,
                           ),
                           child: Center(

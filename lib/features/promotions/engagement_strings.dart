@@ -25,7 +25,7 @@ class EngagementStrings {
   static String get share => t('مشاركة', 'بلاوکردنەوە', 'Share');
   static String shareMessage(String code) => t(
     'استخدم رمز دعوتي $code عند إنشاء حسابك في لكطة.',
-    'لەکاتی دروستکردنی هەژماری لُگطة کۆدی $code بەکاربهێنە.',
+    'لەکاتی دروستکردنی هەژماری لكطة کۆدی $code بەکاربهێنە.',
     'Use my referral code $code when creating your Lugta account.',
   );
   static String get invited => t('المدعوون', 'بانگهێشتکراوەکان', 'Invited');

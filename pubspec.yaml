@@ -1,5 +1,5 @@
 name: flutter_app
-description: "Lugta — لُگطة mobile commerce app."
+description: "Lugta — لكطة mobile commerce app."
 publish_to: 'none'
 version: 0.1.9+11
 
@@ -20,6 +20,7 @@ dependencies:
   flutter_cache_manager: 3.4.2
   gal: 2.3.3
   intl: 0.20.2
+  image_picker: 1.2.3
   path_provider: 2.1.6
   share_plus: 13.3.0
   shared_preferences: 2.5.5
@@ -41,16 +42,11 @@ flutter:
   assets:
     - assets/branding/
   fonts:
-    - family: IBMPlexSansArabic
+    - family: Zain
       fonts:
-        - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
+        - asset: assets/fonts/Zain-ExtraLight.ttf
+          weight: 200
+        - asset: assets/fonts/Zain-Regular.ttf
           weight: 400
-        - asset: assets/fonts/IBMPlexSansArabic-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/IBMPlexSansArabic-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
+        - asset: assets/fonts/Zain-Bold.ttf
           weight: 700
-    - family: SpaceGrotesk
-      fonts:
-        - asset: assets/fonts/SpaceGrotesk-Variable.ttf

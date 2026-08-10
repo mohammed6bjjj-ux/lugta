@@ -192,7 +192,7 @@ class _PayoutAccountsScreenState extends State<PayoutAccountsScreen> {
                 child: PrimaryButton(
                   label: WalletStrings.addPayoutAccount,
                   icon: Icons.add_card_rounded,
-                  gold: true,
+                  accented: true,
                   onPressed: _openEditor,
                 ),
               ),
@@ -211,11 +211,11 @@ class _VerificationNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      color: AppColors.goldSoft,
+      color: AppColors.accentSoft,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.verified_user_outlined, color: AppColors.goldDark),
+          Icon(Icons.verified_user_outlined, color: AppColors.accentStrong),
           const SizedBox(width: AppSpacing.sm + 2),
           Expanded(
             child: Column(
@@ -319,12 +319,14 @@ class _PayoutAccountCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: verified ? AppColors.successSoft : AppColors.goldSoft,
+                  color: verified
+                      ? AppColors.successSoft
+                      : AppColors.accentSoft,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   verified ? Icons.verified_rounded : Icons.schedule_rounded,
-                  color: verified ? AppColors.success : AppColors.goldDark,
+                  color: verified ? AppColors.success : AppColors.accentStrong,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm + 2),
@@ -407,10 +409,10 @@ class _PayoutAccountCard extends StatelessWidget {
                 label: verified
                     ? WalletStrings.verifiedPayoutAccount
                     : WalletStrings.awaitingVerification,
-                color: verified ? AppColors.success : AppColors.goldDark,
+                color: verified ? AppColors.success : AppColors.accentStrong,
                 background: verified
                     ? AppColors.successSoft
-                    : AppColors.goldSoft,
+                    : AppColors.accentSoft,
               ),
               if (account.isDefault)
                 _AccountBadge(
@@ -682,7 +684,7 @@ class _PayoutAccountEditorSheetState extends State<PayoutAccountEditorSheet> {
                     ? WalletStrings.savePayoutAccount
                     : WalletStrings.savePayoutAccountChanges,
                 icon: Icons.verified_user_outlined,
-                gold: true,
+                accented: true,
                 loading: _saving,
                 onPressed: _save,
               ),

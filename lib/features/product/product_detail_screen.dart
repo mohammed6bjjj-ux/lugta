@@ -210,13 +210,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(color: AppColors.gold, width: 2),
+                    border: Border.all(color: AppColors.accent, width: 2),
                     boxShadow: AppShadows.floating,
                   ),
                   child: _cartFlightImageUrl.isEmpty
                       ? Icon(
                           Icons.shopping_bag_outlined,
-                          color: AppColors.goldDark,
+                          color: AppColors.accentStrong,
                         )
                       : AppNetworkImage(
                           _cartFlightImageUrl,
@@ -264,7 +264,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 ),
                 child: Icon(
                   Icons.check_rounded,
-                  color: AppColors.onGold,
+                  color: AppColors.onAccent,
                   size: 24,
                 ),
               ),
@@ -300,7 +300,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
           ),
           action: SnackBarAction(
             label: CartStrings.viewCart,
-            textColor: AppColors.gold,
+            textColor: AppColors.accent,
             onPressed: () => Navigator.of(context).pushNamed(Routes.cart),
           ),
         ),
@@ -406,8 +406,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       child: Badge(
                         isLabelVisible: session.cartQuantity > 0,
                         label: Text(formatNumber(session.cartQuantity)),
-                        backgroundColor: AppColors.goldDark,
-                        textColor: AppColors.onGold,
+                        backgroundColor: AppColors.accent,
+                        textColor: AppColors.onAccent,
                         child: Icon(
                           Icons.shopping_cart_outlined,
                           size: 21,
@@ -483,13 +483,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ).colorScheme.scrim.withValues(alpha: .4),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: AppColors.onGold.withValues(alpha: .55),
+                            color: AppColors.onAccent.withValues(alpha: .55),
                             width: 1.2,
                           ),
                         ),
                         child: Icon(
                           Icons.play_arrow_rounded,
-                          color: AppColors.onGold,
+                          color: AppColors.onAccent,
                           size: 42,
                         ),
                       ),
@@ -530,12 +530,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: AppColors.onGold),
+          Icon(icon, size: 14, color: AppColors.onAccent),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              color: AppColors.onGold,
+              color: AppColors.onAccent,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -561,7 +561,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             width: i == _currentPage ? 22 : 7,
             height: 7,
             decoration: BoxDecoration(
-              gradient: i == _currentPage ? AppColors.goldGradient : null,
+              gradient: i == _currentPage ? AppColors.accentGradient : null,
               color: i == _currentPage ? null : AppColors.divider,
               borderRadius: BorderRadius.circular(100),
             ),
@@ -747,14 +747,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
             decoration: BoxDecoration(
-              gradient: AppColors.goldGradient,
+              gradient: AppColors.accentGradient,
               borderRadius: BorderRadius.circular(100),
-              boxShadow: AppShadows.goldGlow,
+              boxShadow: AppShadows.accentGlow,
             ),
             child: Text(
               CoreStrings.badgeNew,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: AppColors.onGold,
+                color: AppColors.onAccent,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -772,7 +772,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       shadows: [
         ...AppShadows.card,
         BoxShadow(
-          color: AppColors.gold.withValues(alpha: .14),
+          color: AppColors.accent.withValues(alpha: .14),
           blurRadius: 26,
           offset: const Offset(0, 12),
         ),
@@ -823,7 +823,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                 formatNumber(product.discountPercent),
                               ),
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: AppColors.onGold,
+                                color: Colors.white,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -832,19 +832,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // تدرج طباعي ذهبي كبير لسعر الجملة.
-                    ShaderMask(
-                      shaderCallback: (rect) =>
-                          AppColors.goldGradient.createShader(rect),
-                      blendMode: BlendMode.srcIn,
-                      child: Text(
-                        formatIqd(product.wholesalePrice),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.onGold,
-                        ),
+                    Text(
+                      formatIqd(product.wholesalePrice),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
                       ),
                     ),
                   ],
@@ -970,13 +964,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 vertical: AppSpacing.sm,
               ),
               decoration: BoxDecoration(
-                color: selected ? AppColors.goldSoft : AppColors.surface,
+                color: selected ? AppColors.accentSoft : AppColors.surface,
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(
-                  color: selected ? AppColors.gold : Colors.transparent,
+                  color: selected ? AppColors.accent : Colors.transparent,
                   width: 1.6,
                 ),
-                boxShadow: selected ? AppShadows.goldGlow : AppShadows.card,
+                boxShadow: selected ? AppShadows.accentGlow : AppShadows.card,
               ),
               child: Row(
                 children: [
@@ -1124,7 +1118,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       width: 7,
                       height: 7,
                       decoration: BoxDecoration(
-                        gradient: AppColors.goldGradient,
+                        gradient: AppColors.accentGradient,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -1169,7 +1163,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             width: 4,
             height: 18,
             decoration: BoxDecoration(
-              gradient: AppColors.goldGradient,
+              gradient: AppColors.accentGradient,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1191,18 +1185,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 vertical: 6,
               ),
               decoration: BoxDecoration(
-                color: AppColors.goldSoft,
+                color: AppColors.accentSoft,
                 borderRadius: BorderRadius.circular(100),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.copy_rounded, size: 15, color: AppColors.goldDark),
+                  Icon(
+                    Icons.copy_rounded,
+                    size: 15,
+                    color: AppColors.accentStrong,
+                  ),
                   const SizedBox(width: 5),
                   Text(
                     ProductStrings.copyDescription,
                     style: theme.textTheme.labelMedium?.copyWith(
-                      color: AppColors.goldDark,
+                      color: AppColors.accentStrong,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1264,7 +1262,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                     ),
                                     label: CartStrings.addToCart,
                                     icon: Icons.add_shopping_cart_rounded,
-                                    gold: true,
+                                    accented: true,
                                     onPressed: _addSelectedToCart,
                                   ),
                                 ),
@@ -1299,10 +1297,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         height: 56,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? AppColors.goldSoft : AppColors.surface,
+          color: active ? AppColors.accentSoft : AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: active ? AppColors.gold : AppColors.divider,
+            color: active ? AppColors.accent : AppColors.divider,
             width: active ? 1.6 : 1.2,
           ),
         ),
@@ -1320,7 +1318,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                     : Icons.notifications_none_rounded,
                 key: ValueKey(active),
                 size: 20,
-                color: active ? AppColors.goldDark : AppColors.textPrimary,
+                color: active ? AppColors.accentStrong : AppColors.textPrimary,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -1331,7 +1329,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: active ? AppColors.goldDark : AppColors.textPrimary,
+                  color: active
+                      ? AppColors.accentStrong
+                      : AppColors.textPrimary,
                 ),
               ),
             ),

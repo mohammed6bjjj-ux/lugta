@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/routes.dart';
 import '../../app/theme.dart';
@@ -57,7 +58,10 @@ class _SplashScreenState extends State<SplashScreen> {
       }
       await minimumDelay;
       if (!mounted) return;
-      if (!appBackend.auth.hasSession) {
+      if (session.isGuest) {
+        Navigator.pushReplacementNamed(context, Routes.shell);
+        _refreshPublicDataInBackground();
+      } else if (!appBackend.auth.hasSession) {
         Navigator.pushReplacementNamed(context, Routes.onboarding);
         _refreshPublicDataInBackground();
       } else {
@@ -99,81 +103,120 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: const Color(0xFF191713),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(color: Color(0xFF191713)),
-        child: SizedBox.expand(
-          child: SafeArea(
-            child: Column(
-              children: [
-                const Spacer(flex: 4),
-                const Entrance(child: LugtaWordmark(height: 74, inverse: true)),
-                const SizedBox(height: AppSpacing.lg),
-                Entrance(
-                  index: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xl,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: const Color(0xFF37379B),
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF37379B),
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            const PositionedDirectional(
+              top: -126,
+              end: -104,
+              child: _BrandOrbit(size: 286, color: Color(0xFFFCC803)),
+            ),
+            PositionedDirectional(
+              bottom: -174,
+              start: -152,
+              child: _BrandOrbit(
+                size: 350,
+                color: const Color(0xFFBEB8DA).withValues(alpha: .20),
+              ),
+            ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(28, 24, 28, 34),
+                child: Column(
+                  children: [
+                    const Spacer(flex: 4),
+                    const Entrance(
+                      child: LugtaWordmark(height: 86, inverse: true),
                     ),
-                    child: Text(
-                      AuthStrings.splashTagline,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFFFAF6ED),
-                        fontWeight: FontWeight.w500,
-                        height: 1.6,
+                    const SizedBox(height: AppSpacing.lg),
+                    Entrance(
+                      index: 1,
+                      child: Text(
+                        AuthStrings.splashTagline,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
+                    const Spacer(flex: 4),
+                    if (_startupError == null)
+                      const Entrance(index: 2, child: _SplashProgress())
+                    else
+                      Entrance(
+                        index: 2,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .10),
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsetsDirectional.all(16),
+                            child: Column(
+                              children: [
+                                Text(
+                                  AuthStrings.startupFailed,
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: Colors.white.withValues(alpha: .88),
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                FilledButton.icon(
+                                  key: const Key('startup-retry'),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFFFCC803),
+                                    foregroundColor: const Color(0xFF201D12),
+                                  ),
+                                  onPressed: _starting
+                                      ? null
+                                      : () => unawaited(_start()),
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: Text(AuthStrings.retryStartup),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                const Spacer(flex: 4),
-                if (_startupError == null)
-                  const Entrance(index: 2, child: _SplashProgress())
-                else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xl,
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          AuthStrings.startupFailed,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: const Color(
-                              0xFFFAF6ED,
-                            ).withValues(alpha: .72),
-                            height: 1.6,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        FilledButton.icon(
-                          key: const Key('startup-retry'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF1B9E6A),
-                            foregroundColor: Colors.white,
-                          ),
-                          onPressed: _starting
-                              ? null
-                              : () => unawaited(_start()),
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: Text(AuthStrings.retryStartup),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: AppSpacing.xxl),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// مؤشر تحميل رفيع بلون أخضر العلامة.
+class _BrandOrbit extends StatelessWidget {
+  const _BrandOrbit({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(color: color, width: 30),
+    ),
+  );
+}
+
+/// مؤشر تحميل رفيع بأصفر العلامة.
 class _SplashProgress extends StatelessWidget {
   const _SplashProgress();
 
@@ -181,12 +224,12 @@ class _SplashProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(100),
-      child: const SizedBox(
-        width: 132,
-        height: 4,
+      child: SizedBox(
+        width: 148,
+        height: 5,
         child: LinearProgressIndicator(
-          backgroundColor: Color(0x33FAF6ED),
-          color: Color(0xFF1B9E6A),
+          backgroundColor: Colors.white.withValues(alpha: .22),
+          color: const Color(0xFFFCC803),
         ),
       ),
     );

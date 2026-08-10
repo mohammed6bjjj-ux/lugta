@@ -181,11 +181,16 @@ class PushOpenEvent {
 
 /// Platform-neutral message data for foreground presentation.
 class PushMessage {
-  PushMessage({this.title, this.body, Map<String, dynamic> data = const {}})
-    : data = Map<String, dynamic>.unmodifiable(data);
+  PushMessage({
+    this.title,
+    this.body,
+    this.imageUrl,
+    Map<String, dynamic> data = const {},
+  }) : data = Map<String, dynamic>.unmodifiable(data);
 
   final String? title;
   final String? body;
+  final String? imageUrl;
   final Map<String, dynamic> data;
 
   PushOpenEvent get openEvent => PushOpenEvent.fromData(data);
@@ -202,6 +207,7 @@ class PushMessage {
     return jsonEncode({
       'title': title?.trim(),
       'body': body?.trim(),
+      'image_url': imageUrl?.trim(),
       'data': canonicalData,
     });
   }
@@ -603,13 +609,19 @@ class FirebasePushMessagingClient implements PushMessagingClient {
   Stream<String> get tokenRefreshes => _messaging.onTokenRefresh;
 
   @override
-  Stream<PushMessage> get foregroundMessages => FirebaseMessaging.onMessage.map(
-    (message) => PushMessage(
-      title: message.notification?.title,
-      body: message.notification?.body,
-      data: message.data,
-    ),
-  );
+  Stream<PushMessage> get foregroundMessages =>
+      FirebaseMessaging.onMessage.map((message) {
+        final dataImage = _firstPayloadText(message.data, const ['image_url']);
+        return PushMessage(
+          title: message.notification?.title,
+          body: message.notification?.body,
+          imageUrl:
+              message.notification?.android?.imageUrl ??
+              message.notification?.apple?.imageUrl ??
+              dataImage,
+          data: message.data,
+        );
+      });
 
   @override
   Stream<PushOpenEvent> get openedMessages => FirebaseMessaging

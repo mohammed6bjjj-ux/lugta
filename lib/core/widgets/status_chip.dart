@@ -16,28 +16,35 @@ class OrderStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 8 : 10,
-        vertical: compact ? 3 : 5,
-      ),
-      decoration: BoxDecoration(
-        color: status.softColor,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(status.icon, size: compact ? 14 : 16, color: status.color),
-          const SizedBox(width: 5),
-          Text(
-            status.labelAr,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: status.color,
-              fontWeight: FontWeight.w800,
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: compact ? 116 : 180),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 10,
+          vertical: compact ? 3 : 5,
+        ),
+        decoration: BoxDecoration(
+          color: status.softColor,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(status.icon, size: compact ? 14 : 16, color: status.color),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                status.labelAr,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: status.color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

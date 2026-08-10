@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_app/data/mock_data.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
 import 'package:flutter_app/data/session.dart';
+import 'package:flutter_app/core/widgets/app_network_image.dart';
 import 'package:flutter_app/features/promotions/promotion_notification_popup.dart';
 import 'package:flutter_app/features/promotions/promotions_screen.dart';
 import 'package:flutter_app/features/profile/notifications_screen.dart';
@@ -109,6 +111,80 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('هدية لك'), findsNothing);
   });
+
+  testWidgets(
+    'rich notification image works in popup and inbox at 320dp with large text',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      AppNetworkImage.debugImageProvider = (_) => MemoryImage(
+        base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        ),
+      );
+      addTearDown(() => AppNetworkImage.debugImageProvider = null);
+
+      final notification = AppNotification(
+        id: 'rich-promo',
+        title: 'عرض جديد مرتب وواضح',
+        body: 'افتح العرض وشاهد تفاصيل المنتج والسعر قبل انتهاء المدة.',
+        type: NotificationType.product,
+        at: _fixedDate,
+        imageUrl: 'https://example.test/product.webp',
+        imageAlt: 'صورة المنتج المشمول بالعرض',
+        showPopup: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: child!,
+            ),
+          ),
+          home: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => unawaited(
+                showPromotionNotificationPopup(context, notification),
+              ),
+              child: const Text('open rich'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open rich'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AppNetworkImage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(
+        find.byKey(const ValueKey('promotion_popup_close_icon')),
+      );
+      await tester.pumpAndSettle();
+      session.notifications = [notification];
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: child!,
+            ),
+          ),
+          home: const NotificationsScreen(),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(AppNetworkImage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('popup-only notification stays out of the durable inbox UI', (
     tester,

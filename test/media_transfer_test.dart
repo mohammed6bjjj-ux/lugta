@@ -11,16 +11,19 @@ void main() {
   // Anything that reaches the cache manager needs path_provider, so the actual
   // download/share round trip is only exercisable on a device. What is asserted
   // here is the contract the UI switches on.
-  test('an empty selection is a no-op rather than a reported success', () async {
-    final saved = await MediaTransfer.saveToGallery(const []);
-    expect(saved.succeeded, 0);
-    expect(saved.failed, 0);
-    expect(saved.isCompleteSuccess, isFalse);
+  test(
+    'an empty selection is a no-op rather than a reported success',
+    () async {
+      final saved = await MediaTransfer.saveToGallery(const []);
+      expect(saved.succeeded, 0);
+      expect(saved.failed, 0);
+      expect(saved.isCompleteSuccess, isFalse);
 
-    final shared = await MediaTransfer.share(const []);
-    expect(shared.succeeded, 0);
-    expect(shared.isCompleteSuccess, isFalse);
-  });
+      final shared = await MediaTransfer.share(const []);
+      expect(shared.succeeded, 0);
+      expect(shared.isCompleteSuccess, isFalse);
+    },
+  );
 
   test('a failed transfer is never reported as a success', () {
     const result = MediaTransferResult(succeeded: 0, failed: 3);

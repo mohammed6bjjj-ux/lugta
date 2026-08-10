@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import 'pressable.dart';
 
-/// الزر الأساسي الحديث: سطح داكن (أو تدرج ذهبي عبر [gold])،
+/// الزر الأساسي الحديث: سطح بنفسجي، أو تمييز أصفر عبر [accented].
 /// ظل ناعم، وتفاعل تصغير عند الضغط.
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
@@ -14,7 +14,7 @@ class PrimaryButton extends StatelessWidget {
     this.loading = false,
     this.expanded = true,
     this.color,
-    this.gold = false,
+    this.accented = false,
   });
 
   final String label;
@@ -24,15 +24,17 @@ class PrimaryButton extends StatelessWidget {
   final bool expanded;
   final Color? color;
 
-  /// نسخة ذهبية متدرجة بتوهج — للإجراءات المميزة.
-  final bool gold;
+  /// نسخة إبراز صفراء؛ تستخدم للمكافآت أو آخر إجراء في الرحلة فقط.
+  final bool accented;
 
   bool get _enabled => onPressed != null && !loading;
 
-  /// لون المحتوى: الذهبي/الملوّن أبيض دائماً، والافتراضي onPrimary
-  /// (أبيض في الفاتح، داكن على الزر العاجي في الوضع الداكن).
-  Color get _fg =>
-      gold || color != null || !_enabled ? Colors.white : AppColors.onPrimary;
+  Color get _fg {
+    if (!_enabled) return AppColors.textSecondary;
+    if (accented) return AppColors.onAccent;
+    if (color != null) return Colors.white;
+    return AppColors.onPrimary;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,17 +79,16 @@ class PrimaryButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: !_enabled
-              ? const Color(0xFFDDD8D0)
-              : gold
+              ? AppColors.disabledFill
+              : accented
               ? null
               : (color ?? AppColors.primary),
-          gradient: _enabled && gold ? AppColors.goldGradient : null,
-          // كبسولة كاملة الاستدارة — لغة أزرار نول.
-          borderRadius: BorderRadius.circular(100),
+          gradient: _enabled && accented ? AppColors.accentGradient : null,
+          borderRadius: BorderRadius.circular(AppRadius.md),
           boxShadow: !_enabled
               ? null
-              : gold
-              ? AppShadows.goldGlow
+              : accented
+              ? AppShadows.accentGlow
               : [
                   BoxShadow(
                     color: (color ?? AppColors.primary).withValues(alpha: .28),
@@ -138,7 +139,7 @@ class SecondaryButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: color?.withValues(alpha: .4) ?? AppColors.divider,
             width: 1.2,

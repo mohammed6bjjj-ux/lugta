@@ -26,9 +26,21 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
   late final AnimationController _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2200),
-  )..repeat();
+  );
 
   Order get order => widget.order;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulse
+        ..stop()
+        ..value = 0;
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -168,9 +180,9 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                               vertical: AppSpacing.sm + 4,
                             ),
                             decoration: BoxDecoration(
-                              gradient: AppColors.goldGradient,
+                              gradient: AppColors.accentGradient,
                               borderRadius: BorderRadius.circular(100),
-                              boxShadow: AppShadows.goldGlow,
+                              boxShadow: AppShadows.accentGlow,
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -182,16 +194,16 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.textTheme.titleLarge?.copyWith(
                                       fontWeight: FontWeight.w900,
-                                      color: Colors.white,
+                                      color: AppColors.onAccent,
                                       letterSpacing: .5,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.sm + 4),
-                                const Icon(
+                                Icon(
                                   Icons.copy_rounded,
                                   size: 20,
-                                  color: Colors.white,
+                                  color: AppColors.onAccent,
                                 ),
                               ],
                             ),
@@ -242,7 +254,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                       child: PrimaryButton(
                         label: WizardStrings.viewOrder,
                         icon: Icons.receipt_long_outlined,
-                        gold: true,
+                        accented: true,
                         onPressed: () =>
                             Navigator.of(context).pushReplacementNamed(
                               Routes.orderDetail,

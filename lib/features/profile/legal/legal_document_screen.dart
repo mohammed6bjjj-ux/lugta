@@ -78,7 +78,7 @@ class LegalDocumentScreen extends StatelessWidget {
                                     top: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.gold,
+                                    color: AppColors.accent,
                                     borderRadius: BorderRadius.circular(99),
                                   ),
                                 ),
@@ -168,7 +168,7 @@ class _DocumentHeader extends StatelessWidget {
 
     return AppCard(
       key: ValueKey('legal_document_header_$documentId'),
-      color: AppColors.goldSoft,
+      color: AppColors.accentSoft,
       shadows: const [],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -187,7 +187,7 @@ class _DocumentHeader extends StatelessWidget {
               child: Text(
                 'وثيقة قانونية',
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: AppColors.goldDark,
+                  color: AppColors.accentStrong,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -221,7 +221,7 @@ class _DocumentHeader extends StatelessWidget {
           Text(
             effectiveDate,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.goldDark,
+              color: AppColors.accentStrong,
               fontWeight: FontWeight.w700,
             ),
           ),

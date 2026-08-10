@@ -146,15 +146,17 @@ class _FreeDeliveryCatalogRepository implements CatalogRepository {
       _delegate.fetchStockAlertProductIds();
 
   @override
-  Future<DeliveryQuote> quoteDeliveryFee(String deliveryZoneId) async =>
-      DeliveryQuote(
-        baseDeliveryFee: 5000,
-        deliveryFee: 0,
-        deliveryDiscount: 5000,
-        campaignName: 'Welcome offer',
-        freeDeliveryReason: 'New account reward',
-        validUntil: DateTime(2026, 8, 20),
-      );
+  Future<DeliveryQuote> quoteDeliveryFee(
+    String deliveryZoneId, {
+    required int orderSubtotal,
+  }) async => DeliveryQuote(
+    baseDeliveryFee: 5000,
+    deliveryFee: 0,
+    deliveryDiscount: 5000,
+    campaignName: 'Welcome offer',
+    freeDeliveryReason: 'New account reward',
+    validUntil: DateTime(2026, 8, 20),
+  );
 
   @override
   Future<void> setFavorite(String productId, {required bool enabled}) =>

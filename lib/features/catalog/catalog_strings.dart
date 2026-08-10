@@ -24,11 +24,8 @@ class CatalogStrings {
       _t('الأكثر طلباً', 'زۆرترین داواکراوەکان', 'Best sellers');
 
   // ── إعلان الفتح ──
-  static String get promoNewArrivalsTitle => _t(
-    'وصلت لَگطات جديدة',
-    'لقطەی نوێ گەیشت',
-    'New finds just landed',
-  );
+  static String get promoNewArrivalsTitle =>
+      _t('وصلت لَگطات جديدة', 'لقطەی نوێ گەیشت', 'New finds just landed');
   static String get promoSwipeUp =>
       _t('اسحب لفوق', 'بەرەو سەرەوە ڕایبکێشە', 'Swipe up');
   static String get promoDismiss => _t('تخطّي', 'تێپەڕاندن', 'Dismiss');

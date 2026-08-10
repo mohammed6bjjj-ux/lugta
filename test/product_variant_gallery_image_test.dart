@@ -24,12 +24,7 @@ void main() {
       ),
     ],
     variants: const [
-      ProductVariant(
-        id: 'variant-1',
-        nameAr: 'أحمر',
-        imageUrl: '',
-        stock: 5,
-      ),
+      ProductVariant(id: 'variant-1', nameAr: 'أحمر', imageUrl: '', stock: 5),
     ],
     wholesalePrice: 1000,
     suggestedPrice: 1500,

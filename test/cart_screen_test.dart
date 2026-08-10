@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/app/theme.dart';
+import 'package:flutter_app/core/formatters.dart';
 import 'package:flutter_app/data/app_settings.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
@@ -89,6 +90,15 @@ void main() {
     expect(session.cartLineCount, 2);
     expect(firstLine, findsOneWidget);
     expect(secondLine, findsOneWidget);
+    final deliveryRow = find.byKey(
+      const ValueKey('price_summary_delivery_fee'),
+    );
+    expect(deliveryRow, findsOneWidget);
+    expect(
+      find.descendant(of: deliveryRow, matching: find.text(formatIqd(5000))),
+      findsOneWidget,
+      reason: 'The cart must show the fixed fee before choosing a governorate.',
+    );
     expect(
       find.descendant(
         of: firstLine,

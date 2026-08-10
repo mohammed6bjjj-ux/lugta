@@ -554,7 +554,7 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
                     child: PrimaryButton(
                       label: WalletStrings.submitWithdrawRequest,
                       icon: Icons.send_rounded,
-                      gold: true,
+                      accented: true,
                       loading: _submitting,
                       onPressed: _submit,
                     ),
@@ -690,10 +690,10 @@ class _PayoutAccountsSheetState extends State<_PayoutAccountsSheet> {
                         contentPadding: EdgeInsets.zero,
                         onTap: busy ? null : () => widget.onSelect(account),
                         leading: CircleAvatar(
-                          backgroundColor: AppColors.goldSoft,
+                          backgroundColor: AppColors.accentSoft,
                           child: Icon(
                             Icons.account_balance_wallet_outlined,
-                            color: AppColors.goldDark,
+                            color: AppColors.accentStrong,
                           ),
                         ),
                         title: Text(
@@ -774,7 +774,7 @@ class _AvailableBalanceCard extends StatelessWidget {
               height: 120,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.gold.withValues(alpha: .10),
+                color: AppColors.accent.withValues(alpha: .10),
               ),
             ),
           ),
@@ -786,7 +786,7 @@ class _AvailableBalanceCard extends StatelessWidget {
               height: 110,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.gold.withValues(alpha: .07),
+                color: AppColors.accent.withValues(alpha: .07),
               ),
             ),
           ),
@@ -835,7 +835,7 @@ class _AvailableBalanceCard extends StatelessWidget {
                   child: Icon(
                     Icons.account_balance_wallet_rounded,
                     size: 26,
-                    color: AppColors.gold.withValues(alpha: .95),
+                    color: AppColors.accent.withValues(alpha: .95),
                   ),
                 ),
               ],
@@ -872,20 +872,22 @@ class _MethodCard extends StatelessWidget {
           horizontal: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: selected ? AppColors.goldSoft : AppColors.surface,
+          color: selected ? AppColors.accentSoft : AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: selected ? AppColors.gold : Colors.transparent,
+            color: selected ? AppColors.accent : Colors.transparent,
             width: 1.6,
           ),
-          boxShadow: selected ? AppShadows.goldGlow : AppShadows.card,
+          boxShadow: selected ? AppShadows.accentGlow : AppShadows.card,
         ),
         child: Column(
           children: [
             Icon(
               method.icon,
               size: 26,
-              color: selected ? AppColors.goldDark : AppColors.textSecondary,
+              color: selected
+                  ? AppColors.accentStrong
+                  : AppColors.textSecondary,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -895,7 +897,9 @@ class _MethodCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w800,
-                color: selected ? AppColors.goldDark : AppColors.textPrimary,
+                color: selected
+                    ? AppColors.accentStrong
+                    : AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -911,7 +915,7 @@ class _MethodCard extends StatelessWidget {
                       width: 22,
                       height: 22,
                       decoration: BoxDecoration(
-                        gradient: AppColors.goldGradient,
+                        gradient: AppColors.accentGradient,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -971,13 +975,13 @@ class _SummaryCard extends StatelessWidget {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: AppColors.goldSoft,
+                  color: AppColors.accentSoft,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.fact_check_outlined,
                   size: 16,
-                  color: AppColors.goldDark,
+                  color: AppColors.accentStrong,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -988,7 +992,7 @@ class _SummaryCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: AppColors.goldDark,
+                    color: AppColors.accentStrong,
                   ),
                 ),
               ),

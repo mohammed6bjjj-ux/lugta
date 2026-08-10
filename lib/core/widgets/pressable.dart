@@ -39,6 +39,8 @@ class _PressableState extends State<Pressable> {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     Widget child = widget.child;
     final minimumSize = widget.minimumSize;
     if (minimumSize != null) {
@@ -74,12 +76,12 @@ class _PressableState extends State<Pressable> {
         onTap: widget.onTap,
         onLongPress: widget.onLongPress,
         child: AnimatedScale(
-          scale: _pressed ? widget.scale : 1,
-          duration: AppDurations.fast,
+          scale: _pressed && !reduceMotion ? widget.scale : 1,
+          duration: reduceMotion ? Duration.zero : AppDurations.fast,
           curve: Curves.easeOut,
           child: AnimatedOpacity(
             opacity: _pressed ? .9 : 1,
-            duration: AppDurations.fast,
+            duration: reduceMotion ? Duration.zero : AppDurations.fast,
             child: child,
           ),
         ),

@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-09T00:00:00Z",
+  "title": "Design System: لكطة — Lugta",
+  "extensions": {
+    "colorMeta": {
+      "royal-purple": {
+        "role": "primary",
+        "displayName": "Royal Purple",
+        "canonical": "#37379B",
+        "tonalRamp": ["#12123A", "#20205D", "#2C2C7D", "#37379B", "#5555B6", "#7A78D0", "#BEB8FF", "#EEEAFE"]
+      },
+      "vivid-yellow": {
+        "role": "secondary",
+        "displayName": "Vivid Yellow",
+        "canonical": "#FBC702",
+        "tonalRamp": ["#3C3100", "#6A5600", "#9A7B00", "#C79E00", "#FBC702", "#FFDC55", "#FFE878", "#FFF4BF"]
+      },
+      "light-canvas": {
+        "role": "neutral",
+        "displayName": "Cool Canvas",
+        "canonical": "#F8F8FD",
+        "tonalRamp": ["#202035", "#37364A", "#67667A", "#9B99AA", "#D8D7E3", "#E2E1EE", "#F0EFF9", "#F8F8FD"]
+      },
+      "dark-canvas": {
+        "role": "neutral",
+        "displayName": "Violet Black",
+        "canonical": "#11111A",
+        "tonalRamp": ["#11111A", "#191925", "#1E1D2D", "#242438", "#2B2A40", "#37364A", "#67667A", "#BDBBCC"]
+      }
+    },
+    "typographyMeta": {
+      "display": {"displayName": "Display", "purpose": "Rare onboarding and campaign statements."},
+      "headline": {"displayName": "Headline", "purpose": "Screen titles and major monetary totals."},
+      "title": {"displayName": "Title", "purpose": "Cards, sections, and row names."},
+      "body": {"displayName": "Body", "purpose": "Instructions, descriptions, and metadata."},
+      "label": {"displayName": "Label", "purpose": "Buttons, chips, navigation, and compact figures."}
+    },
+    "shadows": [
+      {"name": "card", "value": "0 7px 20px rgba(36,33,59,0.075)", "purpose": "Low separation for cards and rows in light mode."},
+      {"name": "floating", "value": "0 12px 28px rgba(36,33,59,0.14)", "purpose": "Sheets, fixed action bars, and floating navigation."},
+      {"name": "accent-glow", "value": "0 7px 18px rgba(251,199,2,0.26)", "purpose": "Emphasized yellow actions only."}
+    ],
+    "motion": [
+      {"name": "fast", "value": "160ms ease-out", "purpose": "Icon and compact state transitions."},
+      {"name": "base", "value": "260ms ease-out-cubic", "purpose": "Default component state transitions."},
+      {"name": "slow", "value": "420ms ease-out-cubic", "purpose": "Screen-level reveals when motion is allowed."}
+    ],
+    "breakpoints": [
+      {"name": "compact", "value": "320dp"},
+      {"name": "phone", "value": "390dp"},
+      {"name": "large", "value": "600dp"}
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The confident default action for every journey.",
+      "html": "<button class=\"ds-btn-primary\">متابعة</button>",
+      "css": ".ds-btn-primary{height:56px;padding:0 24px;border:0;border-radius:14px;background:#37379B;color:#fff;font:700 16px/1.45 Zain,sans-serif;box-shadow:0 10px 22px rgba(55,55,155,.28);transition:transform 160ms ease,filter 160ms ease}.ds-btn-primary:hover{filter:brightness(1.06)}.ds-btn-primary:active{transform:scale(.98)}.ds-btn-primary:focus-visible{outline:3px solid rgba(55,55,155,.28);outline-offset:3px}"
+    },
+    {
+      "name": "Accent Button",
+      "kind": "button",
+      "refersTo": "button-accent",
+      "description": "A final-step or reward action; never the default action on every screen.",
+      "html": "<button class=\"ds-btn-accent\">أضف للسلة</button>",
+      "css": ".ds-btn-accent{height:56px;padding:0 24px;border:0;border-radius:14px;background:linear-gradient(135deg,#FBC702,#EAB900);color:#201D12;font:700 16px/1.45 Zain,sans-serif;box-shadow:0 7px 18px rgba(251,199,2,.26);transition:transform 160ms ease,filter 160ms ease}.ds-btn-accent:hover{filter:brightness(1.04)}.ds-btn-accent:active{transform:scale(.98)}.ds-btn-accent:focus-visible{outline:3px solid rgba(251,199,2,.35);outline-offset:3px}"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A filled, low-noise field with a decisive purple focus state.",
+      "html": "<input class=\"ds-input\" value=\"ابحث عن منتج...\" aria-label=\"Search\">",
+      "css": ".ds-input{height:52px;padding:0 16px;border:1px solid #E2E1EE;border-radius:14px;background:#F0EFF9;color:#202035;font:400 16px/1.65 Zain,sans-serif;outline:0;transition:border-color 160ms ease,box-shadow 160ms ease}.ds-input:hover{border-color:#BEB8FF}.ds-input:focus-visible{border:2px solid #37379B;box-shadow:0 0 0 3px rgba(55,55,155,.12)}"
+    },
+    {
+      "name": "Application Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The standard working surface for products, orders, accounts, and summaries.",
+      "html": "<article class=\"ds-card\"><strong>تفاصيل الطلب</strong><p>المعلومات المهمة مجمعة بمكان واحد.</p></article>",
+      "css": ".ds-card{padding:16px;border:1px solid rgba(226,225,238,.72);border-radius:16px;background:#fff;color:#202035;font:400 14px/1.62 Zain,sans-serif;box-shadow:0 7px 20px rgba(36,33,59,.075)}.ds-card strong{font-size:18px}.ds-card p{margin:8px 0 0;color:#67667A}"
+    },
+    {
+      "name": "Selected Navigation Item",
+      "kind": "nav",
+      "description": "The active destination in the ergonomic bottom dock.",
+      "html": "<button class=\"ds-nav-active\"><span aria-hidden=\"true\">⌂</span><b>الرئيسية</b></button>",
+      "css": ".ds-nav-active{min-width:80px;min-height:52px;padding:6px 14px;border:0;border-radius:16px;background:#37379B;color:#fff;font:700 12px/1.45 Zain,sans-serif;display:grid;place-items:center;gap:2px}.ds-nav-active span{color:#FBC702;font-size:20px}.ds-nav-active:hover{filter:brightness(1.06)}.ds-nav-active:focus-visible{outline:3px solid rgba(55,55,155,.28);outline-offset:3px}"
+    },
+    {
+      "name": "Reward Chip",
+      "kind": "chip",
+      "description": "A compact yellow signal with dark text for rewards and counts.",
+      "html": "<span class=\"ds-reward-chip\">مكافأة جديدة</span>",
+      "css": ".ds-reward-chip{display:inline-flex;align-items:center;min-height:32px;padding:4px 10px;border-radius:10px;background:#FBC702;color:#201D12;font:700 12px/1.45 Zain,sans-serif}.ds-reward-chip:focus-visible{outline:3px solid rgba(251,199,2,.35);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Bright Trade Counter",
+    "overview": "Lugta turns a dense reseller workflow into a bright, legible trade counter. Royal purple gives primary actions authority, vivid yellow marks rewards and progress, and cool working surfaces keep operational data easy to scan across RTL and LTR.",
+    "keyCharacteristics": [
+      "Royal purple actions and vivid yellow emphasis.",
+      "Zain typography across Arabic, Kurdish, and English.",
+      "Compact rounded geometry with restrained ambient depth.",
+      "Complete light and dark modes with RTL/LTR parity."
+    ],
+    "rules": [
+      {"name": "The Yellow Is a Signal Rule", "body": "Yellow marks emphasis or reward; it never becomes the default page background or text color.", "section": "colors"},
+      {"name": "The No White on Yellow Rule", "body": "Text and icons over yellow always use dark ink.", "section": "colors"},
+      {"name": "The One Typeface Rule", "body": "Zain is the application typeface in Arabic, Kurdish, and English.", "section": "typography"},
+      {"name": "The Ambient Depth Rule", "body": "Shadows separate working layers; they never become hard decorative blocks.", "section": "elevation"}
+    ],
+    "dos": [
+      "Do use semantic palette roles from AppColors.",
+      "Do test every new surface in RTL and LTR.",
+      "Do keep all interactive targets at least 48dp.",
+      "Do respect Reduce Motion."
+    ],
+    "donts": [
+      "Don't restore the former green, cream, or gold visual vocabulary.",
+      "Don't place white text or white icons on yellow.",
+      "Don't use pure black as the dark-mode application surface.",
+      "Don't hard-code physical left/right layout when a directional equivalent exists."
+    ]
+  }
+}

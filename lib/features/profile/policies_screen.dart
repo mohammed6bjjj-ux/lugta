@@ -49,7 +49,7 @@ class PoliciesScreen extends StatelessWidget {
                 Entrance(
                   child: AppCard(
                     key: const ValueKey('legal_center_header'),
-                    color: AppColors.goldSoft,
+                    color: AppColors.accentSoft,
                     shadows: const [],
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -61,14 +61,14 @@ class PoliciesScreen extends StatelessWidget {
                               width: 48,
                               height: 48,
                               decoration: BoxDecoration(
-                                color: AppColors.gold,
+                                color: AppColors.accent,
                                 borderRadius: BorderRadius.circular(
                                   AppRadius.md,
                                 ),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.gavel_rounded,
-                                color: Colors.white,
+                                color: AppColors.onAccent,
                               ),
                             ),
                             const SizedBox(width: AppSpacing.md),
@@ -90,8 +90,8 @@ class PoliciesScreen extends StatelessWidget {
                                   Text(
                                     localized(
                                       ar: 'كل ما يوضح حقوقك والتزاماتك وطريقة عمل لكطة في مكان واحد.',
-                                      ku: 'هەموو ماف و ئەرکەکانت و شێوازی کاری لقطة لە یەک شوێن.',
-                                      en: 'Your rights, responsibilities and how Luqta works, in one place.',
+                                      ku: 'هەموو ماف و ئەرکەکانت و شێوازی کاری لكطة لە یەک شوێن.',
+                                      en: 'Your rights, responsibilities and how Lugta works, in one place.',
                                     ),
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: AppColors.textSecondary,
@@ -180,8 +180,8 @@ class PoliciesScreen extends StatelessWidget {
                 Text(
                   localized(
                     ar: 'تشغّل Nawl Ltd تطبيق لكطة داخل العراق. للدعم والاستفسارات: 0773 882 2202',
-                    ku: 'Nawl Ltd ئەپی لقطة لە عێراق بەڕێوە دەبات. پشتگیری: 0773 882 2202',
-                    en: 'Luqta is operated in Iraq by Nawl Ltd. Support: 0773 882 2202',
+                    ku: 'Nawl Ltd ئەپی لكطة لە عێراق بەڕێوە دەبات. پشتگیری: 0773 882 2202',
+                    en: 'Lugta is operated in Iraq by Nawl Ltd. Support: 0773 882 2202',
                   ),
                   key: const ValueKey('legal_center_footer'),
                   textAlign: TextAlign.center,
@@ -225,12 +225,12 @@ class _LegalDocumentCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.goldSoft,
+              color: AppColors.accentSoft,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(
               _iconFor(document.id),
-              color: AppColors.goldDark,
+              color: AppColors.accentStrong,
               size: 22,
             ),
           ),
@@ -305,7 +305,7 @@ class _InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: AppColors.goldDark),
+          Icon(icon, size: 15, color: AppColors.accentStrong),
           const SizedBox(width: AppSpacing.xs),
           Flexible(
             child: Text(

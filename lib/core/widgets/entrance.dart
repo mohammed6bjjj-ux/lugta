@@ -66,6 +66,7 @@ class _EntranceState extends State<Entrance>
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
     return AnimatedBuilder(
       animation: _curve,
       builder: (context, child) => Opacity(
