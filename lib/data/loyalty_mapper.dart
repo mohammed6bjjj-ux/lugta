@@ -1,6 +1,10 @@
 import 'models.dart';
 
-LoyaltySummary loyaltySummaryFromRpc(Object? value) {
+LoyaltySummary loyaltySummaryFromRpc(
+  Object? value, {
+  String Function(String path)? referenceImageUrlForPath,
+  String Function(String bucket, String path)? reservationImageUrlForObject,
+}) {
   final row = _singleMap(value);
   final tiers =
       _list(row['tiers'])
@@ -19,6 +23,28 @@ LoyaltySummary loyaltySummaryFromRpc(Object? value) {
           .whereType<LoyaltyPointEntry>()
           .toList(growable: false)
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  final benefitRequests =
+      _list(row['recentBenefitRequests'])
+          .map(
+            (value) => _benefitRequestFromJson(
+              value,
+              referenceImageUrlForPath: referenceImageUrlForPath,
+            ),
+          )
+          .whereType<LoyaltyBenefitRequest>()
+          .toList(growable: false)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  final stockReservations =
+      _list(row['recentStockReservations'] ?? row['recent_stock_reservations'])
+          .map(
+            (value) => _stockReservationFromJson(
+              value,
+              imageUrlForObject: reservationImageUrlForObject,
+            ),
+          )
+          .whereType<StockReservation>()
+          .toList(growable: false)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   return LoyaltySummary(
     programEnabled: _bool(row['programEnabled']),
@@ -32,7 +58,28 @@ LoyaltySummary loyaltySummaryFromRpc(Object? value) {
     ),
     tiers: List<LoyaltyTierDefinition>.unmodifiable(tiers),
     recentEntries: List<LoyaltyPointEntry>.unmodifiable(recentEntries),
+    recentBenefitRequests: List<LoyaltyBenefitRequest>.unmodifiable(
+      benefitRequests,
+    ),
+    recentStockReservations: List<StockReservation>.unmodifiable(
+      stockReservations,
+    ),
   );
+}
+
+StockReservation stockReservationFromRpc(
+  Object? value, {
+  String Function(String bucket, String path)? imageUrlForObject,
+}) {
+  final response = _singleMap(value);
+  final reservation = _stockReservationFromJson(
+    response['reservation'] ?? response['stockReservation'] ?? response,
+    imageUrlForObject: imageUrlForObject,
+  );
+  if (reservation == null) {
+    throw const FormatException('Invalid stock reservation response.');
+  }
+  return reservation;
 }
 
 LoyaltyTierDefinition? _tierFromJson(Object? value) {
@@ -50,6 +97,192 @@ LoyaltyTierDefinition? _tierFromJson(Object? value) {
     rewardType: _text(row['rewardType']),
     rewardValue: _nonNegativeInt(row['rewardValue']),
     rewardValidDays: _nullableNonNegativeInt(row['rewardValidDays']),
+    benefits: List<LoyaltyTierBenefit>.unmodifiable(
+      _list(
+        row['benefits'],
+      ).map(_benefitFromJson).whereType<LoyaltyTierBenefit>(),
+    ),
+    stockReservation: _stockReservationEntitlementFromJson(
+      row['stockReservation'] ?? row['stock_reservation'],
+    ),
+  );
+}
+
+StockReservationEntitlement? _stockReservationEntitlementFromJson(
+  Object? value,
+) {
+  final row = _mapOrNull(value);
+  if (row == null) return null;
+  return StockReservationEntitlement(
+    enabled: _bool(row['enabled']),
+    maxActiveUnits: _nonNegativeInt(
+      row['maxActiveUnits'] ?? row['max_active_units'],
+    ),
+    maxPerReservation: _nonNegativeInt(
+      row['maxPerReservation'] ?? row['max_per_reservation'],
+    ),
+    holdHours: _nonNegativeInt(row['holdHours'] ?? row['hold_hours']),
+    activeUnits: _nonNegativeInt(row['activeUnits'] ?? row['active_units']),
+    remainingUnits: _nonNegativeInt(
+      row['remainingUnits'] ?? row['remaining_units'],
+    ),
+  );
+}
+
+StockReservation? _stockReservationFromJson(
+  Object? value, {
+  String Function(String bucket, String path)? imageUrlForObject,
+}) {
+  final row = _mapOrNull(value);
+  if (row == null) return null;
+  final id = _text(row['id']);
+  final variantId = _text(row['variantId'] ?? row['variant_id']);
+  final productId = _text(row['productId'] ?? row['product_id']);
+  final createdAt = _date(row['createdAt'] ?? row['created_at']);
+  final expiresAt = _date(row['expiresAt'] ?? row['expires_at']);
+  final status = _stockReservationStatus(row['status']);
+  if (id.isEmpty ||
+      variantId.isEmpty ||
+      productId.isEmpty ||
+      createdAt == null ||
+      expiresAt == null ||
+      status == null) {
+    return null;
+  }
+
+  final explicitImageUrl = _text(row['imageUrl'] ?? row['image_url']);
+  final coverBucket = _text(row['coverBucket'] ?? row['cover_bucket']);
+  final coverPath = _text(row['coverPath'] ?? row['cover_path']);
+  final resolvedImageUrl = explicitImageUrl.isNotEmpty
+      ? explicitImageUrl
+      : coverBucket.isNotEmpty && coverPath.isNotEmpty
+      ? imageUrlForObject?.call(coverBucket, coverPath) ?? ''
+      : '';
+
+  final quantity = _nonNegativeInt(row['quantity']);
+  final consumedQuantity = _nonNegativeInt(
+    row['consumedQuantity'] ?? row['consumed_quantity'],
+  );
+  final releasedQuantity = _nonNegativeInt(
+    row['releasedQuantity'] ?? row['released_quantity'],
+  );
+  final fallbackRemaining = (quantity - consumedQuantity - releasedQuantity)
+      .clamp(0, quantity)
+      .toInt();
+
+  return StockReservation(
+    id: id,
+    reservationNumber: _nonNegativeInt(
+      row['reservationNumber'] ?? row['reservation_number'],
+    ),
+    variantId: variantId,
+    productId: productId,
+    productName: _text(row['productName'] ?? row['product_name']),
+    variantName: _text(row['variantName'] ?? row['variant_name']),
+    imageUrl: resolvedImageUrl,
+    quantity: quantity,
+    consumedQuantity: consumedQuantity,
+    releasedQuantity: releasedQuantity,
+    remainingQuantity:
+        row['remainingQuantity'] == null && row['remaining_quantity'] == null
+        ? fallbackRemaining
+        : _nonNegativeInt(
+            row['remainingQuantity'] ?? row['remaining_quantity'],
+          ).clamp(0, quantity).toInt(),
+    status: status,
+    expiresAt: expiresAt,
+    createdAt: createdAt,
+  );
+}
+
+StockReservationStatus? _stockReservationStatus(Object? value) =>
+    switch (_text(value).toLowerCase()) {
+      'active' => StockReservationStatus.active,
+      'consumed' => StockReservationStatus.consumed,
+      'released' => StockReservationStatus.released,
+      'expired' => StockReservationStatus.expired,
+      _ => null,
+    };
+
+LoyaltyTierBenefit? _benefitFromJson(Object? value) {
+  final row = _mapOrNull(value);
+  if (row == null) return null;
+  final type = switch (_text(row['type'])) {
+    'product_sourcing' => LoyaltyBenefitType.productSourcing,
+    'custom_photography' => LoyaltyBenefitType.customPhotography,
+    _ => null,
+  };
+  if (type == null) return null;
+  final monthlyLimit = _nonNegativeInt(row['monthlyLimit']);
+  return LoyaltyTierBenefit(
+    type: type,
+    enabled: _bool(row['enabled']),
+    monthlyLimit: monthlyLimit,
+    maxPerRequest: _nonNegativeInt(row['maxPerRequest']),
+    usedThisMonth: _nonNegativeInt(row['usedThisMonth']),
+    remainingThisMonth: row['remainingThisMonth'] == null
+        ? null
+        : _nonNegativeInt(row['remainingThisMonth']),
+  );
+}
+
+LoyaltyBenefitRequest? _benefitRequestFromJson(
+  Object? value, {
+  String Function(String path)? referenceImageUrlForPath,
+}) {
+  final row = _mapOrNull(value);
+  if (row == null) return null;
+  final id = _text(row['id']);
+  final createdAt = _date(row['createdAt']);
+  final updatedAt = _date(row['updatedAt']) ?? createdAt;
+  final tierCode = _tierCode(row['tierCode']);
+  final benefitType = switch (_text(row['benefitType'])) {
+    'product_sourcing' => LoyaltyBenefitType.productSourcing,
+    'custom_photography' => LoyaltyBenefitType.customPhotography,
+    _ => null,
+  };
+  final status = switch (_text(row['status'])) {
+    'pending' => LoyaltyBenefitRequestStatus.pending,
+    'approved' => LoyaltyBenefitRequestStatus.approved,
+    'in_progress' => LoyaltyBenefitRequestStatus.inProgress,
+    'completed' => LoyaltyBenefitRequestStatus.completed,
+    'rejected' => LoyaltyBenefitRequestStatus.rejected,
+    'cancelled' => LoyaltyBenefitRequestStatus.cancelled,
+    _ => null,
+  };
+  final referenceImagePath = _nullableText(row['referenceImagePath']);
+  final contentKind = switch (_nullableText(row['contentKind'])) {
+    'photo' => LoyaltyContentKind.photo,
+    'video' => LoyaltyContentKind.video,
+    _ => null,
+  };
+  if (id.isEmpty ||
+      createdAt == null ||
+      updatedAt == null ||
+      tierCode == null ||
+      benefitType == null ||
+      status == null) {
+    return null;
+  }
+  return LoyaltyBenefitRequest(
+    id: id,
+    requestNumber: _nonNegativeInt(row['requestNumber']),
+    tierCode: tierCode,
+    benefitType: benefitType,
+    productId: _nullableText(row['productId']),
+    productName: _nullableText(row['productName']),
+    itemName: _nullableText(row['itemName']),
+    referenceImagePath: referenceImagePath,
+    referenceImageUrl: referenceImagePath == null
+        ? null
+        : referenceImageUrlForPath?.call(referenceImagePath),
+    contentKind: contentKind,
+    details: _text(row['details']),
+    requestedQuantity: _nonNegativeInt(row['requestedQuantity']),
+    status: status,
+    adminResponse: _nullableText(row['adminResponse']),
+    createdAt: createdAt,
+    updatedAt: updatedAt,
   );
 }
 
@@ -95,22 +328,35 @@ LoyaltyTierCode? _tierCode(Object? value) {
     'bronze' => LoyaltyTierCode.bronze,
     'silver' => LoyaltyTierCode.silver,
     'gold' => LoyaltyTierCode.gold,
+    'diamond' => LoyaltyTierCode.diamond,
     _ => null,
   };
 }
 
-String _fallbackTierName(LoyaltyTierCode code, String language) =>
-    switch ((code, language)) {
-      (LoyaltyTierCode.bronze, 'ckb') => 'برۆنز',
-      (LoyaltyTierCode.silver, 'ckb') => 'زیو',
-      (LoyaltyTierCode.gold, 'ckb') => 'زێڕ',
-      (LoyaltyTierCode.bronze, 'en') => 'Bronze',
-      (LoyaltyTierCode.silver, 'en') => 'Silver',
-      (LoyaltyTierCode.gold, 'en') => 'Gold',
-      (LoyaltyTierCode.bronze, _) => 'برونزي',
-      (LoyaltyTierCode.silver, _) => 'فضي',
-      (LoyaltyTierCode.gold, _) => 'ذهبي',
+String _fallbackTierName(LoyaltyTierCode code, String language) {
+  if (language == 'ckb') {
+    return switch (code) {
+      LoyaltyTierCode.bronze => 'برۆنز',
+      LoyaltyTierCode.silver => 'زیو',
+      LoyaltyTierCode.gold => 'زێڕ',
+      LoyaltyTierCode.diamond => 'ئەڵماس',
     };
+  }
+  if (language == 'en') {
+    return switch (code) {
+      LoyaltyTierCode.bronze => 'Bronze',
+      LoyaltyTierCode.silver => 'Silver',
+      LoyaltyTierCode.gold => 'Gold',
+      LoyaltyTierCode.diamond => 'Diamond',
+    };
+  }
+  return switch (code) {
+    LoyaltyTierCode.bronze => 'برونزي',
+    LoyaltyTierCode.silver => 'فضي',
+    LoyaltyTierCode.gold => 'ذهبي',
+    LoyaltyTierCode.diamond => 'ألماسي',
+  };
+}
 
 Map<String, dynamic> _singleMap(Object? value) {
   if (value is List) {

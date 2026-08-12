@@ -10,6 +10,7 @@ import '../../core/widgets/session_refresh.dart';
 import '../../data/app_settings.dart';
 import '../../data/session.dart';
 import 'profile_strings.dart';
+import 'sales_analytics_strings.dart';
 import 'settings_mutation_queue.dart';
 
 /// شاشة الإعدادات — المظهر، اللغة، مفاتيح الإشعارات، وخيارات عامة.
@@ -226,6 +227,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 index: 1,
                 child: _GroupCard(
                   children: [
+                    ListTile(
+                      key: const ValueKey('sales_analytics_settings_tile'),
+                      onTap: () =>
+                          Navigator.pushNamed(context, Routes.salesAnalytics),
+                      leading: const _SettingIcon(
+                        icon: Icons.query_stats_rounded,
+                        active: true,
+                      ),
+                      title: Text(
+                        SalesAnalyticsStrings.title,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Text(SalesAnalyticsStrings.settingsSubtitle),
+                      trailing: Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                     ListTile(
                       key: const ValueKey('payout_accounts_settings_tile'),
                       onTap: () =>

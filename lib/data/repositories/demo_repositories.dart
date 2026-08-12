@@ -4,6 +4,7 @@ import '../../core/external_actions.dart';
 import '../../core/phone_number.dart';
 import '../mock_data.dart';
 import '../models.dart';
+import '../sales_analytics.dart';
 import 'repositories.dart';
 
 AppRepositories createDemoRepositories() {
@@ -317,11 +318,64 @@ class DemoOrdersRepository implements OrdersRepository {
       _orders.firstWhere((order) => order.id == orderId);
 
   @override
+  Future<SalesAnalyticsSnapshot> fetchSalesAnalytics({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final span = to.difference(from);
+    final previousFrom = from.subtract(span);
+    final currentOrders = _orders
+        .where(
+          (order) =>
+              !order.createdAt.isBefore(from) && order.createdAt.isBefore(to),
+        )
+        .toList();
+    final previousOrders = _orders
+        .where(
+          (order) =>
+              !order.createdAt.isBefore(previousFrom) &&
+              order.createdAt.isBefore(from),
+        )
+        .toList();
+    final granularity = span.inDays <= 35
+        ? 'day'
+        : span.inDays <= 140
+        ? 'week'
+        : 'month';
+
+    return SalesAnalyticsSnapshot(
+      from: from,
+      to: to,
+      previousFrom: previousFrom,
+      granularity: granularity,
+      current: _demoAnalyticsSummary(currentOrders),
+      previous: _demoAnalyticsSummary(previousOrders),
+      trend: _demoAnalyticsTrend(currentOrders, granularity),
+      statuses: _demoAnalyticsStatuses(currentOrders),
+      topProducts: _demoAnalyticsTopProducts(currentOrders),
+    );
+  }
+
+  @override
   Future<Order> createOrder(CreateOrderRequest request) async {
     final serial = _serial++;
     final now = DateTime.now();
     final seller = _seller();
     final firstLine = request.lines.first;
+    final grossProfit = request.lines.fold<int>(
+      0,
+      (sum, line) =>
+          sum +
+          ((line.unitSalePrice -
+                  (line.variant.wholesalePriceOverride ??
+                      line.product.wholesalePrice)) *
+              line.quantity),
+    );
+    final requestedContribution = request.sellerDeliveryContribution;
+    final appliedContribution = requestedContribution
+        .clamp(0, request.governorate.deliveryFee)
+        .clamp(0, grossProfit)
+        .toInt();
     final order = Order(
       id: 'o-$serial',
       code: 'ORD-$serial',
@@ -353,8 +407,9 @@ class DemoOrdersRepository implements OrdersRepository {
           firstLine.variant.wholesalePriceOverride ??
           firstLine.product.wholesalePrice,
       unitSalePrice: firstLine.unitSalePrice,
-      deliveryFee: request.governorate.deliveryFee,
+      deliveryFee: request.governorate.deliveryFee - appliedContribution,
       baseDeliveryFee: request.governorate.deliveryFee,
+      sellerDeliveryContribution: appliedContribution,
       packagingTotal: request.lines.fold(
         0,
         (sum, line) => sum + (line.packagingBox?.price ?? 0) * line.quantity,
@@ -441,6 +496,7 @@ class DemoOrdersRepository implements OrdersRepository {
       deliveryFee: order.deliveryFee,
       baseDeliveryFee: order.baseDeliveryFee,
       deliveryDiscount: order.deliveryDiscount,
+      sellerDeliveryContribution: order.sellerDeliveryContribution,
       freeDeliveryReason: order.freeDeliveryReason,
       packagingTotal: order.packagingTotal,
       complaints: [...order.complaints, complaint],
@@ -463,6 +519,141 @@ class DemoOrdersRepository implements OrdersRepository {
     );
     return complaint;
   }
+}
+
+SalesAnalyticsSummary _demoAnalyticsSummary(List<Order> orders) {
+  final completed = orders
+      .where((order) => order.status == OrderStatus.completed)
+      .toList();
+  final terminal = orders.where((order) => order.status.isTerminal).length;
+  return SalesAnalyticsSummary(
+    orderCount: orders.length,
+    completedCount: completed.length,
+    unsuccessfulCount: orders.where((order) {
+      return order.status == OrderStatus.deliveryFailed ||
+          order.status == OrderStatus.returned ||
+          order.status == OrderStatus.rejected ||
+          order.status == OrderStatus.cancelled;
+    }).length,
+    unitsSold: completed.fold(0, (sum, order) => sum + order.totalQuantity),
+    salesTotal: completed.fold(0, (sum, order) => sum + order.saleTotal),
+    netProfit: completed.fold(0, (sum, order) => sum + order.profit),
+    pendingProfit: orders
+        .where((order) => order.status.holdsPendingProfit)
+        .fold(0, (sum, order) => sum + order.profit),
+    deliveryContribution: orders
+        .where(
+          (order) =>
+              order.status != OrderStatus.returned &&
+              order.status != OrderStatus.rejected &&
+              order.status != OrderStatus.cancelled,
+        )
+        .fold(0, (sum, order) => sum + order.sellerDeliveryContribution),
+    averageOrderValue: completed.isEmpty
+        ? 0
+        : (completed.fold<int>(0, (sum, order) => sum + order.saleTotal) /
+                  completed.length)
+              .round(),
+    successRate: terminal == 0 ? 0 : completed.length * 100 / terminal,
+  );
+}
+
+List<SalesAnalyticsTrendPoint> _demoAnalyticsTrend(
+  List<Order> orders,
+  String granularity,
+) {
+  final grouped = <DateTime, List<Order>>{};
+  for (final order in orders) {
+    final date = order.createdAt;
+    final bucket = switch (granularity) {
+      'month' => DateTime(date.year, date.month),
+      'week' => DateTime(
+        date.year,
+        date.month,
+        date.day,
+      ).subtract(Duration(days: date.weekday - DateTime.monday)),
+      _ => DateTime(date.year, date.month, date.day),
+    };
+    grouped.putIfAbsent(bucket, () => <Order>[]).add(order);
+  }
+  final buckets = grouped.keys.toList()..sort();
+  return [
+    for (final bucket in buckets)
+      SalesAnalyticsTrendPoint(
+        bucket: bucket,
+        orderCount: grouped[bucket]!.length,
+        completedCount: grouped[bucket]!
+            .where((order) => order.status == OrderStatus.completed)
+            .length,
+        salesTotal: grouped[bucket]!
+            .where((order) => order.status == OrderStatus.completed)
+            .fold(0, (sum, order) => sum + order.saleTotal),
+        netProfit: grouped[bucket]!
+            .where((order) => order.status == OrderStatus.completed)
+            .fold(0, (sum, order) => sum + order.profit),
+      ),
+  ];
+}
+
+List<SalesAnalyticsStatusCount> _demoAnalyticsStatuses(List<Order> orders) {
+  final counts = <OrderStatus, int>{};
+  for (final order in orders) {
+    counts.update(order.status, (value) => value + 1, ifAbsent: () => 1);
+  }
+  final rows = counts.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  return [
+    for (final row in rows)
+      SalesAnalyticsStatusCount(status: row.key, orderCount: row.value),
+  ];
+}
+
+List<SalesAnalyticsTopProduct> _demoAnalyticsTopProducts(List<Order> orders) {
+  final grouped = <String, _DemoProductTotals>{};
+  for (final order in orders.where(
+    (order) => order.status == OrderStatus.completed,
+  )) {
+    for (final item in order.items) {
+      final id = item.productId.isEmpty ? order.productId : item.productId;
+      final totals = grouped.putIfAbsent(
+        id,
+        () => _DemoProductTotals(
+          name: item.productName.isEmpty ? order.productName : item.productName,
+        ),
+      );
+      totals.orderIds.add(order.id);
+      totals.units += item.quantity;
+      totals.sales +=
+          (item.saleUnitPrice ?? order.unitSalePrice) * item.quantity;
+      totals.profit +=
+          ((item.saleUnitPrice ?? order.unitSalePrice) -
+              (item.wholesaleUnitPrice ?? order.wholesalePrice)) *
+          item.quantity;
+    }
+  }
+  final rows = grouped.entries.toList()
+    ..sort((a, b) => b.value.profit.compareTo(a.value.profit));
+  return [
+    for (final row in rows.take(5))
+      SalesAnalyticsTopProduct(
+        productId: row.key,
+        nameAr: row.value.name,
+        orderCount: row.value.orderIds.length,
+        unitsSold: row.value.units,
+        salesTotal: row.value.sales,
+        netProfit: row.value.profit,
+      ),
+  ];
+}
+
+class _DemoProductTotals {
+  _DemoProductTotals({required this.name});
+
+  final String name;
+  final Set<String> orderIds = <String>{};
+  int units = 0;
+  int sales = 0;
+  int profit = 0;
 }
 
 class DemoWalletRepository implements WalletRepository {
@@ -708,9 +899,191 @@ class DemoPromotionsRepository implements PromotionsRepository {
 }
 
 class DemoLoyaltyRepository implements LoyaltyRepository {
+  final List<StockReservation> _stockReservations = <StockReservation>[];
+  final Map<String, StockReservation> _stockReservationsByRequestId =
+      <String, StockReservation>{};
+  int _reservationSequence = 1;
+
   @override
-  Future<LoyaltySummary> fetchLoyaltySummary() async => MockData.loyaltySummary;
+  Future<LoyaltySummary> fetchLoyaltySummary() async =>
+      _summaryWithStockReservations(MockData.loyaltySummary);
+
+  @override
+  Future<StockReservation> reserveProductStock({
+    required String variantId,
+    required int quantity,
+    required String clientRequestId,
+  }) async {
+    if (quantity <= 0 || clientRequestId.trim().isEmpty) {
+      throw const BackendException(
+        'تعذر تأمين عملية الحجز. حاول مرة أخرى.',
+        code: 'invalid_stock_reservation_request',
+      );
+    }
+    final normalizedRequestId = clientRequestId.trim();
+    final existing = _stockReservationsByRequestId[normalizedRequestId];
+    if (existing != null) return existing;
+
+    Product? product;
+    ProductVariant? variant;
+    for (final candidate in MockData.products) {
+      for (final candidateVariant in candidate.variants) {
+        if (candidateVariant.id == variantId) {
+          product = candidate;
+          variant = candidateVariant;
+          break;
+        }
+      }
+      if (variant != null) break;
+    }
+    if (product == null || variant == null) {
+      throw const BackendException(
+        'خيار المنتج غير موجود.',
+        code: 'variant_not_found',
+      );
+    }
+
+    final entitlement = MockData.loyaltySummary.currentTier?.stockReservation;
+    if (entitlement == null || !entitlement.enabled) {
+      throw const BackendException(
+        'حجز القطع متاح للمستوى الماسي فقط.',
+        code: 'stock_reservation_not_entitled',
+      );
+    }
+    final activeUnits = _activeReservedUnits;
+    final remainingUnits = (entitlement.maxActiveUnits - activeUnits)
+        .clamp(0, 1 << 31)
+        .toInt();
+    if (quantity > entitlement.maxPerReservation ||
+        quantity > remainingUnits ||
+        quantity > variant.stock) {
+      throw const BackendException(
+        'الكمية المطلوبة تتجاوز الحد المتاح للحجز.',
+        code: 'stock_reservation_limit_exceeded',
+      );
+    }
+
+    final now = DateTime.now();
+    final reservation = StockReservation(
+      id: 'demo-stock-reservation-${now.microsecondsSinceEpoch}',
+      reservationNumber: _reservationSequence++,
+      variantId: variant.id,
+      productId: product.id,
+      productName: product.nameAr,
+      variantName: variant.nameAr,
+      imageUrl: variant.imageUrl.trim().isEmpty
+          ? product.coverImage
+          : variant.imageUrl,
+      quantity: quantity,
+      consumedQuantity: 0,
+      releasedQuantity: 0,
+      remainingQuantity: quantity,
+      status: StockReservationStatus.active,
+      expiresAt: now.add(Duration(hours: entitlement.holdHours)),
+      createdAt: now,
+    );
+    _stockReservations.insert(0, reservation);
+    _stockReservationsByRequestId[normalizedRequestId] = reservation;
+    return reservation;
+  }
+
+  @override
+  Future<void> releaseProductReservation(String reservationId) async {
+    final index = _stockReservations.indexWhere(
+      (reservation) => reservation.id == reservationId,
+    );
+    if (index < 0) {
+      throw const BackendException(
+        'الحجز غير موجود.',
+        code: 'stock_reservation_not_found',
+      );
+    }
+    final reservation = _stockReservations[index];
+    if (!reservation.isActive) return;
+    _stockReservations[index] = StockReservation(
+      id: reservation.id,
+      reservationNumber: reservation.reservationNumber,
+      variantId: reservation.variantId,
+      productId: reservation.productId,
+      productName: reservation.productName,
+      variantName: reservation.variantName,
+      imageUrl: reservation.imageUrl,
+      quantity: reservation.quantity,
+      consumedQuantity: reservation.consumedQuantity,
+      releasedQuantity:
+          reservation.releasedQuantity + reservation.remainingQuantity,
+      remainingQuantity: 0,
+      status: StockReservationStatus.released,
+      expiresAt: reservation.expiresAt,
+      createdAt: reservation.createdAt,
+    );
+  }
+
+  @override
+  Future<void> submitBenefitRequest({
+    required LoyaltyBenefitType type,
+    required int quantity,
+    String? itemName,
+    String? productId,
+    String details = '',
+    LoyaltyReferenceImage? referenceImage,
+    LoyaltyContentKind? contentKind,
+  }) async {}
 
   @override
   Stream<void> watchLoyaltyChanges() => const Stream<void>.empty();
+
+  int get _activeReservedUnits => _stockReservations
+      .where(
+        (reservation) =>
+            reservation.isActive &&
+            reservation.expiresAt.isAfter(DateTime.now()),
+      )
+      .fold(0, (total, reservation) => total + reservation.remainingQuantity);
+
+  LoyaltySummary _summaryWithStockReservations(LoyaltySummary source) {
+    final activeUnits = _activeReservedUnits;
+    LoyaltyTierDefinition? updateTier(LoyaltyTierDefinition? tier) {
+      if (tier == null || tier.stockReservation == null) return tier;
+      final entitlement = tier.stockReservation!;
+      return LoyaltyTierDefinition(
+        code: tier.code,
+        nameAr: tier.nameAr,
+        nameCkb: tier.nameCkb,
+        nameEn: tier.nameEn,
+        threshold: tier.threshold,
+        rewardEnabled: tier.rewardEnabled,
+        rewardType: tier.rewardType,
+        rewardValue: tier.rewardValue,
+        rewardValidDays: tier.rewardValidDays,
+        benefits: tier.benefits,
+        stockReservation: StockReservationEntitlement(
+          enabled: entitlement.enabled,
+          maxActiveUnits: entitlement.maxActiveUnits,
+          maxPerReservation: entitlement.maxPerReservation,
+          holdHours: entitlement.holdHours,
+          activeUnits: activeUnits,
+          remainingUnits: (entitlement.maxActiveUnits - activeUnits)
+              .clamp(0, entitlement.maxActiveUnits)
+              .toInt(),
+        ),
+      );
+    }
+
+    return LoyaltySummary(
+      programEnabled: source.programEnabled,
+      pointsPerSoldUnit: source.pointsPerSoldUnit,
+      totalPoints: source.totalPoints,
+      completedUnits: source.completedUnits,
+      currentTier: updateTier(source.currentTier),
+      nextTier: source.nextTier,
+      pointsToNextTier: source.pointsToNextTier,
+      tiers: [for (final tier in source.tiers) updateTier(tier)!],
+      recentEntries: source.recentEntries,
+      recentBenefitRequests: source.recentBenefitRequests,
+      recentStockReservations: List<StockReservation>.unmodifiable(
+        _stockReservations,
+      ),
+    );
+  }
 }

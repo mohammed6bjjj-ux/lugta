@@ -2,6 +2,7 @@ import 'package:flutter_app/data/mock_data.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
 import 'package:flutter_app/data/repositories/repositories.dart';
+import 'package:flutter_app/data/sales_analytics.dart';
 import 'package:flutter_app/data/session.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -336,6 +337,12 @@ class _IdempotentOrdersRepository implements OrdersRepository {
 
   @override
   Future<List<Order>> fetchOrders() => _delegate.fetchOrders();
+
+  @override
+  Future<SalesAnalyticsSnapshot> fetchSalesAnalytics({
+    required DateTime from,
+    required DateTime to,
+  }) => _delegate.fetchSalesAnalytics(from: from, to: to);
 
   @override
   Future<void> submitChangeRequest({

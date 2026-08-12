@@ -70,6 +70,11 @@ class WizardStrings {
     'کۆگا: $count — بڕێکی سنووردارە!',
     'Stock: $count — limited!',
   );
+  static String reservedStockForYou(String count) => _t(
+    'يتضمن $count قطعة من حجزك الألماسي',
+    '$count دانە لە حجزە ئەڵماسییەکەت لەخۆدەگرێت',
+    'Includes $count from your Diamond reservation',
+  );
   static String get tooManyVariants => _t(
     'يمكن إضافة 50 خياراً مختلفاً كحد أقصى للطلب الواحد.',
     'بۆ هەر داواکارییەک زۆرترین ٥٠ جۆری جیاواز دەتوانرێت زیاد بکرێت.',

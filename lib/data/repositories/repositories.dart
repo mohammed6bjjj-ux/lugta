@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../models.dart';
+import '../sales_analytics.dart';
 
 enum OtpPurpose { registration, passwordRecovery, phoneChange }
 
@@ -23,6 +24,14 @@ class ProfileAvatarChange {
   final ProfileAvatarChangeType type;
   final Uint8List? bytes;
   final String? mimeType;
+}
+
+class LoyaltyReferenceImage {
+  LoyaltyReferenceImage({required Uint8List bytes, required this.mimeType})
+    : bytes = Uint8List.fromList(bytes);
+
+  final Uint8List bytes;
+  final String mimeType;
 }
 
 class RegistrationRequest {
@@ -60,6 +69,7 @@ class CreateOrderRequest {
     this.customerPhone2,
     this.notes,
     this.packagingBox,
+    this.sellerDeliveryContribution = 0,
   }) : lines = List<CreateOrderLine>.unmodifiable([
          for (final item in items)
            CreateOrderLine(
@@ -80,6 +90,7 @@ class CreateOrderRequest {
     required this.addressDetails,
     this.customerPhone2,
     this.notes,
+    this.sellerDeliveryContribution = 0,
   }) : assert(lines.isNotEmpty),
        lines = List<CreateOrderLine>.unmodifiable(lines),
        product = lines.first.product,
@@ -102,6 +113,7 @@ class CreateOrderRequest {
   final String? notes;
   final PackagingBox? packagingBox;
   final List<CreateOrderLine> lines;
+  final int sellerDeliveryContribution;
 }
 
 /// عقد سطر مستقل عند إرسال طلب متعدد المنتجات إلى الخادم.
@@ -279,6 +291,10 @@ abstract interface class CatalogRepository {
 abstract interface class OrdersRepository {
   Future<List<Order>> fetchOrders();
   Future<Order> fetchOrder(String orderId);
+  Future<SalesAnalyticsSnapshot> fetchSalesAnalytics({
+    required DateTime from,
+    required DateTime to,
+  });
   Future<Order> createOrder(CreateOrderRequest request);
   Future<void> cancelOrder(String orderId, {required String clientRequestId});
   Future<void> submitChangeRequest({
@@ -326,6 +342,21 @@ abstract interface class PromotionsRepository {
 
 abstract interface class LoyaltyRepository {
   Future<LoyaltySummary> fetchLoyaltySummary();
+  Future<StockReservation> reserveProductStock({
+    required String variantId,
+    required int quantity,
+    required String clientRequestId,
+  });
+  Future<void> releaseProductReservation(String reservationId);
+  Future<void> submitBenefitRequest({
+    required LoyaltyBenefitType type,
+    required int quantity,
+    String? itemName,
+    String? productId,
+    String details = '',
+    LoyaltyReferenceImage? referenceImage,
+    LoyaltyContentKind? contentKind,
+  });
   Stream<void> watchLoyaltyChanges();
 }
 
@@ -335,6 +366,39 @@ class EmptyLoyaltyRepository implements LoyaltyRepository {
   @override
   Future<LoyaltySummary> fetchLoyaltySummary() async =>
       const LoyaltySummary.disabled();
+
+  @override
+  Future<StockReservation> reserveProductStock({
+    required String variantId,
+    required int quantity,
+    required String clientRequestId,
+  }) async {
+    throw const BackendException(
+      'ميزة حجز القطع غير متاحة حالياً.',
+      code: 'stock_reservation_unavailable',
+    );
+  }
+
+  @override
+  Future<void> releaseProductReservation(String reservationId) async {
+    throw const BackendException(
+      'ميزة حجز القطع غير متاحة حالياً.',
+      code: 'stock_reservation_unavailable',
+    );
+  }
+
+  @override
+  Future<void> submitBenefitRequest({
+    required LoyaltyBenefitType type,
+    required int quantity,
+    String? itemName,
+    String? productId,
+    String details = '',
+    LoyaltyReferenceImage? referenceImage,
+    LoyaltyContentKind? contentKind,
+  }) async {
+    throw const BackendException('ميزة المستوى غير متاحة حالياً.');
+  }
 
   @override
   Stream<void> watchLoyaltyChanges() => const Stream<void>.empty();

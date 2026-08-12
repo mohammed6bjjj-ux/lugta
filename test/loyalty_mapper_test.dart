@@ -131,4 +131,184 @@ void main() {
     expect(summary.recentEntries.single.type, 'negative_adjustment');
     expect(summary.recentEntries.single.points, -5);
   });
+
+  test('maps tier benefit quotas and admin-reviewed requests', () {
+    final summary = loyaltySummaryFromRpc({
+      'programEnabled': true,
+      'currentTier': {
+        'code': 'silver',
+        'nameEn': 'Silver',
+        'threshold': 100,
+        'rewardEnabled': false,
+        'benefits': [
+          {
+            'type': 'product_sourcing',
+            'enabled': true,
+            'monthlyLimit': 3,
+            'maxPerRequest': 20,
+            'usedThisMonth': 1,
+            'remainingThisMonth': 2,
+          },
+          {
+            'type': 'custom_photography',
+            'enabled': true,
+            'monthlyLimit': 2,
+            'maxPerRequest': 6,
+            'usedThisMonth': 2,
+            'remainingThisMonth': 0,
+          },
+        ],
+      },
+      'recentBenefitRequests': [
+        {
+          'id': 'request-1',
+          'requestNumber': 9,
+          'tierCode': 'silver',
+          'benefitType': 'custom_photography',
+          'productId': 'product-1',
+          'productName': 'Watch',
+          'details': 'Three angles',
+          'requestedQuantity': 3,
+          'contentKind': 'video',
+          'status': 'in_progress',
+          'adminResponse': 'Studio booked',
+          'createdAt': '2026-08-11T10:00:00Z',
+          'updatedAt': '2026-08-11T11:00:00Z',
+        },
+      ],
+    }, referenceImageUrlForPath: (path) => 'private://$path');
+
+    expect(summary.currentTier?.benefits, hasLength(2));
+    expect(summary.currentTier?.benefits.first.effectiveRemaining, 2);
+    expect(summary.currentTier?.benefits.last.effectiveRemaining, 0);
+    expect(
+      summary.recentBenefitRequests.single.status,
+      LoyaltyBenefitRequestStatus.inProgress,
+    );
+    expect(summary.recentBenefitRequests.single.adminResponse, 'Studio booked');
+    expect(
+      summary.recentBenefitRequests.single.contentKind,
+      LoyaltyContentKind.video,
+    );
+    expect(summary.recentBenefitRequests.single.referenceImagePath, isNull);
+  });
+
+  test('maps a private reference image for product sourcing requests', () {
+    final summary = loyaltySummaryFromRpc({
+      'programEnabled': true,
+      'recentBenefitRequests': [
+        {
+          'id': 'request-2',
+          'requestNumber': 10,
+          'tierCode': 'gold',
+          'benefitType': 'product_sourcing',
+          'itemName': 'Special watch',
+          'requestedQuantity': 2,
+          'referenceImagePath': 'sellers/user/request.webp',
+          'status': 'pending',
+          'createdAt': '2026-08-11T12:00:00Z',
+          'updatedAt': '2026-08-11T12:00:00Z',
+        },
+      ],
+    }, referenceImageUrlForPath: (path) => 'private://$path');
+
+    final request = summary.recentBenefitRequests.single;
+    expect(request.referenceImagePath, 'sellers/user/request.webp');
+    expect(request.referenceImageUrl, 'private://sellers/user/request.webp');
+    expect(request.contentKind, isNull);
+  });
+
+  test('maps Diamond stock entitlement and recent reservations', () {
+    final summary = loyaltySummaryFromRpc(
+      {
+        'programEnabled': true,
+        'totalPoints': 12000,
+        'currentTier': {
+          'code': 'diamond',
+          'nameAr': 'ألماسي',
+          'threshold': 10000,
+          'rewardEnabled': false,
+          'stockReservation': {
+            'enabled': true,
+            'maxActiveUnits': 12,
+            'maxPerReservation': 4,
+            'holdHours': 48,
+            'activeUnits': 3,
+            'remainingUnits': 9,
+          },
+        },
+        'tiers': [
+          {
+            'code': 'diamond',
+            'nameAr': 'ألماسي',
+            'threshold': 10000,
+            'rewardEnabled': false,
+            'stockReservation': {
+              'enabled': true,
+              'maxActiveUnits': 12,
+              'maxPerReservation': 4,
+              'holdHours': 48,
+              'activeUnits': 3,
+              'remainingUnits': 9,
+            },
+          },
+        ],
+        'recentStockReservations': [
+          {
+            'id': 'reservation-1',
+            'reservationNumber': '73',
+            'variantId': 'variant-1',
+            'productId': 'product-1',
+            'productName': 'ساعة',
+            'variantName': 'بنفسجي',
+            'coverBucket': 'product-media',
+            'coverPath': 'products/product-1/cover.webp',
+            'quantity': 3,
+            'consumedQuantity': 1,
+            'releasedQuantity': 0,
+            'remainingQuantity': 2,
+            'status': 'active',
+            'expiresAt': '2030-08-13T10:00:00Z',
+            'createdAt': '2030-08-11T10:00:00Z',
+          },
+        ],
+      },
+      reservationImageUrlForObject: (bucket, path) => 'private://$bucket/$path',
+    );
+
+    expect(summary.currentTier?.code, LoyaltyTierCode.diamond);
+    expect(summary.currentTier?.stockReservation?.enabled, isTrue);
+    expect(summary.currentTier?.stockReservation?.maxActiveUnits, 12);
+    expect(summary.tiers.single.stockReservation?.holdHours, 48);
+    final reservation = summary.recentStockReservations.single;
+    expect(reservation.reservationNumber, 73);
+    expect(reservation.variantId, 'variant-1');
+    expect(reservation.remainingQuantity, 2);
+    expect(reservation.status, StockReservationStatus.active);
+    expect(reservation.isActive, isTrue);
+    expect(
+      reservation.imageUrl,
+      'private://product-media/products/product-1/cover.webp',
+    );
+  });
+
+  test('ignores stock reservations with statuses outside the DB contract', () {
+    final summary = loyaltySummaryFromRpc({
+      'programEnabled': true,
+      'recentStockReservations': [
+        {
+          'id': 'reservation-invalid',
+          'reservationNumber': 74,
+          'variantId': 'variant-1',
+          'productId': 'product-1',
+          'quantity': 1,
+          'status': 'cancelled',
+          'expiresAt': '2030-08-13T10:00:00Z',
+          'createdAt': '2030-08-11T10:00:00Z',
+        },
+      ],
+    });
+
+    expect(summary.recentStockReservations, isEmpty);
+  });
 }

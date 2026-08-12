@@ -100,7 +100,138 @@ class Seller {
   );
 }
 
-enum LoyaltyTierCode { bronze, silver, gold }
+enum LoyaltyTierCode { bronze, silver, gold, diamond }
+
+enum LoyaltyBenefitType { productSourcing, customPhotography }
+
+enum LoyaltyContentKind { photo, video }
+
+enum LoyaltyBenefitRequestStatus {
+  pending,
+  approved,
+  inProgress,
+  completed,
+  rejected,
+  cancelled,
+}
+
+class LoyaltyTierBenefit {
+  const LoyaltyTierBenefit({
+    required this.type,
+    required this.enabled,
+    required this.monthlyLimit,
+    required this.maxPerRequest,
+    this.usedThisMonth = 0,
+    this.remainingThisMonth,
+  });
+
+  final LoyaltyBenefitType type;
+  final bool enabled;
+  final int monthlyLimit;
+  final int maxPerRequest;
+  final int usedThisMonth;
+  final int? remainingThisMonth;
+
+  int get effectiveRemaining =>
+      remainingThisMonth ??
+      (monthlyLimit - usedThisMonth).clamp(0, monthlyLimit).toInt();
+}
+
+class LoyaltyBenefitRequest {
+  const LoyaltyBenefitRequest({
+    required this.id,
+    required this.requestNumber,
+    required this.tierCode,
+    required this.benefitType,
+    required this.requestedQuantity,
+    required this.status,
+    required this.details,
+    required this.createdAt,
+    required this.updatedAt,
+    this.productId,
+    this.productName,
+    this.itemName,
+    this.referenceImagePath,
+    this.referenceImageUrl,
+    this.contentKind,
+    this.adminResponse,
+  });
+
+  final String id;
+  final int requestNumber;
+  final LoyaltyTierCode tierCode;
+  final LoyaltyBenefitType benefitType;
+  final String? productId;
+  final String? productName;
+  final String? itemName;
+  final String? referenceImagePath;
+  final String? referenceImageUrl;
+  final LoyaltyContentKind? contentKind;
+  final String details;
+  final int requestedQuantity;
+  final LoyaltyBenefitRequestStatus status;
+  final String? adminResponse;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
+class StockReservationEntitlement {
+  const StockReservationEntitlement({
+    required this.enabled,
+    required this.maxActiveUnits,
+    required this.maxPerReservation,
+    required this.holdHours,
+    required this.activeUnits,
+    required this.remainingUnits,
+  });
+
+  final bool enabled;
+  final int maxActiveUnits;
+  final int maxPerReservation;
+  final int holdHours;
+  final int activeUnits;
+  final int remainingUnits;
+
+  bool get canReserve => enabled && remainingUnits > 0;
+}
+
+enum StockReservationStatus { active, consumed, released, expired }
+
+class StockReservation {
+  const StockReservation({
+    required this.id,
+    required this.reservationNumber,
+    required this.variantId,
+    required this.productId,
+    required this.productName,
+    required this.variantName,
+    required this.imageUrl,
+    required this.quantity,
+    required this.consumedQuantity,
+    required this.releasedQuantity,
+    required this.remainingQuantity,
+    required this.status,
+    required this.expiresAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final int reservationNumber;
+  final String variantId;
+  final String productId;
+  final String productName;
+  final String variantName;
+  final String imageUrl;
+  final int quantity;
+  final int consumedQuantity;
+  final int releasedQuantity;
+  final int remainingQuantity;
+  final StockReservationStatus status;
+  final DateTime expiresAt;
+  final DateTime createdAt;
+
+  bool get isActive => status == StockReservationStatus.active;
+}
 
 class LoyaltyTierDefinition {
   const LoyaltyTierDefinition({
@@ -113,6 +244,8 @@ class LoyaltyTierDefinition {
     required this.rewardType,
     required this.rewardValue,
     this.rewardValidDays,
+    this.benefits = const <LoyaltyTierBenefit>[],
+    this.stockReservation,
   });
 
   final LoyaltyTierCode code;
@@ -124,6 +257,8 @@ class LoyaltyTierDefinition {
   final String rewardType;
   final int rewardValue;
   final int? rewardValidDays;
+  final List<LoyaltyTierBenefit> benefits;
+  final StockReservationEntitlement? stockReservation;
 
   String get localizedName => switch (appSettings.language) {
     AppLanguage.ckb => nameCkb.trim().isNotEmpty ? nameCkb : nameAr,
@@ -188,6 +323,8 @@ class LoyaltySummary {
     required this.completedUnits,
     required this.tiers,
     required this.recentEntries,
+    this.recentBenefitRequests = const <LoyaltyBenefitRequest>[],
+    this.recentStockReservations = const <StockReservation>[],
     this.currentTier,
     this.nextTier,
     this.pointsToNextTier,
@@ -202,7 +339,9 @@ class LoyaltySummary {
       nextTier = null,
       pointsToNextTier = null,
       tiers = const <LoyaltyTierDefinition>[],
-      recentEntries = const <LoyaltyPointEntry>[];
+      recentEntries = const <LoyaltyPointEntry>[],
+      recentBenefitRequests = const <LoyaltyBenefitRequest>[],
+      recentStockReservations = const <StockReservation>[];
 
   final bool programEnabled;
   final int pointsPerSoldUnit;
@@ -213,6 +352,8 @@ class LoyaltySummary {
   final int? pointsToNextTier;
   final List<LoyaltyTierDefinition> tiers;
   final List<LoyaltyPointEntry> recentEntries;
+  final List<LoyaltyBenefitRequest> recentBenefitRequests;
+  final List<StockReservation> recentStockReservations;
 
   double get progressToNextTier {
     final next = nextTier;
@@ -943,6 +1084,7 @@ class Order {
     this.trackingNumber,
     this.baseDeliveryFee = 0,
     this.deliveryDiscount = 0,
+    this.sellerDeliveryContribution = 0,
     this.freeDeliveryReason,
     this.packagingTotal = 0,
     this.complaints = const <OrderComplaint>[],
@@ -969,6 +1111,7 @@ class Order {
   final int deliveryFee;
   final int baseDeliveryFee;
   final int deliveryDiscount;
+  final int sellerDeliveryContribution;
   final String? freeDeliveryReason;
   final int packagingTotal;
   final List<OrderComplaint> complaints;
@@ -1019,8 +1162,8 @@ class Order {
         )
       : unitSalePrice * totalQuantity;
 
-  /// ربح البائع = (سعر البيع − سعر الجملة) × الكمية.
-  int get profit => saleTotal - wholesaleTotal;
+  /// الربح الصافي بعد الجزء الذي اختار البائع تحمله من أجرة التوصيل.
+  int get profit => saleTotal - wholesaleTotal - sellerDeliveryContribution;
 
   /// المبلغ النهائي على الزبون = البيع + التعليب + أجرة التوصيل.
   int get customerTotal => saleTotal + packagingTotal + deliveryFee;
@@ -1051,6 +1194,7 @@ class Order {
     deliveryFee: deliveryFee,
     baseDeliveryFee: baseDeliveryFee,
     deliveryDiscount: deliveryDiscount,
+    sellerDeliveryContribution: sellerDeliveryContribution,
     freeDeliveryReason: freeDeliveryReason,
     packagingTotal: packagingTotal,
     complaints: complaints,

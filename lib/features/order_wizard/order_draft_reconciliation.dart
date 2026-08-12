@@ -34,6 +34,7 @@ OrderDraftReconciliation reconcileOrderDraft({
   required List<OrderDraftItem> currentDrafts,
   required Product latestProduct,
   required int unitSalePrice,
+  Map<String, int> additionalOrderableStockByVariant = const <String, int>{},
 }) {
   final requestedQuantities = <String, int>{
     for (final item in currentDrafts)
@@ -44,7 +45,8 @@ OrderDraftReconciliation reconcileOrderDraft({
 
   for (final variant in latestProduct.variants) {
     final requested = requestedQuantities.remove(variant.id) ?? 0;
-    final safeStock = variant.stock < 0 ? 0 : variant.stock;
+    final ownReserved = additionalOrderableStockByVariant[variant.id] ?? 0;
+    final safeStock = (variant.stock + ownReserved).clamp(0, 1 << 31).toInt();
     final quantity = requested.clamp(0, safeStock);
     if (quantity != requested) selectionAdjusted = true;
     drafts.add(OrderDraftItem(variant: variant, quantity: quantity));

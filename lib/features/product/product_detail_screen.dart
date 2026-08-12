@@ -65,7 +65,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             }
           });
     for (final variant in widget.product.variants) {
-      if (variant.inStock) {
+      if (session.isVariantOrderable(variant)) {
         _selectedVariant = variant;
         break;
       }
@@ -126,7 +126,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     ProductVariant? selected;
     final selectedId = _selectedVariant?.id;
     for (final variant in product.variants) {
-      if (variant.id == selectedId && variant.inStock) {
+      if (variant.id == selectedId && session.isVariantOrderable(variant)) {
         selected = variant;
         break;
       }
@@ -143,6 +143,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       variant: selected,
       packagingBoxes: session.packagingBoxes,
       existingItem: session.cartItemForVariant(selected.id),
+      availableStock: session.orderableStockForVariant(selected),
+      reservedStock: session.reservedStockForVariant(selected.id),
     );
     if (!mounted || configuration == null) return;
     try {
@@ -1000,15 +1002,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ),
                         ),
                         Text(
-                          variant.inStock
+                          session.isVariantOrderable(variant)
                               ? ProductStrings.variantInStock(
-                                  formatNumber(variant.stock),
+                                  formatNumber(
+                                    session.orderableStockForVariant(variant),
+                                  ),
                                 )
                               : CoreStrings.badgeOutOfStock,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: variant.inStock
+                            color: session.isVariantOrderable(variant)
                                 ? AppColors.success
                                 : AppColors.error,
                             fontWeight: FontWeight.w700,
@@ -1022,7 +1026,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             ),
           );
           // النافد يظهر معطّلاً ولا يُخفى.
-          if (!variant.inStock) {
+          if (!session.isVariantOrderable(variant)) {
             return Opacity(opacity: .5, child: chip);
           }
           return Pressable(onTap: () => _selectVariant(variant), child: chip);
@@ -1238,7 +1242,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                   padding: const EdgeInsets.all(AppSpacing.sm + 2),
                   child: ListenableBuilder(
                     listenable: session,
-                    builder: (context, _) => product.inStock
+                    builder: (context, _) =>
+                        product.variants.any(
+                          (variant) => session.isVariantOrderable(variant),
+                        )
                         ? Row(
                             children: [
                               Expanded(

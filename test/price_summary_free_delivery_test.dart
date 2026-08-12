@@ -107,4 +107,52 @@ void main() {
     expect(find.text(formatIqd(20000)), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('seller delivery share lowers both customer fee and net profit', (
+    tester,
+  ) async {
+    final previousLanguage = appSettings.language;
+    appSettings.language = AppLanguage.ar;
+    addTearDown(() => appSettings.language = previousLanguage);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: const Scaffold(
+          body: SingleChildScrollView(
+            child: PriceSummaryCard(
+              wholesaleTotal: 7000,
+              saleTotal: 15000,
+              baseDeliveryFee: 5000,
+              deliveryFee: 2500,
+              sellerDeliveryContribution: 2500,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final contributionRow = find.byKey(
+      const ValueKey('price_summary_seller_delivery_contribution'),
+    );
+    final customerFeeRow = find.byKey(
+      const ValueKey('price_summary_customer_delivery_final'),
+    );
+    expect(contributionRow, findsOneWidget);
+    expect(customerFeeRow, findsOneWidget);
+    expect(
+      find.descendant(
+        of: contributionRow,
+        matching: find.text('- ${formatIqd(2500)}'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: customerFeeRow, matching: find.text(formatIqd(2500))),
+      findsOneWidget,
+    );
+    expect(find.text(formatIqd(5500)), findsOneWidget);
+    expect(find.text(formatIqd(17500)), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -30,6 +30,8 @@ Future<ProductCartConfiguration?> showProductCartConfigurator({
   required List<PackagingBox> packagingBoxes,
   CartItem? existingItem,
   bool allowPriceEditing = true,
+  int? availableStock,
+  int reservedStock = 0,
 }) => showModalBottomSheet<ProductCartConfiguration>(
   context: context,
   isScrollControlled: true,
@@ -43,6 +45,8 @@ Future<ProductCartConfiguration?> showProductCartConfigurator({
     packagingBoxes: packagingBoxes,
     existingItem: existingItem,
     allowPriceEditing: allowPriceEditing,
+    availableStock: availableStock,
+    reservedStock: reservedStock,
   ),
 );
 
@@ -53,6 +57,8 @@ class _ProductCartConfiguratorSheet extends StatefulWidget {
     required this.packagingBoxes,
     required this.existingItem,
     required this.allowPriceEditing,
+    required this.availableStock,
+    required this.reservedStock,
   });
 
   final Product product;
@@ -60,6 +66,8 @@ class _ProductCartConfiguratorSheet extends StatefulWidget {
   final List<PackagingBox> packagingBoxes;
   final CartItem? existingItem;
   final bool allowPriceEditing;
+  final int? availableStock;
+  final int reservedStock;
 
   @override
   State<_ProductCartConfiguratorSheet> createState() =>
@@ -75,6 +83,8 @@ class _ProductCartConfiguratorSheetState
 
   int get _unitWholesalePrice =>
       widget.variant.wholesalePriceOverride ?? widget.product.wholesalePrice;
+
+  int get _availableStock => widget.availableStock ?? widget.variant.stock;
 
   int get _minimumPrice {
     final productMinimum = widget.product.effectiveMinSalePrice;
@@ -96,7 +106,8 @@ class _ProductCartConfiguratorSheetState
   void initState() {
     super.initState();
     final existing = widget.existingItem;
-    _quantity = existing?.quantity ?? 1;
+    final safeAvailableStock = _availableStock < 1 ? 1 : _availableStock;
+    _quantity = (existing?.quantity ?? 1).clamp(1, safeAvailableStock);
     _packagingBox = existing?.packagingBox;
     var initialPrice =
         existing?.unitSalePrice ??
@@ -366,20 +377,30 @@ class _ProductCartConfiguratorSheetState
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  CartStrings.availableStock(
-                    formatNumber(widget.variant.stock),
-                  ),
+                  CartStrings.availableStock(formatNumber(_availableStock)),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
                   ),
                 ),
+                if (widget.reservedStock > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    CartStrings.reservedForYou(
+                      formatNumber(widget.reservedStock),
+                    ),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
           QuantityStepper(
             value: _quantity,
             min: 1,
-            max: widget.variant.stock,
+            max: _availableStock,
             incrementKey: const ValueKey('product_cart_increment'),
             decrementKey: const ValueKey('product_cart_decrement'),
             onChanged: (value) => setState(() => _quantity = value),

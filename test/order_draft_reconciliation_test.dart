@@ -82,6 +82,21 @@ void main() {
     expect(result.selectedItems, isEmpty);
   });
 
+  test('keeps quantity covered by the seller own active reservation', () {
+    final source = MockData.products.first;
+    final original = source.variants.first;
+    final latestVariant = variantWith(source: original, stock: 1);
+    final result = reconcileOrderDraft(
+      currentDrafts: [OrderDraftItem(variant: original, quantity: 4)],
+      latestProduct: productWith(source: source, variants: [latestVariant]),
+      unitSalePrice: source.suggestedPrice,
+      additionalOrderableStockByVariant: {latestVariant.id: 3},
+    );
+
+    expect(result.selectionAdjusted, isFalse);
+    expect(result.selectedItems.single.quantity, 4);
+  });
+
   test('uses latest variant wholesale override when validating sale price', () {
     final source = MockData.products.first;
     final original = source.variants.first;

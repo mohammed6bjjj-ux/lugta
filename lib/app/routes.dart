@@ -49,4 +49,5 @@ abstract class Routes {
   static const policies = '/policies';
   static const about = '/about';
   static const settings = '/settings';
+  static const salesAnalytics = '/sales-analytics';
 }

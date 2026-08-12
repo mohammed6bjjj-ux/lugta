@@ -596,6 +596,11 @@ class _ProfileLoyaltyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tier = summary.currentTier;
+    final isDiamond = tier?.code == LoyaltyTierCode.diamond;
+    final primaryText = isDiamond ? AppColors.onPrimary : AppColors.textPrimary;
+    final secondaryText = isDiamond
+        ? AppColors.onPrimary.withValues(alpha: .82)
+        : AppColors.textSecondary;
     final next = summary.nextTier;
     final progressLabel = next == null
         ? LoyaltyStrings.highestLevel
@@ -605,7 +610,7 @@ class _ProfileLoyaltyCard extends StatelessWidget {
           );
     return AppCard(
       onTap: onTap,
-      color: AppColors.surfaceAlt,
+      color: isDiamond ? AppColors.primary : AppColors.surfaceAlt,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -616,12 +621,16 @@ class _ProfileLoyaltyCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.accentSoft,
+                  color: isDiamond ? AppColors.accent : AppColors.accentSoft,
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Icon(
-                  Icons.workspace_premium_outlined,
-                  color: AppColors.accentStrong,
+                  isDiamond
+                      ? Icons.diamond_rounded
+                      : Icons.workspace_premium_outlined,
+                  color: isDiamond
+                      ? AppColors.onAccent
+                      : AppColors.accentStrong,
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -632,13 +641,14 @@ class _ProfileLoyaltyCard extends StatelessWidget {
                     Text(
                       LoyaltyStrings.profileTitle,
                       style: theme.textTheme.titleMedium?.copyWith(
+                        color: primaryText,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     Text(
                       '${tier?.localizedName ?? '—'} · ${formatNumber(summary.totalPoints)} ${LoyaltyStrings.point}',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: secondaryText,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -648,7 +658,7 @@ class _ProfileLoyaltyCard extends StatelessWidget {
               Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 16,
-                color: AppColors.textSecondary,
+                color: secondaryText,
               ),
             ],
           ),
@@ -660,16 +670,16 @@ class _ProfileLoyaltyCard extends StatelessWidget {
               value: summary.progressToNextTier,
               minHeight: 8,
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              color: AppColors.accentStrong,
-              backgroundColor: AppColors.divider,
+              color: AppColors.accent,
+              backgroundColor: isDiamond
+                  ? AppColors.onPrimary.withValues(alpha: .18)
+                  : AppColors.divider,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             progressLabel,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: secondaryText),
           ),
         ],
       ),

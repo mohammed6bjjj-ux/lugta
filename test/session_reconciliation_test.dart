@@ -6,6 +6,7 @@ import 'package:flutter_app/app/routes.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
 import 'package:flutter_app/data/repositories/repositories.dart';
+import 'package:flutter_app/data/sales_analytics.dart';
 import 'package:flutter_app/data/services/device_token_registrar.dart';
 import 'package:flutter_app/data/session.dart';
 import 'package:flutter_app/features/auth/account_blocked_screen.dart';
@@ -509,6 +510,12 @@ class _BlockingOrdersRepository implements OrdersRepository {
   Future<Order> fetchOrder(String orderId) => _delegate.fetchOrder(orderId);
 
   @override
+  Future<SalesAnalyticsSnapshot> fetchSalesAnalytics({
+    required DateTime from,
+    required DateTime to,
+  }) => _delegate.fetchSalesAnalytics(from: from, to: to);
+
+  @override
   Future<Order> createOrder(CreateOrderRequest request) =>
       _delegate.createOrder(request);
 
@@ -688,6 +695,40 @@ class _TrackingLoyaltyRepository implements LoyaltyRepository {
     }
     return value;
   }
+
+  @override
+  Future<StockReservation> reserveProductStock({
+    required String variantId,
+    required int quantity,
+    required String clientRequestId,
+  }) => _delegate.reserveProductStock(
+    variantId: variantId,
+    quantity: quantity,
+    clientRequestId: clientRequestId,
+  );
+
+  @override
+  Future<void> releaseProductReservation(String reservationId) =>
+      _delegate.releaseProductReservation(reservationId);
+
+  @override
+  Future<void> submitBenefitRequest({
+    required LoyaltyBenefitType type,
+    required int quantity,
+    String? itemName,
+    String? productId,
+    String details = '',
+    LoyaltyReferenceImage? referenceImage,
+    LoyaltyContentKind? contentKind,
+  }) => _delegate.submitBenefitRequest(
+    type: type,
+    quantity: quantity,
+    itemName: itemName,
+    productId: productId,
+    details: details,
+    referenceImage: referenceImage,
+    contentKind: contentKind,
+  );
 
   @override
   Stream<void> watchLoyaltyChanges() => _changes.stream;

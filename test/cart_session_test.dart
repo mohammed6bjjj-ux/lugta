@@ -147,6 +147,62 @@ void main() {
     },
   );
 
+  test('own active reservation extends orderable stock safely', () {
+    final heldVariant = ProductVariant(
+      id: 'held-variant',
+      nameAr: 'محجوز',
+      imageUrl: firstVariant.imageUrl,
+      stock: 0,
+    );
+    final heldProduct = Product(
+      id: 'held-product',
+      nameAr: firstProduct.nameAr,
+      categoryId: firstProduct.categoryId,
+      description: firstProduct.description,
+      specs: firstProduct.specs,
+      media: firstProduct.media,
+      variants: [heldVariant],
+      wholesalePrice: firstProduct.wholesalePrice,
+      suggestedPrice: firstProduct.suggestedPrice,
+      createdAt: firstProduct.createdAt,
+    );
+    session.loyaltySummary = LoyaltySummary(
+      programEnabled: true,
+      pointsPerSoldUnit: 1,
+      totalPoints: 0,
+      completedUnits: 0,
+      tiers: const [],
+      recentEntries: const [],
+      recentStockReservations: [
+        StockReservation(
+          id: 'reservation-1',
+          reservationNumber: 1,
+          variantId: heldVariant.id,
+          productId: heldProduct.id,
+          productName: heldProduct.nameAr,
+          variantName: heldVariant.nameAr,
+          imageUrl: heldVariant.imageUrl,
+          quantity: 3,
+          consumedQuantity: 0,
+          releasedQuantity: 0,
+          remainingQuantity: 3,
+          status: StockReservationStatus.active,
+          expiresAt: DateTime.now().add(const Duration(hours: 3)),
+          createdAt: DateTime.now(),
+        ),
+      ],
+    );
+
+    expect(session.reservedStockForVariant(heldVariant.id), 3);
+    expect(session.orderableStockForVariant(heldVariant), 3);
+    session.addToCart(product: heldProduct, variant: heldVariant, quantity: 3);
+    expect(session.cartItems.single.quantity, 3);
+    expect(
+      () => session.updateCartQuantity(heldVariant.id, 4),
+      throwsA(isA<BackendException>()),
+    );
+  });
+
   test('updates quantities, removes individual lines, and clears the cart', () {
     session.addToCart(product: firstProduct, variant: firstVariant);
     session.addToCart(

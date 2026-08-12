@@ -5,6 +5,7 @@ import 'package:flutter_app/app/app_router.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
 import 'package:flutter_app/data/repositories/repositories.dart';
+import 'package:flutter_app/data/sales_analytics.dart';
 import 'package:flutter_app/data/services/device_token_registrar.dart';
 import 'package:flutter_app/data/session.dart';
 import 'package:flutter_app/features/orders/order_detail_screen.dart';
@@ -224,6 +225,12 @@ class _TargetedOrdersRepository implements OrdersRepository {
 
   @override
   Future<List<Order>> fetchOrders() => _delegate.fetchOrders();
+
+  @override
+  Future<SalesAnalyticsSnapshot> fetchSalesAnalytics({
+    required DateTime from,
+    required DateTime to,
+  }) => _delegate.fetchSalesAnalytics(from: from, to: to);
 
   @override
   Future<Order> fetchOrder(String orderId) async {

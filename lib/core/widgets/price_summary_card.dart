@@ -15,6 +15,8 @@ class PriceSummaryCard extends StatelessWidget {
     this.quantity,
     this.packagingTotal = 0,
     this.baseDeliveryFee,
+    this.sellerDeliveryContribution = 0,
+    this.promotionDeliveryDiscount,
   });
 
   final int wholesaleTotal;
@@ -22,19 +24,26 @@ class PriceSummaryCard extends StatelessWidget {
   final int deliveryFee;
   final int packagingTotal;
   final int? baseDeliveryFee;
+  final int sellerDeliveryContribution;
+  final int? promotionDeliveryDiscount;
 
   /// إن مُررت الكمية تُعرض في ترويسة البطاقة.
   final int? quantity;
 
-  int get profit => saleTotal - wholesaleTotal;
+  int get profit => saleTotal - wholesaleTotal - sellerDeliveryContribution;
   int get customerTotal => saleTotal + packagingTotal + deliveryFee;
   int get deliveryDiscount {
-    final discount = (baseDeliveryFee ?? deliveryFee) - deliveryFee;
+    final discount =
+        promotionDeliveryDiscount ??
+        (baseDeliveryFee ?? deliveryFee) -
+            deliveryFee -
+            sellerDeliveryContribution;
     return discount > 0 ? discount : 0;
   }
 
   int get displayedDeliveryFee =>
-      deliveryDiscount > 0 ? (baseDeliveryFee ?? deliveryFee) : deliveryFee;
+      baseDeliveryFee ??
+      deliveryFee + deliveryDiscount + sellerDeliveryContribution;
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +133,27 @@ class PriceSummaryCard extends StatelessWidget {
                     '- ${formatIqd(deliveryDiscount)}',
                     rowKey: const ValueKey('price_summary_delivery_discount'),
                     valueColor: AppColors.success,
+                    bold: true,
+                  ),
+                if (sellerDeliveryContribution > 0)
+                  _row(
+                    context,
+                    CoreStrings.sellerDeliveryContribution,
+                    '- ${formatIqd(sellerDeliveryContribution)}',
+                    rowKey: const ValueKey(
+                      'price_summary_seller_delivery_contribution',
+                    ),
+                    valueColor: Theme.of(context).colorScheme.primary,
+                    bold: true,
+                  ),
+                if (deliveryDiscount > 0 || sellerDeliveryContribution > 0)
+                  _row(
+                    context,
+                    CoreStrings.customerDeliveryAfterDiscounts,
+                    formatIqd(deliveryFee),
+                    rowKey: const ValueKey(
+                      'price_summary_customer_delivery_final',
+                    ),
                     bold: true,
                   ),
                 if (packagingTotal > 0)

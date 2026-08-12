@@ -15,6 +15,7 @@ import '../content_parser.dart';
 import '../loyalty_mapper.dart';
 import '../models.dart';
 import '../promotion_mapper.dart';
+import '../sales_analytics.dart';
 import '../wallet_ledger_mapper.dart';
 import '../services/device_token_registrar.dart';
 import 'repositories.dart';
@@ -1458,6 +1459,21 @@ class SupabaseOrdersRepository implements OrdersRepository {
       _guard(() => _fetchOrder(orderId));
 
   @override
+  Future<SalesAnalyticsSnapshot> fetchSalesAnalytics({
+    required DateTime from,
+    required DateTime to,
+  }) async => _guard(() async {
+    final result = await _client.rpc(
+      'seller_sales_analytics',
+      params: {
+        'p_from': from.toUtc().toIso8601String(),
+        'p_to': to.toUtc().toIso8601String(),
+      },
+    );
+    return _salesAnalyticsFromJson(_singleMap(result));
+  });
+
+  @override
   Future<Order> createOrder(CreateOrderRequest request) async => _guard(
     () async {
       final result = await _client.rpc(
@@ -1476,6 +1492,7 @@ class SupabaseOrdersRepository implements OrdersRepository {
               : normalizeIraqiPhone(request.customerPhone2!),
           'p_landmark': null,
           'p_delivery_notes': request.notes,
+          'p_seller_delivery_contribution': request.sellerDeliveryContribution,
         },
       );
       final resultRow = _singleMap(result);
@@ -2067,6 +2084,9 @@ class SupabasePromotionsRepository implements PromotionsRepository {
 class SupabaseLoyaltyRepository implements LoyaltyRepository {
   SupabaseLoyaltyRepository(this._client);
 
+  static const _requestMediaBucket = 'loyalty-request-media';
+  static const _maxReferenceImageBytes = 8 * 1024 * 1024;
+
   final SupabaseClient _client;
 
   @override
@@ -2074,7 +2094,16 @@ class SupabaseLoyaltyRepository implements LoyaltyRepository {
     try {
       return await _guard(() async {
         final value = await _client.rpc('get_my_loyalty_summary');
-        return loyaltySummaryFromRpc(value);
+        return loyaltySummaryFromRpc(
+          value,
+          referenceImageUrlForPath: (path) => _authenticatedStorageObjectUrl(
+            _client,
+            _requestMediaBucket,
+            path,
+          ),
+          reservationImageUrlForObject: (bucket, path) =>
+              _authenticatedStorageObjectUrl(_client, bucket, path),
+        );
       });
     } on BackendException catch (error) {
       if (_isMissingBackendFeature(error)) {
@@ -2082,6 +2111,119 @@ class SupabaseLoyaltyRepository implements LoyaltyRepository {
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<StockReservation> reserveProductStock({
+    required String variantId,
+    required int quantity,
+    required String clientRequestId,
+  }) => _guard(() async {
+    final value = await _client.rpc(
+      'reserve_product_stock',
+      params: <String, dynamic>{
+        'p_variant_id': variantId,
+        'p_quantity': quantity,
+        'p_client_request_id': clientRequestId,
+      },
+    );
+    return stockReservationFromRpc(
+      value,
+      imageUrlForObject: (bucket, path) =>
+          _authenticatedStorageObjectUrl(_client, bucket, path),
+    );
+  });
+
+  @override
+  Future<void> releaseProductReservation(String reservationId) =>
+      _guard(() async {
+        await _client.rpc(
+          'release_product_reservation',
+          params: <String, dynamic>{'p_reservation_id': reservationId},
+        );
+      });
+
+  @override
+  Future<void> submitBenefitRequest({
+    required LoyaltyBenefitType type,
+    required int quantity,
+    String? itemName,
+    String? productId,
+    String details = '',
+    LoyaltyReferenceImage? referenceImage,
+    LoyaltyContentKind? contentKind,
+  }) async {
+    await _guard(() async {
+      final userId = _requireUserId(_client);
+      String? uploadedPath;
+      if (type == LoyaltyBenefitType.productSourcing) {
+        if (referenceImage == null || referenceImage.bytes.isEmpty) {
+          throw const BackendException(
+            'أضف صورة واضحة للمنتج المطلوب.',
+            code: 'reference_image_required',
+          );
+        }
+        if (referenceImage.bytes.length > _maxReferenceImageBytes) {
+          throw const BackendException(
+            'حجم صورة المنتج يجب ألا يتجاوز 8 ميغابايت.',
+            code: 'reference_image_too_large',
+          );
+        }
+        final mimeType = _normalizedLoyaltyReferenceMimeType(
+          referenceImage.mimeType,
+        );
+        final extension = _loyaltyReferenceExtension(mimeType);
+        uploadedPath = 'sellers/$userId/${newUuidV4()}.$extension';
+        await _client.storage
+            .from(_requestMediaBucket)
+            .uploadBinary(
+              uploadedPath,
+              referenceImage.bytes,
+              fileOptions: FileOptions(
+                cacheControl: '31536000',
+                upsert: false,
+                contentType: mimeType,
+              ),
+            );
+      }
+
+      try {
+        await _client.rpc(
+          'submit_loyalty_benefit_request',
+          params: <String, dynamic>{
+            'p_benefit_type': switch (type) {
+              LoyaltyBenefitType.productSourcing => 'product_sourcing',
+              LoyaltyBenefitType.customPhotography => 'custom_photography',
+            },
+            'p_requested_quantity': quantity,
+            'p_item_name': (itemName?.trim().isEmpty ?? true)
+                ? null
+                : itemName!.trim(),
+            'p_product_id': productId,
+            'p_details': details.trim(),
+            'p_reference_image_path': uploadedPath,
+            'p_content_kind': type == LoyaltyBenefitType.customPhotography
+                ? switch (contentKind ?? LoyaltyContentKind.photo) {
+                    LoyaltyContentKind.photo => 'photo',
+                    LoyaltyContentKind.video => 'video',
+                  }
+                : null,
+          },
+        );
+      } catch (_) {
+        if (uploadedPath != null) {
+          try {
+            await _client.storage.from(_requestMediaBucket).remove([
+              uploadedPath,
+            ]);
+          } catch (_) {
+            // The database row was not created. A later cleanup can remove
+            // the unreferenced object if the best-effort delete is offline.
+          }
+        }
+        rethrow;
+      }
+    });
   }
 
   @override
@@ -2122,6 +2264,17 @@ class SupabaseLoyaltyRepository implements LoyaltyRepository {
               table: 'promotions',
               callback: (_) => emit(),
             )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'loyalty_benefit_requests',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'seller_id',
+                value: userId,
+              ),
+              callback: (_) => emit(),
+            )
             .subscribe();
       },
       onCancel: () async {
@@ -2142,6 +2295,29 @@ String _normalizedAvatarMimeType(String? value) {
     code: 'invalid_avatar_type',
   );
 }
+
+String _normalizedLoyaltyReferenceMimeType(String? value) {
+  final mimeType = value?.trim().toLowerCase().split(';').first ?? '';
+  if (const {
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/avif',
+  }.contains(mimeType)) {
+    return mimeType;
+  }
+  throw const BackendException(
+    'صيغة صورة المنتج غير مدعومة. استخدم JPG أو PNG أو WebP.',
+    code: 'invalid_reference_image_type',
+  );
+}
+
+String _loyaltyReferenceExtension(String mimeType) => switch (mimeType) {
+  'image/png' => 'png',
+  'image/webp' => 'webp',
+  'image/avif' => 'avif',
+  _ => 'jpg',
+};
 
 String _avatarExtension(String mimeType) => switch (mimeType) {
   'image/png' => 'png',
@@ -2341,6 +2517,7 @@ Order _orderFromJson(Map<String, dynamic> row, Map<String, String> mediaUrls) {
       fallback: _int(row['delivery_fee']),
     ),
     deliveryDiscount: _int(row['delivery_discount']),
+    sellerDeliveryContribution: _int(row['seller_delivery_contribution']),
     freeDeliveryReason: _nullableText(row['free_delivery_reason']),
     packagingTotal: _int(row['packaging_total']),
     complaints: [
@@ -2609,6 +2786,64 @@ OrderStatus _orderStatus(String value) => switch (value) {
   _ => OrderStatus.pendingReview,
 };
 
+SalesAnalyticsSnapshot _salesAnalyticsFromJson(Map<String, dynamic> row) {
+  final current = _map(row['current']);
+  final previous = _map(row['previous']);
+  return SalesAnalyticsSnapshot(
+    from: _date(row['from']),
+    to: _date(row['to']),
+    previousFrom: _date(row['previous_from']),
+    granularity: _text(row['granularity'], fallback: 'day'),
+    current: _salesAnalyticsSummaryFromJson(current),
+    previous: _salesAnalyticsSummaryFromJson(previous),
+    trend: [
+      for (final point in _maps(row['trend']))
+        SalesAnalyticsTrendPoint(
+          bucket: _date(point['bucket']),
+          orderCount: _int(point['order_count']),
+          completedCount: _int(point['completed_count']),
+          salesTotal: _int(point['sales_total']),
+          netProfit: _int(point['net_profit']),
+        ),
+    ],
+    statuses: [
+      for (final status in _maps(row['statuses']))
+        SalesAnalyticsStatusCount(
+          status: _orderStatus(_text(status['status'])),
+          orderCount: _int(status['order_count']),
+        ),
+    ],
+    topProducts: [
+      for (final product in _maps(row['top_products']))
+        SalesAnalyticsTopProduct(
+          productId: _text(product['product_id']),
+          nameAr: _text(product['name_ar'], fallback: 'منتج'),
+          nameCkb: _nullableText(product['name_ckb']),
+          nameEn: _nullableText(product['name_en']),
+          orderCount: _int(product['order_count']),
+          unitsSold: _int(product['units_sold']),
+          salesTotal: _int(product['sales_total']),
+          netProfit: _int(product['net_profit']),
+        ),
+    ],
+  );
+}
+
+SalesAnalyticsSummary _salesAnalyticsSummaryFromJson(
+  Map<String, dynamic> row,
+) => SalesAnalyticsSummary(
+  orderCount: _int(row['order_count']),
+  completedCount: _int(row['completed_count']),
+  unsuccessfulCount: _int(row['unsuccessful_count']),
+  unitsSold: _int(row['units_sold']),
+  salesTotal: _int(row['sales_total']),
+  netProfit: _int(row['net_profit']),
+  pendingProfit: _int(row['pending_profit']),
+  deliveryContribution: _int(row['delivery_contribution']),
+  averageOrderValue: _int(row['average_order_value']),
+  successRate: _double(row['success_rate']),
+);
+
 IconData _categoryIcon(String identity) {
   final value = identity.toLowerCase();
   for (final rule in _categoryIconRules) {
@@ -2741,6 +2976,13 @@ int _int(Object? value, {int fallback = 0}) => switch (value) {
 };
 
 int? _intOrNull(Object? value) => value == null ? null : _int(value);
+
+double _double(Object? value, {double fallback = 0}) => switch (value) {
+  double number => number,
+  num number => number.toDouble(),
+  String text => double.tryParse(text) ?? fallback,
+  _ => fallback,
+};
 
 bool _bool(Object? value) => value == true || value == 1 || value == 'true';
 

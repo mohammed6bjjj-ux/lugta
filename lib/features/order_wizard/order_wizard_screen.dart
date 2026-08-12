@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +11,7 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/entrance.dart';
+import '../../core/widgets/delivery_contribution_selector.dart';
 import '../../core/widgets/price_summary_card.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/quantity_stepper.dart';
@@ -65,6 +68,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   DeliveryQuote? _deliveryQuote;
   PackagingBox? _packagingBox;
   bool _loadingDeliveryQuote = false;
+  int _sellerDeliveryContribution = 0;
 
   @override
   void initState() {
@@ -150,6 +154,11 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   int get _baseDeliveryFee =>
       _deliveryQuote?.baseDeliveryFee ?? _fixedDeliveryFee;
   int get _packagingTotal => (_packagingBox?.price ?? 0) * _totalQuantity;
+  int get _maxSellerDeliveryContribution =>
+      math.min(_deliveryFee, math.max(0, _totalProfit ~/ 500 * 500));
+
+  int _clampSellerDeliveryContribution(int value) =>
+      value.clamp(0, _maxSellerDeliveryContribution).toInt();
 
   bool get _nextEnabled {
     if (_submitting) return false;
@@ -174,6 +183,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       _governorate = governorate;
       _deliveryQuote = null;
       _loadingDeliveryQuote = governorate != null;
+      _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+        _sellerDeliveryContribution,
+      );
     });
     if (governorate == null) return;
     try {
@@ -185,6 +197,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       setState(() {
         _deliveryQuote = quote;
         _loadingDeliveryQuote = false;
+        _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+          _sellerDeliveryContribution,
+        );
       });
     } catch (error) {
       if (!mounted || _governorate?.id != governorate.id) return;
@@ -217,6 +232,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           setState(() {
             _forward = true;
             _step = 3;
+            _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+              _sellerDeliveryContribution,
+            );
           });
         }
       case 3:
@@ -268,12 +286,17 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         session.refreshProductById(_product.id),
         session.refreshCatalog().then<Object>((_) => const Object()),
         session.refreshPublicData().then<Object>((_) => const Object()),
+        session.refreshLoyaltySummary().then<Object>((_) => const Object()),
       ]);
       final latestProduct = results.first as Product;
       final reconciliation = reconcileOrderDraft(
         currentDrafts: _drafts,
         latestProduct: latestProduct,
         unitSalePrice: _salePrice,
+        additionalOrderableStockByVariant: <String, int>{
+          for (final variant in latestProduct.variants)
+            variant.id: session.reservedStockForVariant(variant.id),
+        },
       );
       if (!mounted) return;
 
@@ -311,6 +334,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       _drafts = reconciliation.drafts;
       _governorate = latestGovernorate;
       _deliveryQuote = latestQuote;
+      _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+        _sellerDeliveryContribution,
+      );
       if (!packagingStillAvailable) {
         _packagingBox = null;
         setState(() {
@@ -369,6 +395,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
             ? null
             : _notesController.text.trim(),
         packagingBox: _packagingBox,
+        sellerDeliveryContribution: _sellerDeliveryContribution,
       );
       if (!mounted) return;
       Navigator.of(
@@ -1580,11 +1607,28 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         const SizedBox(height: AppSpacing.md),
         Entrance(
           index: 3,
+          child: DeliveryContributionSelector(
+            deliveryFee: _deliveryFee,
+            grossProfit: _totalProfit,
+            value: _sellerDeliveryContribution,
+            onChanged: (value) {
+              setState(() {
+                _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+                  value,
+                );
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Entrance(
+          index: 4,
           child: PriceSummaryCard(
             wholesaleTotal: _wholesaleTotal,
             saleTotal: _salePrice * _totalQuantity,
-            deliveryFee: _deliveryFee,
+            deliveryFee: _deliveryFee - _sellerDeliveryContribution,
             baseDeliveryFee: _baseDeliveryFee,
+            sellerDeliveryContribution: _sellerDeliveryContribution,
             packagingTotal: _packagingTotal,
             quantity: _totalQuantity,
           ),
@@ -2534,7 +2578,9 @@ class _VariantTile extends StatelessWidget {
     final theme = Theme.of(context);
     final variant = draft.variant;
     final selected = draft.quantity > 0;
-    final outOfStock = !variant.inStock;
+    final orderableStock = session.orderableStockForVariant(variant);
+    final reservedStock = session.reservedStockForVariant(variant.id);
+    final outOfStock = orderableStock <= 0;
 
     return Opacity(
       opacity: outOfStock ? .55 : 1,
@@ -2613,24 +2659,36 @@ class _VariantTile extends StatelessWidget {
                     )
                   else
                     Text(
-                      variant.lowStock
+                      orderableStock <= 3
                           ? WizardStrings.stockLimited(
-                              formatNumber(variant.stock),
+                              formatNumber(orderableStock),
                             )
                           : WizardStrings.stockCount(
-                              formatNumber(variant.stock),
+                              formatNumber(orderableStock),
                             ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: variant.lowStock
+                        color: orderableStock <= 3
                             ? AppColors.warning
                             : AppColors.textSecondary,
-                        fontWeight: variant.lowStock
+                        fontWeight: orderableStock <= 3
                             ? FontWeight.w700
                             : FontWeight.w500,
                       ),
                     ),
+                  if (reservedStock > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      WizardStrings.reservedStockForYou(
+                        formatNumber(reservedStock),
+                      ),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -2644,7 +2702,7 @@ class _VariantTile extends StatelessWidget {
                   'variant_decrement_${variant.id}',
                 ),
                 value: draft.quantity,
-                max: variant.stock,
+                max: orderableStock,
                 onChanged: onQuantityChanged,
               ),
           ],

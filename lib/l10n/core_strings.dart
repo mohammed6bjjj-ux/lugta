@@ -78,6 +78,16 @@ class CoreStrings {
     'کرێی گەیاندن (لەسەر کڕیار)',
     'Delivery fee (on customer)',
   );
+  static String get sellerDeliveryContribution => _t(
+    'تتحمل من أجرة التوصيل',
+    'بەشی تۆ لە کرێی گەیاندن',
+    'Your delivery contribution',
+  );
+  static String get customerDeliveryAfterDiscounts => _t(
+    'المتبقي على الزبون للتوصيل',
+    'ماوەی کرێی گەیاندن لەسەر کڕیار',
+    'Delivery remaining for customer',
+  );
   static String get packagingFeeOnCustomer => _t(
     'التعليب (على الزبون)',
     'پاکەتکردن (لەسەر کڕیار)',

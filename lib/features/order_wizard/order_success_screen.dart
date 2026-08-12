@@ -231,6 +231,9 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                         saleTotal: order.saleTotal,
                         deliveryFee: order.deliveryFee,
                         baseDeliveryFee: order.baseDeliveryFee,
+                        sellerDeliveryContribution:
+                            order.sellerDeliveryContribution,
+                        promotionDeliveryDiscount: order.deliveryDiscount,
                         packagingTotal: order.packagingTotal,
                         quantity: order.totalQuantity,
                       ),

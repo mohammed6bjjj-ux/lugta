@@ -92,6 +92,23 @@ class MockData {
       rewardType: 'free_delivery',
       rewardValue: 1,
       rewardValidDays: 14,
+      benefits: [
+        LoyaltyTierBenefit(
+          type: LoyaltyBenefitType.productSourcing,
+          enabled: true,
+          monthlyLimit: 2,
+          maxPerRequest: 10,
+          usedThisMonth: 1,
+          remainingThisMonth: 1,
+        ),
+        LoyaltyTierBenefit(
+          type: LoyaltyBenefitType.customPhotography,
+          enabled: true,
+          monthlyLimit: 1,
+          maxPerRequest: 5,
+          remainingThisMonth: 1,
+        ),
+      ],
     ),
     nextTier: const LoyaltyNextTier(
       code: LoyaltyTierCode.silver,
@@ -113,6 +130,20 @@ class MockData {
         rewardType: 'free_delivery',
         rewardValue: 1,
         rewardValidDays: 14,
+        benefits: [
+          LoyaltyTierBenefit(
+            type: LoyaltyBenefitType.productSourcing,
+            enabled: true,
+            monthlyLimit: 2,
+            maxPerRequest: 10,
+          ),
+          LoyaltyTierBenefit(
+            type: LoyaltyBenefitType.customPhotography,
+            enabled: true,
+            monthlyLimit: 1,
+            maxPerRequest: 5,
+          ),
+        ],
       ),
       LoyaltyTierDefinition(
         code: LoyaltyTierCode.silver,
@@ -124,6 +155,20 @@ class MockData {
         rewardType: 'wallet_credit',
         rewardValue: 10000,
         rewardValidDays: 30,
+        benefits: [
+          LoyaltyTierBenefit(
+            type: LoyaltyBenefitType.productSourcing,
+            enabled: true,
+            monthlyLimit: 4,
+            maxPerRequest: 20,
+          ),
+          LoyaltyTierBenefit(
+            type: LoyaltyBenefitType.customPhotography,
+            enabled: true,
+            monthlyLimit: 2,
+            maxPerRequest: 8,
+          ),
+        ],
       ),
       LoyaltyTierDefinition(
         code: LoyaltyTierCode.gold,
@@ -135,6 +180,52 @@ class MockData {
         rewardType: 'free_delivery',
         rewardValue: 3,
         rewardValidDays: 30,
+        benefits: [
+          LoyaltyTierBenefit(
+            type: LoyaltyBenefitType.productSourcing,
+            enabled: true,
+            monthlyLimit: 8,
+            maxPerRequest: 50,
+          ),
+          LoyaltyTierBenefit(
+            type: LoyaltyBenefitType.customPhotography,
+            enabled: true,
+            monthlyLimit: 4,
+            maxPerRequest: 12,
+          ),
+        ],
+      ),
+      LoyaltyTierDefinition(
+        code: LoyaltyTierCode.diamond,
+        nameAr: 'ألماسي',
+        nameCkb: 'ئەڵماس',
+        nameEn: 'Diamond',
+        threshold: 6000,
+        rewardEnabled: false,
+        rewardType: '',
+        rewardValue: 0,
+        benefits: [
+          LoyaltyTierBenefit(
+            type: LoyaltyBenefitType.productSourcing,
+            enabled: true,
+            monthlyLimit: 12,
+            maxPerRequest: 75,
+          ),
+          LoyaltyTierBenefit(
+            type: LoyaltyBenefitType.customPhotography,
+            enabled: true,
+            monthlyLimit: 6,
+            maxPerRequest: 20,
+          ),
+        ],
+        stockReservation: StockReservationEntitlement(
+          enabled: true,
+          maxActiveUnits: 12,
+          maxPerReservation: 4,
+          holdHours: 24,
+          activeUnits: 0,
+          remainingUnits: 12,
+        ),
       ),
     ],
     recentEntries: [
@@ -157,6 +248,21 @@ class MockData {
         soldUnits: 1,
         description: 'نقاط بيع طلب مكتمل',
         createdAt: _now.subtract(const Duration(days: 3)),
+      ),
+    ],
+    recentBenefitRequests: [
+      LoyaltyBenefitRequest(
+        id: 'benefit-demo-1',
+        requestNumber: 17,
+        tierCode: LoyaltyTierCode.bronze,
+        benefitType: LoyaltyBenefitType.productSourcing,
+        itemName: 'ساعة رياضية مقاومة للماء',
+        requestedQuantity: 3,
+        status: LoyaltyBenefitRequestStatus.approved,
+        details: 'يفضل لون أسود مع سوار سيليكون.',
+        adminResponse: 'تم قبول الطلب وجارٍ البحث عن المورد المناسب.',
+        createdAt: _now.subtract(const Duration(days: 2)),
+        updatedAt: _now.subtract(const Duration(days: 1)),
       ),
     ],
   );

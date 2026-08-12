@@ -5,6 +5,7 @@ import 'package:flutter_app/data/app_settings.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
 import 'package:flutter_app/data/repositories/repositories.dart';
+import 'package:flutter_app/data/sales_analytics.dart';
 import 'package:flutter_app/data/session.dart';
 import 'package:flutter_app/features/order_wizard/order_wizard_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -189,6 +190,12 @@ class _SlowCountingOrdersRepository implements OrdersRepository {
 
   @override
   Future<Order> fetchOrder(String orderId) => _delegate.fetchOrder(orderId);
+
+  @override
+  Future<SalesAnalyticsSnapshot> fetchSalesAnalytics({
+    required DateTime from,
+    required DateTime to,
+  }) => _delegate.fetchSalesAnalytics(from: from, to: to);
 
   @override
   Future<List<Order>> fetchOrders() => _delegate.fetchOrders();

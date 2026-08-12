@@ -44,6 +44,11 @@ class CartStrings {
   static String get quantity => _t('الكمية', 'ژمارە', 'Quantity');
   static String availableStock(String count) =>
       _t('المتوفر $count قطعة', '$count دانە بەردەستە', '$count available');
+  static String reservedForYou(String count) => _t(
+    'من حجزك الألماسي: $count قطعة',
+    'لە حجزە ئەڵماسییەکەت: $count دانە',
+    '$count from your Diamond reservation',
+  );
   static String priceRange(String minimum, String maximum) => _t(
     'سعر البيع من $minimum إلى $maximum',
     'نرخی فرۆشتن لە $minimum بۆ $maximum',

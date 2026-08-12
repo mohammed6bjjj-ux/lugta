@@ -13,6 +13,7 @@ import 'catalog_snapshot_cache.dart';
 import 'mock_data.dart';
 import 'models.dart';
 import 'notification_deep_link.dart';
+import 'sales_analytics.dart';
 import 'repositories/demo_repositories.dart';
 import 'repositories/repositories.dart';
 import 'services/device_token_registrar.dart';
@@ -177,6 +178,34 @@ class AppSession extends ChangeNotifier {
   int get cartProfitTotal =>
       cartItems.fold(0, (sum, item) => sum + item.profitTotal);
   String get cartClientRequestId => _cartClientRequestId;
+
+  /// Units held by this seller remain orderable for the seller even though
+  /// they are removed from the public catalog stock while the hold is active.
+  int reservedStockForVariant(String variantId, {DateTime? now}) {
+    final normalizedId = variantId.trim();
+    if (normalizedId.isEmpty) return 0;
+    final referenceTime = now ?? DateTime.now();
+    return loyaltySummary?.recentStockReservations
+            .where(
+              (reservation) =>
+                  reservation.variantId == normalizedId &&
+                  reservation.isActive &&
+                  reservation.remainingQuantity > 0 &&
+                  reservation.expiresAt.isAfter(referenceTime),
+            )
+            .fold<int>(
+              0,
+              (sum, reservation) => sum + reservation.remainingQuantity,
+            ) ??
+        0;
+  }
+
+  int orderableStockForVariant(ProductVariant variant, {DateTime? now}) =>
+      variant.stock + reservedStockForVariant(variant.id, now: now);
+
+  bool isVariantOrderable(ProductVariant variant, {DateTime? now}) =>
+      orderableStockForVariant(variant, now: now) > 0;
+
   AppNotification? get nextPopupNotification {
     final candidates =
         notifications
@@ -581,6 +610,96 @@ class AppSession extends ChangeNotifier {
     return _refreshLoyaltySummaryForScope(scope);
   }
 
+  Future<StockReservation> reserveProductStock({
+    required String variantId,
+    required int quantity,
+    required String clientRequestId,
+  }) async {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null || seller.status != AccountStatus.approved) {
+      throw StateError('يجب تسجيل الدخول بحساب بائع مفعل.');
+    }
+    final reservation = await scope.repositories.loyalty.reserveProductStock(
+      variantId: variantId,
+      quantity: quantity,
+      clientRequestId: clientRequestId,
+    );
+    if (_isCurrent(scope)) {
+      // Refresh public stock first: once the hold is visible in the loyalty
+      // summary it is added back only for its owner. This ordering prevents a
+      // temporary overstatement while the catalog still contains pre-hold
+      // stock.
+      var catalogSynced = false;
+      try {
+        await refreshCatalog();
+        catalogSynced = true;
+      } catch (_) {
+        // The mutation already succeeded. Keep the previous safe snapshot and
+        // let pull-to-refresh/realtime reconcile without encouraging a retry.
+      }
+      if (catalogSynced && _isCurrent(scope)) {
+        try {
+          await _refreshLoyaltySummaryForScope(scope);
+        } catch (_) {
+          // The reduced public stock is safe until the reservation refreshes.
+        }
+      }
+    }
+    return reservation;
+  }
+
+  Future<void> releaseProductReservation(String reservationId) async {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null || seller.status != AccountStatus.approved) {
+      throw StateError('يجب تسجيل الدخول بحساب بائع مفعل.');
+    }
+    await scope.repositories.loyalty.releaseProductReservation(reservationId);
+    if (_isCurrent(scope)) {
+      // Remove the private allowance before refreshing public stock so an
+      // already-released hold can never be counted twice between requests.
+      var loyaltySynced = false;
+      try {
+        await _refreshLoyaltySummaryForScope(scope);
+        loyaltySynced = true;
+      } catch (_) {
+        // The release itself succeeded; a later refresh can reconcile safely.
+      }
+      if (loyaltySynced && _isCurrent(scope)) {
+        try {
+          await refreshCatalog();
+        } catch (_) {
+          // Keeping the lower catalog stock is conservative and safe.
+        }
+      }
+    }
+  }
+
+  Future<void> submitLoyaltyBenefitRequest({
+    required LoyaltyBenefitType type,
+    required int quantity,
+    String? itemName,
+    String? productId,
+    String details = '',
+    LoyaltyReferenceImage? referenceImage,
+    LoyaltyContentKind? contentKind,
+  }) async {
+    final scope = _captureAuthenticatedScope();
+    if (scope == null || seller.status != AccountStatus.approved) {
+      throw StateError('يجب تسجيل الدخول بحساب بائع مفعل.');
+    }
+    await scope.repositories.loyalty.submitBenefitRequest(
+      type: type,
+      quantity: quantity,
+      itemName: itemName,
+      productId: productId,
+      details: details,
+      referenceImage: referenceImage,
+      contentKind: contentKind,
+    );
+    if (!_isCurrent(scope)) return;
+    await _refreshLoyaltySummaryForScope(scope);
+  }
+
   Future<void> _refreshLoyaltySummaryForScope(
     _AuthenticatedRequestScope scope,
   ) {
@@ -594,6 +713,7 @@ class AppSession extends ChangeNotifier {
         if (!_isCurrent(scope)) return;
         loyaltySummary = summary;
         loyaltySummaryLoaded = true;
+        _reconcileCartWithCatalog();
       } catch (error) {
         if (!_isCurrent(scope)) rethrow;
         loyaltySummaryError = _messageFor(error);
@@ -852,7 +972,7 @@ class AppSession extends ChangeNotifier {
               product,
               map['variant_id']?.toString(),
             );
-            if (variant == null || !variant.inStock) {
+            if (variant == null || !isVariantOrderable(variant)) {
               normalizedDuringRestore = true;
               continue;
             }
@@ -860,7 +980,10 @@ class AppSession extends ChangeNotifier {
             final requestedQuantity = rawQuantity is num
                 ? rawQuantity.toInt()
                 : int.tryParse(rawQuantity?.toString() ?? '') ?? 1;
-            final quantity = requestedQuantity.clamp(1, variant.stock);
+            final quantity = requestedQuantity.clamp(
+              1,
+              orderableStockForVariant(variant),
+            );
             if (quantity != requestedQuantity) normalizedDuringRestore = true;
             final rawPrice = map['unit_sale_price'];
             var unitSalePrice = rawPrice is num
@@ -920,7 +1043,7 @@ class AppSession extends ChangeNotifier {
       final variant = product == null
           ? null
           : _variantForCartId(product, current.variant.id);
-      if (product == null || variant == null || !variant.inStock) {
+      if (product == null || variant == null || !isVariantOrderable(variant)) {
         payloadChanged = true;
         continue;
       }
@@ -928,7 +1051,10 @@ class AppSession extends ChangeNotifier {
         payloadChanged = true;
         continue;
       }
-      final quantity = current.quantity.clamp(1, variant.stock);
+      final quantity = current.quantity.clamp(
+        1,
+        orderableStockForVariant(variant),
+      );
       final packaging = product.packagingEnabled
           ? _packagingBoxForCartId(current.packagingBox?.id)
           : null;
@@ -1398,6 +1524,27 @@ class AppSession extends ChangeNotifier {
     return next;
   }
 
+  /// Loads a complete server-side analytics range instead of deriving totals
+  /// from the paginated order list kept in the mobile session.
+  Future<SalesAnalyticsSnapshot> fetchSalesAnalytics({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final scope = _requireAuthenticatedScope();
+    if (seller.status != AccountStatus.approved) {
+      throw const BackendException('Seller account is not approved.');
+    }
+    final snapshot = await scope.repositories.orders.fetchSalesAnalytics(
+      from: from,
+      to: to,
+    );
+    _ensureCurrent(scope);
+    if (seller.status != AccountStatus.approved) {
+      throw const BackendException('Seller account is not approved.');
+    }
+    return snapshot;
+  }
+
   /// Fetches one active product and replaces its cached snapshot before a
   /// notification opens product details.
   Future<Product> refreshProductById(String productId) {
@@ -1533,8 +1680,14 @@ class AppSession extends ChangeNotifier {
     if (quantity <= 0) {
       throw const BackendException('يجب أن تكون الكمية أكبر من صفر.');
     }
-    if (!variant.inStock) {
+    final orderableStock = orderableStockForVariant(variant);
+    if (orderableStock <= 0) {
       throw const BackendException('هذا الخيار غير متوفر حالياً.');
+    }
+    if (quantity > orderableStock) {
+      throw BackendException(
+        'الكمية المطلوبة أكبر من المخزون المتوفر ($orderableStock).',
+      );
     }
 
     final existingIndex = cartItems.indexWhere(
@@ -1543,9 +1696,9 @@ class AppSession extends ChangeNotifier {
     if (existingIndex >= 0) {
       final existing = cartItems[existingIndex];
       final updatedQuantity = existing.quantity + quantity;
-      if (updatedQuantity > variant.stock) {
+      if (updatedQuantity > orderableStock) {
         throw BackendException(
-          'الكمية المطلوبة أكبر من المخزون المتوفر (${variant.stock}).',
+          'الكمية المطلوبة أكبر من المخزون المتوفر ($orderableStock).',
         );
       }
       _replaceCartItem(
@@ -1601,12 +1754,13 @@ class AppSession extends ChangeNotifier {
     if (!belongsToProduct) {
       throw const BackendException('هذا الخيار لا يتبع للمنتج المحدد.');
     }
-    if (!variant.inStock) {
+    final orderableStock = orderableStockForVariant(variant);
+    if (orderableStock <= 0) {
       throw const BackendException('هذا الخيار غير متوفر حالياً.');
     }
-    if (quantity <= 0 || quantity > variant.stock) {
+    if (quantity <= 0 || quantity > orderableStock) {
       throw BackendException(
-        'الكمية المطلوبة يجب أن تكون بين 1 و${variant.stock}.',
+        'الكمية المطلوبة يجب أن تكون بين 1 و$orderableStock.',
       );
     }
 
@@ -1666,9 +1820,10 @@ class AppSession extends ChangeNotifier {
       return;
     }
     final item = cartItems[index];
-    if (quantity > item.variant.stock) {
+    final orderableStock = orderableStockForVariant(item.variant);
+    if (quantity > orderableStock) {
       throw BackendException(
-        'الكمية المطلوبة أكبر من المخزون المتوفر (${item.variant.stock}).',
+        'الكمية المطلوبة أكبر من المخزون المتوفر ($orderableStock).',
       );
     }
     _replaceCartItem(index, item.copyWith(quantity: quantity));
@@ -1741,6 +1896,7 @@ class AppSession extends ChangeNotifier {
     String? customerPhone2,
     required String addressDetails,
     String? notes,
+    int sellerDeliveryContribution = 0,
   }) async {
     final scope = _requireAuthenticatedScope();
     if (cartItems.isEmpty) {
@@ -1770,6 +1926,7 @@ class AppSession extends ChangeNotifier {
         customerPhone2: customerPhone2,
         addressDetails: addressDetails,
         notes: notes,
+        sellerDeliveryContribution: sellerDeliveryContribution,
       ),
     );
     _ensureCurrent(scope);
@@ -1796,6 +1953,7 @@ class AppSession extends ChangeNotifier {
     required String addressDetails,
     String? notes,
     PackagingBox? packagingBox,
+    int sellerDeliveryContribution = 0,
   }) async {
     final scope = _requireAuthenticatedScope();
     final order = await scope.repositories.orders.createOrder(
@@ -1811,6 +1969,7 @@ class AppSession extends ChangeNotifier {
         addressDetails: addressDetails,
         notes: notes,
         packagingBox: packagingBox,
+        sellerDeliveryContribution: sellerDeliveryContribution,
       ),
     );
     _ensureCurrent(scope);

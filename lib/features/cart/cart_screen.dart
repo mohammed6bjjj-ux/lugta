@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/delivery_contribution_selector.dart';
 import '../../core/widgets/price_summary_card.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/quantity_stepper.dart';
@@ -44,6 +46,7 @@ class _CartScreenState extends State<CartScreen> {
   DeliveryQuote? _deliveryQuote;
   Timer? _deliveryQuoteRefreshTimer;
   int _deliveryQuoteRequest = 0;
+  int _sellerDeliveryContribution = 0;
 
   @override
   void initState() {
@@ -75,6 +78,11 @@ class _CartScreenState extends State<CartScreen> {
   int get _deliveryFee => _deliveryQuote?.deliveryFee ?? _fixedDeliveryFee;
   int get _baseDeliveryFee =>
       _deliveryQuote?.baseDeliveryFee ?? _fixedDeliveryFee;
+  int get _maxSellerDeliveryContribution =>
+      math.min(_deliveryFee, math.max(0, session.cartProfitTotal ~/ 500 * 500));
+
+  int _clampSellerDeliveryContribution(int value) =>
+      value.clamp(0, _maxSellerDeliveryContribution).toInt();
 
   Future<void> _confirmClearCart() async {
     final confirmed = await showDialog<bool>(
@@ -102,6 +110,7 @@ class _CartScreenState extends State<CartScreen> {
       setState(() {
         _step = 0;
         _deliveryQuote = null;
+        _sellerDeliveryContribution = 0;
       });
     }
   }
@@ -113,6 +122,7 @@ class _CartScreenState extends State<CartScreen> {
       setState(() {
         _step = 0;
         _deliveryQuote = null;
+        _sellerDeliveryContribution = 0;
       });
       return;
     }
@@ -127,6 +137,8 @@ class _CartScreenState extends State<CartScreen> {
       packagingBoxes: session.packagingBoxes,
       existingItem: item,
       allowPriceEditing: false,
+      availableStock: session.orderableStockForVariant(item.variant),
+      reservedStock: session.reservedStockForVariant(item.variant.id),
     );
     if (configuration == null || !mounted) return;
     try {
@@ -164,6 +176,9 @@ class _CartScreenState extends State<CartScreen> {
       setState(() {
         _deliveryQuote = null;
         _loadingDeliveryQuote = false;
+        _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+          _sellerDeliveryContribution,
+        );
       });
     }
     if (session.cartItems.isEmpty) return;
@@ -195,6 +210,9 @@ class _CartScreenState extends State<CartScreen> {
       setState(() {
         _deliveryQuote = quote;
         _loadingDeliveryQuote = false;
+        _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+          _sellerDeliveryContribution,
+        );
       });
     } catch (error) {
       if (!mounted || request != _deliveryQuoteRequest) return;
@@ -286,6 +304,9 @@ class _CartScreenState extends State<CartScreen> {
       if (!mounted) return;
       _governorate = latestGovernorate;
       _deliveryQuote = latestQuote;
+      _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+        _sellerDeliveryContribution,
+      );
       if (latestQuote.deliveryFee != previousDeliveryFee) {
         setState(() {
           _submitting = false;
@@ -306,6 +327,7 @@ class _CartScreenState extends State<CartScreen> {
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        sellerDeliveryContribution: _sellerDeliveryContribution,
       );
       if (!mounted) return;
       Navigator.of(
@@ -438,6 +460,8 @@ class _CartScreenState extends State<CartScreen> {
           child: _CartLineCard(
             key: ValueKey('cart_line_${item.id}'),
             item: item,
+            orderableStock: session.orderableStockForVariant(item.variant),
+            reservedStock: session.reservedStockForVariant(item.variant.id),
             onQuantityChanged: (quantity) {
               session.updateCartQuantity(item.id, quantity);
               _scheduleDeliveryQuoteRefresh();
@@ -701,6 +725,19 @@ class _CartScreenState extends State<CartScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
+        DeliveryContributionSelector(
+          deliveryFee: _deliveryFee,
+          grossProfit: session.cartProfitTotal,
+          value: _sellerDeliveryContribution,
+          onChanged: (value) {
+            setState(() {
+              _sellerDeliveryContribution = _clampSellerDeliveryContribution(
+                value,
+              );
+            });
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
         _buildTotalsCard(includeDelivery: true),
       ],
     );
@@ -710,8 +747,13 @@ class _CartScreenState extends State<CartScreen> {
     wholesaleTotal: session.cartWholesaleTotal,
     saleTotal: session.cartSaleTotal,
     packagingTotal: session.cartPackagingTotal,
-    deliveryFee: includeDelivery ? _deliveryFee : 0,
+    deliveryFee: includeDelivery
+        ? _deliveryFee - _sellerDeliveryContribution
+        : 0,
     baseDeliveryFee: includeDelivery ? _baseDeliveryFee : 0,
+    sellerDeliveryContribution: includeDelivery
+        ? _sellerDeliveryContribution
+        : 0,
     quantity: session.cartQuantity,
   );
 
@@ -761,12 +803,16 @@ class _CartLineCard extends StatelessWidget {
   const _CartLineCard({
     super.key,
     required this.item,
+    required this.orderableStock,
+    required this.reservedStock,
     required this.onQuantityChanged,
     required this.onEditOptions,
     required this.onRemove,
   });
 
   final CartItem item;
+  final int orderableStock;
+  final int reservedStock;
   final ValueChanged<int> onQuantityChanged;
   final VoidCallback onEditOptions;
   final VoidCallback onRemove;
@@ -821,6 +867,16 @@ class _CartLineCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (reservedStock > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        CartStrings.reservedForYou(formatNumber(reservedStock)),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1045,7 +1101,7 @@ class _CartLineCard extends StatelessWidget {
                   QuantityStepper(
                     value: item.quantity,
                     min: 1,
-                    max: item.variant.stock,
+                    max: orderableStock,
                     incrementKey: ValueKey('cart_increment_${item.id}'),
                     decrementKey: ValueKey('cart_decrement_${item.id}'),
                     onChanged: onQuantityChanged,
