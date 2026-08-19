@@ -60,9 +60,13 @@ String formatDateTime(DateTime d) {
   return '${formatDate(d)} — $hour12:$minutes $period';
 }
 
+/// مزوّد الساعة للأزمنة النسبية. اختبارات الـgoldens تثبته مع
+/// MockData.debugNow حتى لا تنجرف العبارات النسبية يوماً بعد يوم.
+DateTime Function() debugClock = DateTime.now;
+
 /// وقت نسبي بلغة التطبيق: منذ 5 دقائق / ٥ خولەک لەمەوبەر / 5m ago
 String timeAgo(DateTime d) {
-  final diff = DateTime.now().difference(d);
+  final diff = debugClock().difference(d);
   return switch (appSettings.language) {
     AppLanguage.ar => _timeAgoAr(diff, d),
     AppLanguage.ckb => _timeAgoCkb(diff, d),

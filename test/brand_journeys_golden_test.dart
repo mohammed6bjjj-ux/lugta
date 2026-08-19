@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app/app/app_router.dart';
 import 'package:flutter_app/app/ckb_localizations.dart';
 import 'package:flutter_app/app/theme.dart';
+import 'package:flutter_app/core/formatters.dart';
 import 'package:flutter_app/core/widgets/app_network_image.dart';
 import 'package:flutter_app/data/app_settings.dart';
 import 'package:flutter_app/data/mock_data.dart';
@@ -36,10 +37,11 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   late final List<MemoryImage> productImages;
   setUpAll(() async {
-    // Pin the demo-data clock before anything touches MockData: every
-    // rendered relative date stays identical to the day the golden
-    // baselines were captured, so they never drift day to day.
+    // Pin BOTH clocks to one instant before anything touches MockData:
+    // absolute demo dates and relative "time ago" labels then render
+    // identically on any day, so the baselines never drift.
     MockData.debugNow = DateTime(2026, 8, 18, 12);
+    debugClock = () => DateTime(2026, 8, 18, 12);
     final zainExtraLight = FontLoader('Zain')
       ..addFont(rootBundle.load('assets/fonts/Zain-ExtraLight.ttf'));
     final zainRegular = FontLoader('Zain')
