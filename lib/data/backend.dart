@@ -9,6 +9,7 @@ import 'repositories/demo_repositories.dart';
 import 'repositories/repositories.dart';
 import 'repositories/supabase_repositories.dart';
 import 'secure_session_storage.dart';
+import 'services/app_heartbeat_service.dart';
 import 'services/device_token_registrar.dart';
 
 class AppBackend {
@@ -17,6 +18,7 @@ class AppBackend {
   static final AppBackend instance = AppBackend._();
 
   AppRepositories repositories = createDemoRepositories();
+  AppHeartbeat heartbeat = const NoopAppHeartbeat();
   DeviceTokenRegistrar deviceTokens = const NoopDeviceTokenRegistrar();
 
   AuthRepository get auth => repositories.auth;
@@ -24,6 +26,8 @@ class AppBackend {
   Future<void> initialize() async {
     if (AppConfig.demoRequested) {
       NetworkMediaRequest.reset();
+      await heartbeat.dispose();
+      heartbeat = const NoopAppHeartbeat();
       await deviceTokens.dispose();
       deviceTokens = const NoopDeviceTokenRegistrar();
       repositories = createDemoRepositories();
@@ -49,6 +53,8 @@ class AppBackend {
       storageOptions: const StorageClientOptions(retryAttempts: 2),
     );
     final client = Supabase.instance.client;
+    await heartbeat.dispose();
+    heartbeat = await createAppHeartbeat(client);
     NetworkMediaRequest.configure(
       headersProvider: () {
         final token = client.auth.currentSession?.accessToken.trim() ?? '';

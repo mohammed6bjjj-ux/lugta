@@ -35,6 +35,7 @@ class AppBootstrap {
     ]);
     await session.configure(
       appBackend.repositories,
+      heartbeat: appBackend.heartbeat,
       deviceTokens: appBackend.deviceTokens,
       loadInitialData: false,
     );

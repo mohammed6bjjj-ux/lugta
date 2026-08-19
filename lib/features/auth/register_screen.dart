@@ -277,12 +277,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           hint: AuthStrings.referralCodeHint,
                           textDirection: TextDirection.ltr,
                           prefixIcon: Icons.group_add_outlined,
+                          validator: validateReferralCode,
                           textInputAction: TextInputAction.next,
                           inputFormatters: [
                             FilteringTextInputFormatter.allow(
-                              RegExp(r'[A-Za-z0-9_-]'),
+                              RegExp(r'[A-Za-z0-9]'),
                             ),
-                            LengthLimitingTextInputFormatter(32),
+                            LengthLimitingTextInputFormatter(16),
                           ],
                         ),
                         const SizedBox(height: AppSpacing.md),

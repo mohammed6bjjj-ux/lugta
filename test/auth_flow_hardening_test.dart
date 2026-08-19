@@ -13,6 +13,8 @@ import 'package:flutter_app/features/auth/forgot_password_screen.dart';
 import 'package:flutter_app/features/auth/login_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart' as http_testing;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -241,6 +243,96 @@ void main() {
       },
     );
   }
+
+  test(
+    'an already-active profile is treated as completed registration '
+    'without calling the completion RPC again',
+    () async {
+      const secureStorage = FlutterSecureStorage();
+      final auth = _FakeGoTrueClient();
+      var rpcCalls = 0;
+      final rest = http_testing.MockClient((request) async {
+        if (request.url.path.contains('/rpc/complete_seller_registration')) {
+          rpcCalls += 1;
+          return http.Response('{}', 404, request: request);
+        }
+        if (request.url.path.endsWith('/profiles')) {
+          // The phone-confirmation trigger already completed this seller.
+          return http.Response(
+            '{"status":"active"}',
+            200,
+            request: request,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('[]', 200,
+            request: request,
+            headers: const {'content-type': 'application/json'});
+      });
+      final client = _FakeSupabaseClient(auth, httpClient: rest);
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      final repository = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: secureStorage,
+      );
+
+      await repository.signUp(_registration());
+      expect(await secureStorage.read(key: pendingRegistrationKey), isNotEmpty);
+      auth.establishSession();
+
+      final completed = await repository.completePendingRegistration();
+
+      expect(completed, isTrue);
+      expect(rpcCalls, 0);
+      expect(await secureStorage.read(key: pendingRegistrationKey), isNull);
+    },
+  );
+
+  test(
+    'OTP verification succeeds when the draft is gone but the backend '
+    'already completed the registration',
+    () async {
+      const secureStorage = FlutterSecureStorage();
+      final auth = _FakeGoTrueClient();
+      final rest = http_testing.MockClient((request) async {
+        if (request.url.path.endsWith('/profiles')) {
+          return http.Response(
+            '{"status":"active"}',
+            200,
+            request: request,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('[]', 200,
+            request: request,
+            headers: const {'content-type': 'application/json'});
+      });
+      final client = _FakeSupabaseClient(auth, httpClient: rest);
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      final repository = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: secureStorage,
+      );
+
+      // No local draft exists (fresh storage) and the fake user carries no
+      // seller_registration metadata, yet the profile is already active.
+      auth.establishSession();
+
+      await repository.verifyOtp(
+        phone: '07712345678',
+        token: '123456',
+        purpose: OtpPurpose.registration,
+      );
+    },
+  );
 
   test(
     'durable recovery gate signs out an interrupted recovery after restart',
@@ -585,10 +677,11 @@ Session _session() => Session(
 );
 
 class _FakeSupabaseClient extends SupabaseClient {
-  _FakeSupabaseClient(this.fakeAuth)
+  _FakeSupabaseClient(this.fakeAuth, {http.Client? httpClient})
     : super(
         'http://localhost',
         'test-key',
+        httpClient: httpClient,
         authOptions: const AuthClientOptions(autoRefreshToken: false),
       );
 

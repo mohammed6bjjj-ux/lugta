@@ -16,28 +16,35 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('successful password sign-in clears a pending registration', () async {
-    FlutterSecureStorage.setMockInitialValues({
-      pendingKey: jsonEncode(_draft(phone: '+9647712345678')),
-    });
-    const storage = FlutterSecureStorage();
-    final auth = _FakeGoTrueClient();
-    final client = _FakeSupabaseClient(auth);
-    addTearDown(() async {
-      await client.dispose();
-      auth.dispose();
-    });
-    final repository = SupabaseAuthRepository(
-      client,
-      const NoopDeviceTokenRegistrar(),
-      secureStorage: storage,
-    );
+  test(
+    'password sign-in keeps an incomplete registration draft for retry',
+    () async {
+      // Since the interrupted-registration hardening, login must NOT discard
+      // the draft: it is the only local recovery source until the profile RPC
+      // commits. With an unconfirmed phone the completion attempt no-ops and
+      // the draft survives the sign-in.
+      FlutterSecureStorage.setMockInitialValues({
+        pendingKey: jsonEncode(_draft(phone: '+9647712345678')),
+      });
+      const storage = FlutterSecureStorage();
+      final auth = _FakeGoTrueClient();
+      final client = _FakeSupabaseClient(auth);
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      final repository = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: storage,
+      );
 
-    await repository.signIn(phone: '07712345678', password: '123456');
+      await repository.signIn(phone: '07712345678', password: '123456');
 
-    expect(auth.signInCalls, 1);
-    expect(await storage.read(key: pendingKey), isNull);
-  });
+      expect(auth.signInCalls, 1);
+      expect(await storage.read(key: pendingKey), isNotEmpty);
+    },
+  );
 
   test('phone mismatch silently clears the stale draft', () async {
     FlutterSecureStorage.setMockInitialValues({

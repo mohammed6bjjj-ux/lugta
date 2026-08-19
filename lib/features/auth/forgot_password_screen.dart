@@ -26,6 +26,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  static const _resendCooldownSeconds = 60;
   static List<String> get _stepTitles => [
     AuthStrings.stepPhone,
     AuthStrings.otpTitle,
@@ -49,7 +50,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _obscureConfirm = true;
 
   Timer? _timer;
-  int _secondsLeft = 60;
+  int _secondsLeft = _resendCooldownSeconds;
 
   @override
   void dispose() {
@@ -95,7 +96,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   void _startCountdown() {
     _timer?.cancel();
-    setState(() => _secondsLeft = 60);
+    setState(() => _secondsLeft = _resendCooldownSeconds);
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();

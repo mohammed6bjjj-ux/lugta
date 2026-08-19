@@ -154,6 +154,26 @@ class AuthStrings {
     'کۆدەکەی هاوڕێکەت بنووسە',
     'Enter the code a friend shared',
   );
+  static String get completeAccountTitle => _t(
+    'إكمال بيانات الحساب',
+    'تەواوکردنی زانیاری هەژمار',
+    'Complete account details',
+  );
+  static String get completeAccountBody => _t(
+    'رقمك مؤكد. أكمل بيانات المتجر مرة واحدة لتفعيل الحساب.',
+    'ژمارەکەت پشتڕاست کراوەتەوە. زانیاری فرۆشگا تەواو بکە بۆ چالاککردنی هەژمار.',
+    'Your phone is verified. Complete the store details once to activate the account.',
+  );
+  static String get completeAccountAction => _t(
+    'حفظ وتفعيل الحساب',
+    'پاشەکەوتکردن و چالاککردنی هەژمار',
+    'Save and activate account',
+  );
+  static String get missingRegistrationData => _t(
+    'رقم الهاتف مؤكد، لكن بيانات الحساب غير مكتملة.',
+    'ژمارەی مۆبایل پشتڕاست کراوەتەوە، بەڵام زانیاری هەژمار تەواو نییە.',
+    'The phone is verified, but the account details are incomplete.',
+  );
   static String get governorate => _t('المحافظة', 'پارێزگا', 'Governorate');
   static String get governorateHint =>
       _t('اختر محافظتك', 'پارێزگاکەت هەڵبژێرە', 'Select your governorate');

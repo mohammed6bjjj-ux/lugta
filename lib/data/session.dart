@@ -16,6 +16,7 @@ import 'notification_deep_link.dart';
 import 'sales_analytics.dart';
 import 'repositories/demo_repositories.dart';
 import 'repositories/repositories.dart';
+import 'services/app_heartbeat_service.dart';
 import 'services/device_token_registrar.dart';
 
 enum SessionDestination {
@@ -42,6 +43,7 @@ class AppSession extends ChangeNotifier {
   static const String _guestCatalogCacheScope = 'public-guest';
 
   AppRepositories _repositories;
+  AppHeartbeat _heartbeat = const NoopAppHeartbeat();
   DeviceTokenRegistrar _deviceTokens = const NoopDeviceTokenRegistrar();
   StreamSubscription<String?>? _authStateSubscription;
   StreamSubscription<List<AppNotification>>? _notificationsSubscription;
@@ -227,6 +229,7 @@ class AppSession extends ChangeNotifier {
 
   Future<void> configure(
     AppRepositories repositories, {
+    AppHeartbeat heartbeat = const NoopAppHeartbeat(),
     DeviceTokenRegistrar deviceTokens = const NoopDeviceTokenRegistrar(),
     bool loadInitialData = true,
   }) async {
@@ -235,7 +238,11 @@ class AppSession extends ChangeNotifier {
     _invalidateAuthenticatedRequests();
     await _authStateSubscription?.cancel();
     _authStateSubscription = null;
+    if (!identical(_heartbeat, heartbeat)) {
+      await _heartbeat.dispose();
+    }
     _repositories = repositories;
+    _heartbeat = heartbeat;
     _deviceTokens = deviceTokens;
     _isConfigured = true;
     await _notificationsSubscription?.cancel();
@@ -250,6 +257,7 @@ class AppSession extends ChangeNotifier {
       _handleForegroundPush,
     );
     _observedUserId = _currentAuthUserId();
+    _heartbeat.authenticatedUserChanged(_observedUserId);
     _authStateSubscription = auth.userIdChanges.listen(
       _handleAuthUserIdChange,
       onError: (_) {
@@ -447,6 +455,10 @@ class AppSession extends ChangeNotifier {
       await _runRefresh(() => _loadResumeData(scope), authScope: scope);
     });
   }
+
+  void appResumed() => _heartbeat.appResumed();
+
+  void appPaused() => _heartbeat.appPaused();
 
   Future<void> _loadResumeData(_AuthenticatedRequestScope scope) async {
     if (!_isCurrent(scope)) return;
@@ -2306,6 +2318,11 @@ class AppSession extends ChangeNotifier {
   /// revocation fails, so the local cleanup must live in [finally].
   Future<void> signOut() async {
     try {
+      await _heartbeat.beforeSignOut();
+    } catch (_) {
+      // Presence reporting is best-effort and must never block logout.
+    }
+    try {
       await auth.signOut();
     } finally {
       await clearAuthenticatedData();
@@ -2503,6 +2520,7 @@ class AppSession extends ChangeNotifier {
     }
 
     _observedUserId = normalizedUserId;
+    _heartbeat.authenticatedUserChanged(normalizedUserId);
     _invalidateAuthenticatedRequests();
     final notificationsSubscription = _notificationsSubscription;
     _notificationsSubscription = null;

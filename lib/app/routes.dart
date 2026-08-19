@@ -17,6 +17,7 @@ abstract class Routes {
   static const forgotPassword = '/forgot-password';
   static const guestAccess = '/guest-access';
   static const pendingApproval = '/pending-approval';
+  static const completeRegistration = '/complete-registration';
   static const accountBlocked = '/account-blocked';
   static const accountDeleted = '/account-deleted';
 

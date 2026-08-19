@@ -63,6 +63,13 @@ class DemoAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> completeRegistration(
+    RegistrationCompletionRequest request,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+  }
+
+  @override
   Future<bool> completePendingRegistration() async => false;
 
   @override

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
@@ -6,6 +8,7 @@ import '../../core/external_actions.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/entrance.dart';
 import '../../core/widgets/primary_button.dart';
+import '../../data/backend.dart';
 import '../../data/models.dart';
 import '../../data/session.dart';
 import 'auth_navigation.dart';
@@ -32,6 +35,19 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
   );
 
   @override
+  void initState() {
+    super.initState();
+    // Attempt completion/refresh automatically on mount so a user whose
+    // registration finished server-side (or whose earlier RPC attempt was
+    // interrupted) recovers without knowing to pull-to-refresh.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_recheckStatus(silent: true));
+      }
+    });
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (MediaQuery.disableAnimationsOf(context)) {
@@ -50,25 +66,37 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
     super.dispose();
   }
 
-  Future<void> _recheckStatus() async {
+  Future<void> _recheckStatus({bool silent = false}) async {
     try {
+      await appBackend.auth.completePendingRegistration();
       await session.refreshAuthenticatedData();
       if (!mounted) return;
       final profile = session.seller;
       if (profile.status != AccountStatus.pending) {
         openAuthenticatedDestination(context);
-      } else {
+      } else if (!silent) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AuthStrings.stillUnderReviewSnack)),
+          SnackBar(
+            content: Text(
+              _needsRegistrationData
+                  ? AuthStrings.missingRegistrationData
+                  : AuthStrings.stillUnderReviewSnack,
+            ),
+          ),
         );
       }
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || silent) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
+
+  bool get _needsRegistrationData =>
+      session.seller.name.trim().isEmpty ||
+      session.seller.storeName.trim().isEmpty ||
+      session.seller.governorateId.trim().isEmpty;
 
   Future<void> _contactSupport() async {
     final opened = await launchWhatsApp(session.supportWhatsapp);
@@ -195,8 +223,22 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
+                if (_needsRegistrationData) ...[
+                  Entrance(
+                    index: 3,
+                    child: PrimaryButton(
+                      label: AuthStrings.completeAccountTitle,
+                      icon: Icons.fact_check_outlined,
+                      onPressed: () => Navigator.pushNamed(
+                        context,
+                        Routes.completeRegistration,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
                 Entrance(
-                  index: 3,
+                  index: 4,
                   child: SecondaryButton(
                     label: AuthStrings.contactSupport,
                     icon: Icons.support_agent_rounded,
@@ -205,7 +247,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Entrance(
-                  index: 4,
+                  index: 5,
                   child: SecondaryButton(
                     label: AuthStrings.logout,
                     icon: Icons.logout_rounded,
@@ -221,7 +263,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                 // ────────────────────────────────────────────────────────────
                 if (session.isDemo)
                   Entrance(
-                    index: 5,
+                    index: 6,
                     child: PrimaryButton(
                       label: AuthStrings.previewApprovedLogin,
                       icon: Icons.visibility_outlined,

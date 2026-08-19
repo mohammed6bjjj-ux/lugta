@@ -85,7 +85,11 @@ class SupabaseAuthRepository implements AuthRepository {
         password: password,
       );
     });
-    await _clearPendingRegistration();
+    // A confirmed registration may have been interrupted after Auth accepted
+    // the OTP but before the seller profile RPC committed. Never discard that
+    // draft on login: retry it first, then clear it only after success or when
+    // it belongs to another/finished account.
+    await completePendingRegistration();
     await _registerDeviceBestEffort();
   }
 
@@ -135,7 +139,13 @@ class SupabaseAuthRepository implements AuthRepository {
           phone: normalizedPhone,
           password: request.password,
           channel: OtpChannel.sms,
-          data: {'registration_attempt_id': draft.registrationAttemptId},
+          data: {
+            'registration_attempt_id': draft.registrationAttemptId,
+            // Recovery-only payload. It contains no password and grants no
+            // authority: the server RPC still validates the authenticated
+            // phone, terms, governorate, and current profile state.
+            'seller_registration': draft.toAuthMetadata(),
+          },
         );
       });
     } on BackendException catch (error) {
@@ -177,11 +187,12 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<bool> completePendingRegistration() async {
-    final draft = await _readPendingRegistration();
-    if (draft == null) return false;
-
     final user = _client.auth.currentUser;
     if (user == null || user.phoneConfirmedAt == null) return false;
+    final draft =
+        await _readPendingRegistration() ??
+        _PendingRegistrationDraft.fromAuthUser(user);
+    if (draft == null) return false;
     final authenticatedPhone = user.phone;
     if (authenticatedPhone == null ||
         normalizeIraqiPhone(authenticatedPhone) != draft.phone) {
@@ -198,6 +209,14 @@ class SupabaseAuthRepository implements AuthRepository {
       return value == null ? null : _map(value);
     });
     final status = profile == null ? '' : _text(profile['status']);
+    if (status == 'active' || status == 'approved') {
+      // The backend already completed this registration — for example the
+      // phone-confirmation trigger recovered it from the signup snapshot the
+      // moment the OTP was verified. Treat it as success so the flow proceeds
+      // instead of surfacing a false failure.
+      await _clearPendingRegistration();
+      return true;
+    }
     if (status.isNotEmpty &&
         status != 'pending_phone' &&
         status != 'pending_approval') {
@@ -208,6 +227,55 @@ class SupabaseAuthRepository implements AuthRepository {
     await _completeSellerRegistration(draft);
     await _clearPendingRegistration();
     return true;
+  }
+
+  @override
+  Future<void> completeRegistration(
+    RegistrationCompletionRequest request,
+  ) async {
+    final user = _client.auth.currentUser;
+    final authenticatedPhone = user?.phone;
+    if (user == null ||
+        user.phoneConfirmedAt == null ||
+        authenticatedPhone == null) {
+      throw const BackendException(
+        'يجب تأكيد رقم الهاتف قبل إكمال بيانات الحساب.',
+        code: 'verified_phone_required',
+      );
+    }
+    if (request.termsVersion.trim().isEmpty) {
+      throw const BackendException(
+        'تعذر تحميل النسخة الحالية من الشروط. حدّث الصفحة وحاول مجدداً.',
+        code: 'terms_version_missing',
+      );
+    }
+    final rawInstagram = request.instagramUrl?.trim();
+    final normalizedInstagram = rawInstagram == null || rawInstagram.isEmpty
+        ? null
+        : normalizeInstagramProfile(rawInstagram);
+    if (rawInstagram != null &&
+        rawInstagram.isNotEmpty &&
+        normalizedInstagram == null) {
+      throw const BackendException(
+        'رابط إنستغرام غير صالح. استخدم اسم المستخدم أو رابط الصفحة فقط.',
+        code: 'invalid_instagram_profile',
+      );
+    }
+    final draft = _PendingRegistrationDraft(
+      phone: normalizeIraqiPhone(authenticatedPhone),
+      fullName: request.fullName.trim(),
+      storeName: request.storeName.trim(),
+      governorateId: request.governorateId,
+      termsVersion: request.termsVersion,
+      locale: appSettings.language.name,
+      createdAt: DateTime.now().toUtc(),
+      registrationAttemptId: _newRegistrationAttemptId(),
+      instagramHandle: normalizedInstagram,
+      referralCode: _normalizeReferralCode(request.referralCode),
+    );
+    await _completeSellerRegistration(draft);
+    await _clearPendingRegistration();
+    await _registerDeviceBestEffort();
   }
 
   Future<void> _completeSellerRegistration(
@@ -258,7 +326,7 @@ class SupabaseAuthRepository implements AuthRepository {
           user?.phone != null &&
           normalizeIraqiPhone(user!.phone!) == normalizedPhone) {
         final completed = await completePendingRegistration();
-        if (!completed) {
+        if (!completed && !await _registrationAlreadyCompleted()) {
           throw const BackendException(
             'تعذر العثور على بيانات التسجيل. ارجع وأعد إرسال الطلب.',
             code: 'registration_draft_missing',
@@ -294,7 +362,7 @@ class SupabaseAuthRepository implements AuthRepository {
     }
     if (purpose == OtpPurpose.registration) {
       final completed = await completePendingRegistration();
-      if (!completed) {
+      if (!completed && !await _registrationAlreadyCompleted()) {
         throw const BackendException(
           'تم تأكيد الرقم، لكن تعذر إكمال بيانات التسجيل. حاول مرة أخرى.',
           code: 'registration_completion_failed',
@@ -302,6 +370,32 @@ class SupabaseAuthRepository implements AuthRepository {
       }
     }
     await _registerDeviceBestEffort();
+  }
+
+  /// True when the signed-in user's seller registration is already complete
+  /// on the backend — for example when the phone-confirmation trigger
+  /// recovered it server-side before the client could call the RPC.
+  Future<bool> _registrationAlreadyCompleted() async {
+    final user = _client.auth.currentUser;
+    if (user == null || user.phoneConfirmedAt == null) return false;
+    try {
+      final profile = await _guard(() async {
+        final value = await _client
+            .from('profiles')
+            .select('status')
+            .eq('id', user.id)
+            .maybeSingle();
+        return value == null ? null : _map(value);
+      });
+      final status = profile == null ? '' : _text(profile['status']);
+      if (status == 'active' || status == 'approved') {
+        await _clearPendingRegistration();
+        return true;
+      }
+      return false;
+    } on BackendException {
+      return false;
+    }
   }
 
   Future<void> _writePendingRegistration(
@@ -701,6 +795,19 @@ class _PendingRegistrationDraft {
     );
   }
 
+  static _PendingRegistrationDraft? fromAuthUser(User user) {
+    final raw = user.userMetadata?['seller_registration'];
+    if (raw is! Map || user.phone == null) return null;
+    try {
+      return _PendingRegistrationDraft.fromJson({
+        ...Map<String, dynamic>.from(raw),
+        'phone': normalizeIraqiPhone(user.phone!),
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
   final String phone;
   final String fullName;
   final String storeName;
@@ -714,6 +821,18 @@ class _PendingRegistrationDraft {
 
   Map<String, dynamic> toJson() => {
     'phone': phone,
+    'full_name': fullName,
+    'store_name': storeName,
+    'governorate_id': governorateId,
+    'terms_version': termsVersion,
+    'locale': locale,
+    'created_at': createdAt.toIso8601String(),
+    'registration_attempt_id': registrationAttemptId,
+    'instagram_handle': instagramHandle,
+    'referral_code': referralCode,
+  };
+
+  Map<String, dynamic> toAuthMetadata() => {
     'full_name': fullName,
     'store_name': storeName,
     'governorate_id': governorateId,
@@ -3168,14 +3287,26 @@ String _authMessage(String message, {String? code}) {
   if (normalized.contains('invalid login credentials')) {
     return 'رقم الهاتف أو كلمة المرور غير صحيحة.';
   }
-  if (normalized.contains('otp') || normalized.contains('token')) {
+  if (code == 'otp_expired' ||
+      normalized.contains('token has expired or is invalid') ||
+      normalized.contains('invalid verification code')) {
     return 'رمز التحقق غير صحيح أو انتهت صلاحيته.';
   }
   if (normalized.contains('already registered')) {
     return 'رقم الهاتف مسجل مسبقاً. سجل الدخول أو استخدم نسيت كلمة المرور.';
   }
-  if (normalized.contains('rate limit')) {
+  if (code == 'over_sms_send_rate_limit' ||
+      normalized.contains('rate limit') ||
+      normalized.contains('security purposes')) {
     return 'محاولات كثيرة. انتظر قليلاً ثم حاول مجدداً.';
+  }
+  if (code == 'otp_disabled') {
+    return 'إرسال رمز التحقق غير متاح حالياً. حاول لاحقاً.';
+  }
+  if ((code?.startsWith('hook_') ?? false) ||
+      normalized.contains('due to hook') ||
+      normalized.contains('service currently unavailable')) {
+    return 'تعذر إرسال رمز التحقق عبر واتساب. حاول مرة أخرى بعد قليل.';
   }
   return 'تعذر إكمال المصادقة. حاول مرة أخرى.';
 }

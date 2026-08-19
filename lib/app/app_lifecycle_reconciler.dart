@@ -35,13 +35,24 @@ class _AppLifecycleReconcilerState extends State<AppLifecycleReconciler>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
-    unawaited(
-      _session.reconcileAfterResume().catchError((_) {
-        // The current screen remains usable and manual refresh can retry. The
-        // session has already retained a user-facing error for shared UI.
-      }),
-    );
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _session.appResumed();
+        unawaited(
+          _session.reconcileAfterResume().catchError((_) {
+            // The current screen remains usable and manual refresh can retry.
+            // The session retained a user-facing error for shared UI.
+          }),
+        );
+        return;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _session.appPaused();
+        return;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        return;
+    }
   }
 
   @override

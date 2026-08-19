@@ -131,6 +131,11 @@ class _ControllableAuthRepository implements AuthRepository {
   Future<bool> completePendingRegistration() async => false;
 
   @override
+  Future<void> completeRegistration(
+    RegistrationCompletionRequest request,
+  ) async {}
+
+  @override
   Future<void> resendOtp({
     required String phone,
     required OtpPurpose purpose,

@@ -12,6 +12,7 @@ import '../features/auth/login_screen.dart';
 import '../features/auth/onboarding_screen.dart';
 import '../features/auth/otp_verification_screen.dart';
 import '../features/auth/pending_approval_screen.dart';
+import '../features/auth/complete_registration_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/auth/splash_screen.dart';
 import '../features/catalog/category_products_screen.dart';
@@ -103,6 +104,7 @@ class AppRouter {
       Routes.forgotPassword => const ForgotPasswordScreen(),
       Routes.guestAccess => const GuestAccessScreen(),
       Routes.pendingApproval => const PendingApprovalScreen(),
+      Routes.completeRegistration => const CompleteRegistrationScreen(),
       Routes.accountBlocked => _blocked(args),
       Routes.accountDeleted => const AccountDeletedScreen(),
       Routes.shell => const MainShell(),

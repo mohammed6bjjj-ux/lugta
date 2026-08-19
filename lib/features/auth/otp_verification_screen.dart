@@ -11,7 +11,7 @@ import 'auth_navigation.dart';
 import 'auth_strings.dart';
 import 'widgets/otp_code_input.dart';
 
-/// شاشة التحقق برمز OTP — 6 خانات مع عدّاد إعادة إرسال 60 ثانية.
+/// شاشة التحقق برمز OTP — 6 خانات مع عدّاد يمنع تداخل الأكواد المتأخرة.
 ///
 /// [purpose]:
 /// - 'register': عند الاكتمال ينتقل إلى شاشة انتظار الموافقة.
@@ -31,10 +31,11 @@ class OtpVerificationScreen extends StatefulWidget {
 }
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+  static const _resendCooldownSeconds = 60;
   final GlobalKey<OtpCodeInputState> _otpKey = GlobalKey<OtpCodeInputState>();
 
   Timer? _timer;
-  int _secondsLeft = 60;
+  int _secondsLeft = _resendCooldownSeconds;
   bool _verifying = false;
   bool _resending = false;
 
@@ -52,7 +53,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   void _startCountdown() {
     _timer?.cancel();
-    setState(() => _secondsLeft = 60);
+    setState(() => _secondsLeft = _resendCooldownSeconds);
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();

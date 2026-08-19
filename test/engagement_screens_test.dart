@@ -320,10 +320,10 @@ final _fixedDate = DateTime(2026, 8, 6);
 
 Future<void> _configureSignedInDemo(WidgetTester tester) async {
   final repositories = createDemoRepositories();
-  await tester.runAsync(
-    () => repositories.auth.signIn(phone: '07800000000', password: 'password'),
-  );
-  await session.configure(repositories, loadInitialData: false);
+  await tester.runAsync(() async {
+    await repositories.auth.signIn(phone: '07800000000', password: 'password');
+    await session.configure(repositories, loadInitialData: false);
+  });
 }
 
 Widget _underSessionRouteListener(Widget child) => MaterialApp(

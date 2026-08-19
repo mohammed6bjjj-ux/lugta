@@ -183,3 +183,17 @@ String? validatePassword(String? value) {
   }
   return null;
 }
+
+/// Referral codes are server-issued ASCII identifiers: 8–16 letters/digits.
+String? validateReferralCode(String? value) {
+  final v = (value ?? '').trim();
+  if (v.isEmpty) return null;
+  if (!RegExp(r'^[A-Za-z0-9]{8,16}$').hasMatch(v)) {
+    return _t(
+      'رمز الدعوة يجب أن يكون من 8 إلى 16 حرفاً أو رقماً',
+      'کۆدی بانگهێشت دەبێت 8 تا 16 پیت یان ژمارە بێت',
+      'Referral code must be 8–16 letters or numbers',
+    );
+  }
+  return null;
+}

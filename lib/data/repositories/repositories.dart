@@ -56,6 +56,28 @@ class RegistrationRequest {
   final String? referralCode;
 }
 
+/// Non-credential fields used to finish an OTP-confirmed registration.
+///
+/// This is intentionally separate from [RegistrationRequest]: recovering an
+/// interrupted registration must never ask for, retain, or resend a password.
+class RegistrationCompletionRequest {
+  const RegistrationCompletionRequest({
+    required this.fullName,
+    required this.storeName,
+    required this.governorateId,
+    required this.termsVersion,
+    this.instagramUrl,
+    this.referralCode,
+  });
+
+  final String fullName;
+  final String storeName;
+  final String governorateId;
+  final String termsVersion;
+  final String? instagramUrl;
+  final String? referralCode;
+}
+
 class CreateOrderRequest {
   CreateOrderRequest({
     required this.clientRequestId,
@@ -227,6 +249,9 @@ abstract interface class AuthRepository {
 
   Future<void> signIn({required String phone, required String password});
   Future<void> signUp(RegistrationRequest request);
+
+  /// Completes a confirmed account whose local registration draft was lost.
+  Future<void> completeRegistration(RegistrationCompletionRequest request);
 
   /// Completes an OTP-confirmed seller registration when a matching local
   /// registration draft exists for the current authenticated phone number.
