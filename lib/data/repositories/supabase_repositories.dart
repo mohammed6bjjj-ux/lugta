@@ -88,8 +88,14 @@ class SupabaseAuthRepository implements AuthRepository {
     // A confirmed registration may have been interrupted after Auth accepted
     // the OTP but before the seller profile RPC committed. Never discard that
     // draft on login: retry it first, then clear it only after success or when
-    // it belongs to another/finished account.
-    await completePendingRegistration();
+    // it belongs to another/finished account. Best-effort: a transient retry
+    // failure must not make an accepted login look failed — the attempt is
+    // repeated at bootstrap, on splash, and on the pending-approval screen.
+    try {
+      await completePendingRegistration();
+    } on BackendException {
+      // Retried later; the login itself succeeded.
+    }
     await _registerDeviceBestEffort();
   }
 
@@ -375,6 +381,9 @@ class SupabaseAuthRepository implements AuthRepository {
   /// True when the signed-in user's seller registration is already complete
   /// on the backend — for example when the phone-confirmation trigger
   /// recovered it server-side before the client could call the RPC.
+  /// `pending_approval` also counts: the backend only ever enters that status
+  /// through a completed registration, so with auto-approval disabled the
+  /// trigger-completed account must not be reported as a failure.
   Future<bool> _registrationAlreadyCompleted() async {
     final user = _client.auth.currentUser;
     if (user == null || user.phoneConfirmedAt == null) return false;
@@ -385,10 +394,11 @@ class SupabaseAuthRepository implements AuthRepository {
             .select('status')
             .eq('id', user.id)
             .maybeSingle();
-        return value == null ? null : _map(value);
+        return value == null ? '' : _text(_map(value)['status']);
       });
-      final status = profile == null ? '' : _text(profile['status']);
-      if (status == 'active' || status == 'approved') {
+      if (profile == 'active' ||
+          profile == 'approved' ||
+          profile == 'pending_approval') {
         await _clearPendingRegistration();
         return true;
       }

@@ -292,47 +292,52 @@ void main() {
     },
   );
 
-  test(
-    'OTP verification succeeds when the draft is gone but the backend '
-    'already completed the registration',
-    () async {
-      const secureStorage = FlutterSecureStorage();
-      final auth = _FakeGoTrueClient();
-      final rest = http_testing.MockClient((request) async {
-        if (request.url.path.endsWith('/profiles')) {
-          return http.Response(
-            '{"status":"active"}',
-            200,
-            request: request,
-            headers: const {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('[]', 200,
-            request: request,
-            headers: const {'content-type': 'application/json'});
-      });
-      final client = _FakeSupabaseClient(auth, httpClient: rest);
-      addTearDown(() async {
-        await client.dispose();
-        auth.dispose();
-      });
-      final repository = SupabaseAuthRepository(
-        client,
-        const NoopDeviceTokenRegistrar(),
-        secureStorage: secureStorage,
-      );
+  // 'active' covers auto-approval; 'pending_approval' covers the
+  // trigger-completed registration when auto-approval is disabled.
+  for (final completedStatus in const ['active', 'pending_approval']) {
+    test(
+      'OTP verification succeeds when the draft is gone but the backend '
+      'already completed the registration ($completedStatus)',
+      () async {
+        const secureStorage = FlutterSecureStorage();
+        final auth = _FakeGoTrueClient();
+        final rest = http_testing.MockClient((request) async {
+          if (request.url.path.endsWith('/profiles')) {
+            return http.Response(
+              '{"status":"$completedStatus"}',
+              200,
+              request: request,
+              headers: const {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('[]', 200,
+              request: request,
+              headers: const {'content-type': 'application/json'});
+        });
+        final client = _FakeSupabaseClient(auth, httpClient: rest);
+        addTearDown(() async {
+          await client.dispose();
+          auth.dispose();
+        });
+        final repository = SupabaseAuthRepository(
+          client,
+          const NoopDeviceTokenRegistrar(),
+          secureStorage: secureStorage,
+        );
 
-      // No local draft exists (fresh storage) and the fake user carries no
-      // seller_registration metadata, yet the profile is already active.
-      auth.establishSession();
+        // No local draft exists (fresh storage) and the fake user carries no
+        // seller_registration metadata, yet the backend already completed
+        // this registration.
+        auth.establishSession();
 
-      await repository.verifyOtp(
-        phone: '07712345678',
-        token: '123456',
-        purpose: OtpPurpose.registration,
-      );
-    },
-  );
+        await repository.verifyOtp(
+          phone: '07712345678',
+          token: '123456',
+          purpose: OtpPurpose.registration,
+        );
+      },
+    );
+  }
 
   test(
     'durable recovery gate signs out an interrupted recovery after restart',

@@ -36,6 +36,10 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   late final List<MemoryImage> productImages;
   setUpAll(() async {
+    // Pin the demo-data clock before anything touches MockData: every
+    // rendered relative date stays identical to the day the golden
+    // baselines were captured, so they never drift day to day.
+    MockData.debugNow = DateTime(2026, 8, 18, 12);
     final zainExtraLight = FontLoader('Zain')
       ..addFont(rootBundle.load('assets/fonts/Zain-ExtraLight.ttf'));
     final zainRegular = FontLoader('Zain')

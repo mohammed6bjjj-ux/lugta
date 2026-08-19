@@ -46,7 +46,13 @@ class MockData {
   static String _u(String name, {int w = 900}) =>
       'https://images.unsplash.com/photo-${_photos[name]}?w=$w&q=80&auto=format';
 
-  static final DateTime _now = DateTime.now();
+  /// Reference clock for every relative demo date. Tests — golden tests in
+  /// particular — pin this to a fixed instant before first data access so
+  /// rendered dates never drift from one day to the next. All demo data
+  /// statics are lazy, so overriding it early re-bases every derived date.
+  static DateTime debugNow = DateTime.now();
+
+  static DateTime get _now => debugNow;
 
   /// إعدادات المنصة (تديرها لوحة الإدارة لاحقاً).
   static const int minWithdrawalAmount = 10000;

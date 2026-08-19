@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../app/routes.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/entrance.dart';
 import '../../data/backend.dart';
@@ -104,15 +105,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         token: code,
         purpose: _purpose,
       );
-      if (widget.purpose == 'register') {
-        await session.refreshAuthenticatedData();
-      }
-      if (!mounted) return;
-      if (widget.purpose == 'register') {
-        openAuthenticatedDestination(context);
-      } else {
-        Navigator.pop(context, true);
-      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _verifying = false);
@@ -120,6 +112,30 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.toString())));
+      return;
+    }
+    // The registration is committed at this point. A transient failure while
+    // refreshing session data must not be reported as a verification failure:
+    // fall through to the pending-approval screen, whose automatic recheck
+    // loads the fresh state and routes onward.
+    if (widget.purpose == 'register') {
+      try {
+        await session.refreshAuthenticatedData();
+      } catch (_) {
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          Routes.pendingApproval,
+          (route) => false,
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+    if (widget.purpose == 'register') {
+      openAuthenticatedDestination(context);
+    } else {
+      Navigator.pop(context, true);
     }
   }
 
