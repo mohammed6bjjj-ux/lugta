@@ -268,7 +268,7 @@ class DemoCatalogRepository implements CatalogRepository {
   @override
   Future<DeliveryQuote> quoteDeliveryFee(
     String deliveryZoneId, {
-    required int orderSubtotal,
+    required int orderWholesaleTotal,
   }) async {
     final governorate = MockData.governorates.firstWhere(
       (item) => item.id == deliveryZoneId,

@@ -2,18 +2,163 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_app/app/theme.dart';
 import 'package:flutter_app/data/mock_data.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
 import 'package:flutter_app/data/session.dart';
 import 'package:flutter_app/core/widgets/app_network_image.dart';
 import 'package:flutter_app/features/promotions/promotion_notification_popup.dart';
+import 'package:flutter_app/features/promotions/engagement_strings.dart';
 import 'package:flutter_app/features/promotions/promotions_screen.dart';
 import 'package:flutter_app/features/profile/notifications_screen.dart';
 import 'package:flutter_app/features/referrals/referral_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final size in [const Size(320, 900), const Size(800, 375)]) {
+    for (final dark in [false, true]) {
+      testWidgets(
+        'signup delivery gift is RTL and large-text safe at $size dark=$dark',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          session
+            ..referralSummaryLoaded = true
+            ..referralSummaryLoading = false
+            ..referralSummaryError = null;
+          for (final flags in [
+            (true, false),
+            (true, true),
+            (false, true),
+            (false, false),
+          ]) {
+            session.referralSummary = ReferralSummary(
+              referralCode: 'LUGTA123',
+              invitedCount: 0,
+              qualifiedCount: 0,
+              rewardedCount: 0,
+              signupDeliveryActive: flags.$1,
+              signupDeliveryEarned: flags.$2,
+            );
+            await tester.pumpWidget(const SizedBox.shrink());
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: dark ? AppTheme.dark() : AppTheme.light(),
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: const TextScaler.linear(2)),
+                  child: Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: child!,
+                  ),
+                ),
+                home: const ReferralScreen(),
+              ),
+            );
+            expect(
+              find.byKey(const ValueKey('referral_signup_offer')),
+              flags.$1 || flags.$2 ? findsOneWidget : findsNothing,
+            );
+            expect(
+              find.text(EngagementStrings.referralSignupBody),
+              flags.$1 ? findsOneWidget : findsNothing,
+            );
+            expect(
+              find.text(EngagementStrings.referralSignupEarned),
+              flags.$2 ? findsOneWidget : findsNothing,
+            );
+            expect(
+              find.text(EngagementStrings.referralSignupPaused),
+              !flags.$1 && flags.$2 ? findsOneWidget : findsNothing,
+            );
+            expect(tester.takeException(), isNull);
+          }
+        },
+      );
+    }
+  }
+  testWidgets(
+    'profit-share offer shows withdrawable reward and survives pausing at 320dp',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      session
+        ..referralSummary = const ReferralSummary(
+          referralCode: 'LUGTA123',
+          invitedCount: 1,
+          qualifiedCount: 1,
+          rewardedCount: 1,
+          profitShareActive: true,
+          profitShareEarned: 1000,
+          profitShareOrders: 1,
+        )
+        ..referralSummaryLoaded = true
+        ..referralSummaryLoading = false
+        ..referralSummaryError = null;
+      await tester.pumpWidget(const MaterialApp(home: ReferralScreen()));
+      expect(
+        find.byKey(const ValueKey('referral_profit_offer')),
+        findsOneWidget,
+      );
+      expect(find.text('اربح 1٪ من أرباح أصدقائك'), findsOneWidget);
+      expect(find.text('1,000 د.ع'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      session.referralSummary = const ReferralSummary(
+        referralCode: 'LUGTA123',
+        invitedCount: 1,
+        qualifiedCount: 1,
+        rewardedCount: 1,
+        profitShareActive: false,
+        profitShareEarned: 1000,
+        profitShareOrders: 1,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(const MaterialApp(home: ReferralScreen()));
+      expect(
+        find.text('العرض متوقف حالياً، وأرباحك السابقة محفوظة في محفظتك.'),
+        findsOneWidget,
+      );
+      expect(find.text('1,000 د.ع'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'configured rewards render fractional rate and pending balances at 320dp',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      session
+        ..referralSummary = const ReferralSummary(
+          referralCode: 'TEST',
+          invitedCount: 1,
+          qualifiedCount: 0,
+          rewardedCount: 0,
+          rewardKind: 'profit_percent',
+          rewardValue: 2.5,
+          referralEnabled: true,
+          pendingCash: 250,
+          pendingPoints: 15,
+          pendingDelivery: 2500,
+        )
+        ..referralSummaryLoaded = true
+        ..referralSummaryLoading = false
+        ..referralSummaryError = null;
+      await tester.pumpWidget(const MaterialApp(home: ReferralScreen()));
+      expect(find.text('2.5٪ من ربح طلب الإحالة'), findsOneWidget);
+      expect(find.text('مكافآت نقدية معلّقة: 250 د.ع'), findsOneWidget);
+      expect(find.text('نقاط معلّقة: 15'), findsOneWidget);
+      expect(find.text('خصومات توصيل معلّقة: 2,500 د.ع'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('referral screen exposes code and all server metrics', (
     tester,
   ) async {

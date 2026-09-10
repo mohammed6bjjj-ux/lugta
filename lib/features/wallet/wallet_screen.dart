@@ -707,6 +707,9 @@ class _TransactionRow extends StatelessWidget {
     WalletTxType.reversal => ('-', AppColors.error),
     WalletTxType.profitReleased => ('+', AppColors.success),
     WalletTxType.pendingProfit => ('+', AppColors.accentStrong),
+    WalletTxType.pendingReward => ('+', AppColors.accentStrong),
+    WalletTxType.rewardReleased => ('+', AppColors.success),
+    WalletTxType.rewardReversed => ('-', AppColors.error),
   };
 
   @override

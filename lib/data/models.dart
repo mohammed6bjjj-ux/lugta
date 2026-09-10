@@ -566,6 +566,7 @@ class ProductVariant {
     required this.imageUrl,
     required this.stock,
     this.colorHex,
+    this.size,
     this.nameCkb,
     this.nameEn,
     this.sku,
@@ -588,14 +589,35 @@ class ProductVariant {
   /// لون تمثيلي اختياري لعرض دائرة اللون.
   final int? colorHex;
 
+  /// Clothing or numeric size for this exact stock-keeping variant.
+  final String? size;
+  bool get hasSize => size?.trim().isNotEmpty == true;
+
   bool get inStock => stock > 0;
   bool get lowStock => stock > 0 && stock <= 3;
 
-  String get localizedName => switch (appSettings.language) {
-    AppLanguage.ckb => nameCkb?.trim().isNotEmpty == true ? nameCkb! : nameAr,
-    AppLanguage.en => nameEn?.trim().isNotEmpty == true ? nameEn! : nameAr,
-    AppLanguage.ar => nameAr,
-  };
+  String get localizedName {
+    final name = switch (appSettings.language) {
+      AppLanguage.ckb => nameCkb?.trim().isNotEmpty == true ? nameCkb! : nameAr,
+      AppLanguage.en => nameEn?.trim().isNotEmpty == true ? nameEn! : nameAr,
+      AppLanguage.ar => nameAr,
+    };
+    final value = size?.trim() ?? '';
+    if (value.isEmpty || name == value || name.endsWith(' / $value')) {
+      return name;
+    }
+    return name.trim().isEmpty ? value : '$name / $value';
+  }
+
+  String get localizedOptionName {
+    final name = localizedName;
+    final value = size?.trim() ?? '';
+    if (value.isEmpty) return name;
+    if (name == value) return '';
+    return name.endsWith(' / $value')
+        ? name.substring(0, name.length - value.length - 3)
+        : name;
+  }
 }
 
 class Product {
@@ -635,6 +657,7 @@ class Product {
   final Map<String, String> specs;
   final List<MediaItem> media;
   final List<ProductVariant> variants;
+  bool get hasSizes => variants.any((variant) => variant.hasSize);
 
   /// سعر الجملة للقطعة الواحدة (دينار عراقي).
   final int wholesalePrice;
@@ -750,6 +773,9 @@ class DeliveryQuote {
     this.freeDeliveryReason,
     this.campaignName,
     this.validUntil,
+    this.rewardAvailable = false,
+    this.rewardDiscountCap = 0,
+    this.remainingWholesale = 0,
   });
 
   final int baseDeliveryFee;
@@ -758,6 +784,9 @@ class DeliveryQuote {
   final String? freeDeliveryReason;
   final String? campaignName;
   final DateTime? validUntil;
+  final bool rewardAvailable;
+  final int rewardDiscountCap;
+  final int remainingWholesale;
 
   bool get isFree => baseDeliveryFee > 0 && deliveryFee == 0;
 }
@@ -877,6 +906,20 @@ class ReferralSummary {
     this.completedReferredOrders = 0,
     this.availableFreeDeliveries = 0,
     this.walletRewardsEarned = 0,
+    this.profitShareActive = false,
+    this.profitSharePercent = 1,
+    this.profitShareEarned = 0,
+    this.profitShareOrders = 0,
+    this.rewardKind,
+    this.rewardValue = 1,
+    this.referralEnabled = false,
+    this.pendingCash = 0,
+    this.pendingPoints = 0,
+    this.pendingDelivery = 0,
+    this.releasedPoints = 0,
+    this.releasedDelivery = 0,
+    this.signupDeliveryActive = false,
+    this.signupDeliveryEarned = false,
     this.referredBy,
     this.referredByName,
   });
@@ -901,6 +944,20 @@ class ReferralSummary {
   final int completedReferredOrders;
   final int availableFreeDeliveries;
   final int walletRewardsEarned;
+  final bool profitShareActive;
+  final int profitSharePercent;
+  final int profitShareEarned;
+  final int profitShareOrders;
+  final String? rewardKind;
+  final double rewardValue;
+  final bool referralEnabled;
+  final int pendingCash;
+  final int pendingPoints;
+  final int pendingDelivery;
+  final int releasedPoints;
+  final int releasedDelivery;
+  final bool signupDeliveryActive;
+  final bool signupDeliveryEarned;
 }
 
 /// آلة حالات الطلب الموحّدة (10 حالات).
@@ -1237,6 +1294,9 @@ enum WalletTxType {
   /// تسوية إدارية موجبة أو سالبة موثقة في دفتر المحفظة.
   adjustmentCredit,
   adjustmentDebit,
+  pendingReward,
+  rewardReleased,
+  rewardReversed,
 }
 
 extension WalletTxTypeX on WalletTxType {
@@ -1245,6 +1305,9 @@ extension WalletTxTypeX on WalletTxType {
 
   Color get color => switch (this) {
     WalletTxType.pendingProfit => AppColors.accentStrong,
+    WalletTxType.pendingReward => AppColors.accentStrong,
+    WalletTxType.rewardReleased => AppColors.success,
+    WalletTxType.rewardReversed => AppColors.error,
     WalletTxType.profitReleased => AppColors.success,
     WalletTxType.reversal => AppColors.error,
     WalletTxType.withdrawal => AppColors.info,
@@ -1255,6 +1318,9 @@ extension WalletTxTypeX on WalletTxType {
 
   IconData get icon => switch (this) {
     WalletTxType.pendingProfit => Icons.schedule_rounded,
+    WalletTxType.pendingReward => Icons.schedule_rounded,
+    WalletTxType.rewardReleased => Icons.redeem_outlined,
+    WalletTxType.rewardReversed => Icons.undo_rounded,
     WalletTxType.profitReleased => Icons.trending_up_rounded,
     WalletTxType.reversal => Icons.undo_rounded,
     WalletTxType.withdrawal => Icons.account_balance_wallet_outlined,

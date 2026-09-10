@@ -302,9 +302,12 @@ abstract interface class CatalogRepository {
   Stream<void> watchCatalogChanges();
   Future<List<Governorate>> fetchDeliveryZones();
   Future<List<PackagingBox>> fetchPackagingBoxes();
+
+  /// Wholesale merchandise subtotal only; excludes markup, packaging and shipping.
+  /// The server recomputes the authoritative subtotal when creating the order.
   Future<DeliveryQuote> quoteDeliveryFee(
     String deliveryZoneId, {
-    required int orderSubtotal,
+    required int orderWholesaleTotal,
   });
   Future<PublicContentSnapshot> fetchPublicContent();
   Future<Set<String>> fetchFavoriteProductIds();

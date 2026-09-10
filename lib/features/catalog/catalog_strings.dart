@@ -22,6 +22,7 @@ class CatalogStrings {
       _t('وصل حديثاً', 'تازە گەیشتووەکان', 'New arrivals');
   static String get bestSellers =>
       _t('الأكثر طلباً', 'زۆرترین داواکراوەکان', 'Best sellers');
+  static String get viewMore => _t('عرض المزيد', 'زیاتر ببینە', 'View more');
 
   // ── إعلان الفتح ──
   static String get promoNewArrivalsTitle =>

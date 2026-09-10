@@ -11,7 +11,12 @@ import 'package:flutter_app/data/models.dart';
 import 'package:flutter_app/data/repositories/demo_repositories.dart';
 import 'package:flutter_app/data/session.dart';
 import 'package:flutter_app/features/catalog/home_screen.dart';
+import 'package:flutter_app/features/catalog/product_filters_sheet.dart';
+import 'package:flutter_app/features/catalog/products_screen.dart';
+import 'package:flutter_app/features/shell/main_shell.dart';
+import 'package:flutter_app/data/services/device_token_registrar.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'home_catalog_sections_test.dart' show fixtureProduct;
 
 void main() {
   setUpAll(() async {
@@ -255,6 +260,158 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('home grids cap each group and more selects its exact category', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(375, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    session.categories = const [category];
+    session.products = [
+      for (var i = 0; i < 9; i++) fixtureProduct('p$i', category.id, i),
+    ];
+    ProductFilters? selected;
+    await tester.pumpWidget(
+      _testApp(
+        Directionality(
+          textDirection: TextDirection.rtl,
+          child: HomeScreen(onOpenProducts: (filters) => selected = filters),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    for (final id in ['best-sellers', 'category-${category.id}']) {
+      final more = find.byKey(ValueKey('home-more-$id'));
+      await tester.scrollUntilVisible(
+        more,
+        450,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      final grid = tester.widget<SliverGrid>(
+        find.byKey(ValueKey('home-grid-$id'), skipOffstage: false),
+      );
+      expect((grid.delegate as SliverChildBuilderDelegate).childCount, 6);
+      expect(tester.getSize(more).height, greaterThanOrEqualTo(48));
+      await tester.tap(more);
+      await tester.pump();
+      expect(selected?.categoryId, id == 'best-sellers' ? null : category.id);
+      expect(
+        selected?.sort,
+        id == 'best-sellers' ? SortOption.popular : SortOption.newest,
+      );
+      expect(tester.takeException(), isNull);
+    }
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(ValueKey('home-more-category-${category.id}'))),
+      alignment: 1,
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await expectLater(
+      find.byType(HomeScreen),
+      matchesGoldenFile('goldens/lugta/home-category-more-light.png'),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  for (final size in [const Size(320, 844), const Size(844, 375)]) {
+    testWidgets('category previews fit dark large text at $size', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      AppColors.p = AppPalette.dark;
+      addTearDown(() => AppColors.p = AppPalette.light);
+      session.categories = const [category];
+      session.products = [
+        for (var i = 0; i < 7; i++) fixtureProduct('p$i', category.id, i),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.dark(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(2),
+              disableAnimations: true,
+            ),
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: child!,
+            ),
+          ),
+          home: const HomeScreen(),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      final more = find.byKey(ValueKey('home-more-category-${category.id}'));
+      await tester.scrollUntilVisible(
+        more,
+        350,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await Scrollable.ensureVisible(tester.element(more), alignment: 1);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.getSize(more).height, greaterThanOrEqualTo(48));
+      expect(tester.takeException(), isNull);
+      if (size.width == 320) {
+        await expectLater(
+          find.byType(HomeScreen),
+          matchesGoldenFile(
+            'goldens/lugta/home-category-more-dark-large-text.png',
+          ),
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets(
+    'home more switches the real products tab and clears stale search',
+    (tester) async {
+      session.categories = const [category];
+      session.products = [fixtureProduct('p1', category.id, 1)];
+      session.notifications = [];
+      await tester.pumpWidget(
+        _testApp(const MainShell(deviceTokens: NoopDeviceTokenRegistrar())),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      final more = find.byKey(ValueKey('home-more-category-${category.id}'));
+      await tester.scrollUntilVisible(
+        more,
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(more);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 1);
+      expect(
+        tester
+            .widget<ProductsScreen>(find.byType(ProductsScreen))
+            .initialFilters
+            .categoryId,
+        category.id,
+      );
+      expect(find.text(category.nameAr), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'does not exist');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byKey(const ValueKey('home_nav_tab')));
+      await tester.pump();
+      await tester.ensureVisible(more);
+      await tester.tap(more);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+      expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   // Superseded intent: the card used to contain the photo so nothing was ever
   // cropped, but catalog photos arrive in mixed aspect ratios, so each tile

@@ -48,6 +48,9 @@ class ModelStrings {
   static String walletTxType(WalletTxType t) => switch (appSettings.language) {
     AppLanguage.ar => switch (t) {
       WalletTxType.pendingProfit => 'ربح معلق',
+      WalletTxType.pendingReward => 'مكافأة معلّقة',
+      WalletTxType.rewardReleased => 'مكافأة متاحة',
+      WalletTxType.rewardReversed => 'تخفيض أو عكس مكافأة',
       WalletTxType.profitReleased => 'ربح متاح',
       WalletTxType.reversal => 'عكس ربح (طلب راجع)',
       WalletTxType.withdrawal => 'سحب رصيد',
@@ -57,6 +60,9 @@ class ModelStrings {
     },
     AppLanguage.ckb => switch (t) {
       WalletTxType.pendingProfit => 'قازانجی هەڵواسراو',
+      WalletTxType.pendingReward => 'پاداشتی چاوەڕوان',
+      WalletTxType.rewardReleased => 'پاداشتی بەردەست',
+      WalletTxType.rewardReversed => 'کەمکردنەوە یان گەڕاندنەوەی پاداشت',
       WalletTxType.profitReleased => 'قازانجی بەردەست',
       WalletTxType.reversal => 'گەڕاندنەوەی قازانج (داواکاری گەڕاوە)',
       WalletTxType.withdrawal => 'ڕاکێشانی باڵانس',
@@ -66,6 +72,9 @@ class ModelStrings {
     },
     AppLanguage.en => switch (t) {
       WalletTxType.pendingProfit => 'Pending profit',
+      WalletTxType.pendingReward => 'Pending reward',
+      WalletTxType.rewardReleased => 'Available reward',
+      WalletTxType.rewardReversed => 'Reward reduction or reversal',
       WalletTxType.profitReleased => 'Available profit',
       WalletTxType.reversal => 'Profit reversal (returned order)',
       WalletTxType.withdrawal => 'Balance withdrawal',

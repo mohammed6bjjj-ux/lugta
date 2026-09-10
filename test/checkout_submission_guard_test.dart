@@ -12,17 +12,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late _SlowCountingOrdersRepository ordersRepository;
+  late _FreeDeliveryCatalogRepository catalogRepository;
 
   setUp(() async {
     appSettings.language = AppLanguage.en;
     final base = createDemoRepositories();
     await base.auth.signIn(phone: '07712345678', password: 'test-password');
     final orders = _SlowCountingOrdersRepository(base.orders);
+    catalogRepository = _FreeDeliveryCatalogRepository(base.catalog);
     await session.configure(
       AppRepositories(
         auth: base.auth,
         profile: base.profile,
-        catalog: _FreeDeliveryCatalogRepository(base.catalog),
+        catalog: catalogRepository,
         orders: orders,
         wallet: base.wallet,
         notifications: base.notifications,
@@ -108,6 +110,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(ordersRepository.createCalls, 1);
+    expect(catalogRepository.quotedWholesaleTotals, isNotEmpty);
+    expect(
+      catalogRepository.quotedWholesaleTotals,
+      everyElement(variant.wholesalePriceOverride ?? product.wholesalePrice),
+    );
   });
 }
 
@@ -115,6 +122,7 @@ class _FreeDeliveryCatalogRepository implements CatalogRepository {
   _FreeDeliveryCatalogRepository(this._delegate);
 
   final CatalogRepository _delegate;
+  final List<int> quotedWholesaleTotals = [];
 
   @override
   Future<List<Category>> fetchCategories() => _delegate.fetchCategories();
@@ -149,15 +157,18 @@ class _FreeDeliveryCatalogRepository implements CatalogRepository {
   @override
   Future<DeliveryQuote> quoteDeliveryFee(
     String deliveryZoneId, {
-    required int orderSubtotal,
-  }) async => DeliveryQuote(
-    baseDeliveryFee: 5000,
-    deliveryFee: 0,
-    deliveryDiscount: 5000,
-    campaignName: 'Welcome offer',
-    freeDeliveryReason: 'New account reward',
-    validUntil: DateTime(2026, 8, 20),
-  );
+    required int orderWholesaleTotal,
+  }) async {
+    quotedWholesaleTotals.add(orderWholesaleTotal);
+    return DeliveryQuote(
+      baseDeliveryFee: 5000,
+      deliveryFee: 0,
+      deliveryDiscount: 5000,
+      campaignName: 'Welcome offer',
+      freeDeliveryReason: 'New account reward',
+      validUntil: DateTime(2026, 8, 20),
+    );
+  }
 
   @override
   Future<void> setFavorite(String productId, {required bool enabled}) =>

@@ -3,6 +3,69 @@ import 'package:flutter_app/data/promotion_mapper.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'configurable rewards preserve fractional rate and separate money, points and delivery',
+    () {
+      final summary = referralSummaryFromRpc({
+        'referral_kind': 'profit_percent',
+        'referral_value': '2.5',
+        'referral_enabled': true,
+        'referral_pending_cash': 250,
+        'referral_pending_points': 15,
+        'referral_pending_delivery': 2500,
+        'referral_released_points': 20,
+        'referral_released_delivery': 5000,
+      });
+      expect(summary.rewardValue, 2.5);
+      expect(summary.referralEnabled, isTrue);
+      expect(summary.pendingCash, 250);
+      expect(summary.pendingPoints, 15);
+      expect(summary.pendingDelivery, 2500);
+      expect(summary.releasedPoints, 20);
+      expect(summary.releasedDelivery, 5000);
+      expect(referralSummaryFromRpc({}).rewardKind, isNull);
+      expect(referralSummaryFromRpc({}).pendingCash, 0);
+    },
+  );
+  test(
+    'signup gift distinguishes a live offer from previously earned credit',
+    () {
+      final active = referralSummaryFromRpc({
+        'signup_delivery_active': true,
+        'signup_delivery_earned': false,
+      });
+      expect(active.signupDeliveryActive, isTrue);
+      expect(active.signupDeliveryEarned, isFalse);
+      final paused = referralSummaryFromRpc([
+        {'signup_delivery_active': false, 'signup_delivery_earned': true},
+      ]);
+      expect(paused.signupDeliveryActive, isFalse);
+      expect(paused.signupDeliveryEarned, isTrue);
+      for (final legacy in [null, <String, dynamic>{}, []]) {
+        expect(referralSummaryFromRpc(legacy).signupDeliveryActive, isFalse);
+        expect(referralSummaryFromRpc(legacy).signupDeliveryEarned, isFalse);
+      }
+      expect(const ReferralSummary.empty().signupDeliveryEarned, isFalse);
+    },
+  );
+  test(
+    'maps profit-share rate separately from earned dinars and defaults safely',
+    () {
+      final summary = referralSummaryFromRpc({
+        'referral_code': 'LUGTA123',
+        'profit_share_active': true,
+        'profit_share_percent': '1',
+        'profit_share_earned': '1123',
+        'profit_share_orders': 2,
+      });
+      expect(summary.profitShareActive, isTrue);
+      expect(summary.profitSharePercent, 1);
+      expect(summary.profitShareEarned, 1123);
+      expect(summary.profitShareOrders, 2);
+      expect(referralSummaryFromRpc({}).profitShareActive, isFalse);
+      expect(referralSummaryFromRpc({}).profitShareEarned, 0);
+    },
+  );
   test('maps current promotion grant snapshot columns', () {
     final grant = promotionGrantFromJson({
       'id': 'grant-1',

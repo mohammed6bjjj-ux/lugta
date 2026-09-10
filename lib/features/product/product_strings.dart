@@ -23,6 +23,14 @@ class ProductStrings {
   static String get video => _t('فيديو', 'ڤیدیۆ', 'Video');
   static String get availableVariants =>
       _t('المتغيرات المتوفرة', 'جۆرە بەردەستەکان', 'Available variants');
+  static String get sizesAndColors =>
+      _t('المقاسات والألوان', 'قەبارە و ڕەنگەکان', 'Sizes & colors');
+  static String get chooseSize => _t(
+    'اختر المقاس واللون المناسبين قبل الإضافة للسلة.',
+    'پێش زیادکردن بۆ سەبەتە قەبارە و ڕەنگی گونجاو هەڵبژێرە.',
+    'Choose your size and color before adding to cart.',
+  );
+  static String get noSize => _t('بدون مقاس', 'بێ قەبارە', 'No size');
   static String get specifications =>
       _t('المواصفات', 'تایبەتمەندییەکان', 'Specifications');
   static String get descriptionTitle => _t('الوصف', 'وەسف', 'Description');
@@ -164,6 +172,18 @@ class ProductStrings {
       _t('إلغاء التحديد', 'هەڵوەشاندنەوەی هەڵبژاردن', 'Deselect all');
   static String get downloadToDevice =>
       _t('تحميل إلى الجهاز', 'داگرتن بۆ ئامێر', 'Download to device');
+  static String get viewDownloads =>
+      _t('متابعة التنزيلات', 'بینینی داگرتنەکان', 'View downloads');
+  static String mediaQueued(String count) => _t(
+    'أُضيف $count ملف للتنزيل بالخلفية. تابع التقدم من إشعارات الجهاز',
+    '$count فایل بۆ داگرتن لە پاشبنەما زیاد کرا. لە ئاگادارکردنەوەکانی ئامێرەکە بیبینە',
+    '$count files queued in the background. Track progress in device notifications',
+  );
+  static String mediaPartial(String saved, String queued, String failed) => _t(
+    'محفوظ: $saved · بالتنزيل: $queued · تعذر: $failed. أعد المحاولة للناقص',
+    'پاشەکەوتکراو: $saved · داگرتن: $queued · سەرنەکەوتوو: $failed',
+    'Saved: $saved · Queued: $queued · Failed: $failed. Retry missing files',
+  );
   static String get copyPostText =>
       _t('نسخ نص المنشور', 'کۆپیکردنی دەقی پۆست', 'Copy post text');
   static String get postTextCopied => _t(

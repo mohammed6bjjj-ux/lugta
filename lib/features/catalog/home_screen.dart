@@ -19,12 +19,97 @@ import '../../data/session.dart';
 import '../cart/cart_strings.dart';
 import '../auth/guest_strings.dart';
 import 'catalog_strings.dart';
+import 'home_catalog_sections.dart';
+import 'product_filters_sheet.dart';
 
 /// الشاشة الرئيسية — محتوى تبويب «الرئيسية» داخل الشِل.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.onOpenProducts});
+
+  final ValueChanged<ProductFilters>? onOpenProducts;
 
   static const double _gridAspectRatio = ProductCard.gridAspectRatio;
+
+  void _openProducts(BuildContext context, ProductFilters filters) {
+    if (onOpenProducts != null) {
+      onOpenProducts!(filters);
+    } else {
+      Navigator.pushNamed(context, Routes.products, arguments: filters);
+    }
+  }
+
+  List<Widget> _productSection({
+    required BuildContext context,
+    required String id,
+    required String title,
+    required List<Product> products,
+    required ProductFilters filters,
+  }) => [
+    SliverToBoxAdapter(
+      child: SectionHeader(key: ValueKey('home-section-$id'), title: title),
+    ),
+    SliverPadding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      sliver: SliverLayoutBuilder(
+        builder: (context, constraints) {
+          const gap = AppSpacing.sm + 4;
+          final columns = (constraints.crossAxisExtent / 200).floor().clamp(
+            2,
+            6,
+          );
+          final width =
+              (constraints.crossAxisExtent - gap * (columns - 1)) / columns;
+          return SliverGrid(
+            key: ValueKey('home-grid-$id'),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: gap,
+              crossAxisSpacing: gap,
+              mainAxisExtent:
+                  width / _gridAspectRatio + _extraTextHeight(context),
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => ProductCard(
+                key: ValueKey('home-$id-${products[index].id}'),
+                product: products[index],
+              ),
+              childCount: products.length,
+            ),
+          );
+        },
+      ),
+    ),
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.lg,
+        ),
+        child: Semantics(
+          label: '${CatalogStrings.viewMore}: $title',
+          child: OutlinedButton.icon(
+            key: ValueKey('home-more-$id'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            onPressed: () => _openProducts(context, filters),
+            label: Text(CatalogStrings.viewMore),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+          ),
+        ),
+      ),
+    ),
+  ];
+
+  // Reserve growing text space without shrinking the user's accessibility font.
+  double _extraTextHeight(BuildContext context) =>
+      (MediaQuery.textScalerOf(context).scale(40) - 40).clamp(
+        0,
+        double.infinity,
+      );
 
   List<Product> get _newArrivals {
     final sorted = [...session.products]
@@ -54,6 +139,10 @@ class HomeScreen extends StatelessWidget {
         builder: (context, _) {
           final newArrivals = _newArrivals;
           final bestSellers = _bestSellers;
+          final sections = homeCatalogSections(
+            session.categories,
+            session.products,
+          );
           return SessionRefreshIndicator(
             onRefresh: _refreshHome,
             child: CustomScrollView(
@@ -175,7 +264,9 @@ class HomeScreen extends StatelessWidget {
                 ),
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: ProductCard.horizontalHeight,
+                    height:
+                        ProductCard.horizontalHeight +
+                        _extraTextHeight(context),
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(
@@ -197,34 +288,24 @@ class HomeScreen extends StatelessWidget {
                 const SliverToBoxAdapter(
                   child: SizedBox(height: AppSpacing.lg),
                 ),
-                SliverToBoxAdapter(
-                  child: SectionHeader(title: CatalogStrings.bestSellers),
-                ),
-                SliverPadding(
-                  // حشوة سفلية كبيرة كي لا يختفي آخر المحتوى خلف شريط التنقل العائم.
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    AppSpacing.md,
-                    AppSpacing.md,
-                    120,
+                if (bestSellers.isNotEmpty)
+                  ..._productSection(
+                    context: context,
+                    id: 'best-sellers',
+                    title: CatalogStrings.bestSellers,
+                    products: bestSellers,
+                    filters: const ProductFilters(sort: SortOption.popular),
                   ),
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: AppSpacing.sm + 4,
-                          crossAxisSpacing: AppSpacing.sm + 4,
-                          childAspectRatio: _gridAspectRatio,
-                        ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => Entrance(
-                        index: index,
-                        child: ProductCard(product: bestSellers[index]),
-                      ),
-                      childCount: bestSellers.length,
-                    ),
+                for (final section in sections)
+                  ..._productSection(
+                    context: context,
+                    id: 'category-${section.category.id}',
+                    title: section.category.localizedName,
+                    products: section.products,
+                    filters: ProductFilters(categoryId: section.category.id),
                   ),
-                ),
+                // Keep the last action above the floating navigation dock.
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
               ],
             ),
           );

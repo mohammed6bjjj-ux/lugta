@@ -23,6 +23,50 @@ void main() {
     'created_at': createdAt,
   };
 
+  test(
+    'shows pending, released and reversed rewards but hides release counter-entry',
+    () {
+      final transactions = walletTransactionsFromLedgerRows([
+        row(
+          id: 'r1',
+          entryType: 'promotion_reward',
+          bucket: 'pending',
+          amount: 250,
+        ),
+        {
+          ...row(
+            id: 'r2',
+            entryType: 'promotion_reward',
+            bucket: 'pending',
+            amount: -250,
+          ),
+          'metadata': {'reward_stage': 'released'},
+        },
+        row(
+          id: 'r3',
+          entryType: 'promotion_reward',
+          bucket: 'available',
+          amount: 250,
+        ),
+        row(
+          id: 'r4',
+          entryType: 'promotion_reward',
+          bucket: 'available',
+          amount: -250,
+        ),
+      ]);
+      expect(transactions, hasLength(3));
+      expect(
+        transactions.map((t) => t.type),
+        containsAll([
+          WalletTxType.pendingReward,
+          WalletTxType.rewardReleased,
+          WalletTxType.rewardReversed,
+        ]),
+      );
+      expect(transactions.every((t) => t.amount == 250), isTrue);
+    },
+  );
   test('shows only the available side of a profit release', () {
     final transactions = walletTransactionsFromLedgerRows([
       row(

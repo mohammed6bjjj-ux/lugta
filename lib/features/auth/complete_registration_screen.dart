@@ -105,16 +105,22 @@ class _CompleteRegistrationScreenState
               : _referralController.text.trim(),
         ),
       );
-      await session.refreshAuthenticatedData();
-      if (!mounted) return;
-      openAuthenticatedDestination(context);
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.toString())));
+      return;
     }
+    try {
+      await session.refreshCurrentProfile();
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, Routes.splash, (_) => false);
+      return;
+    }
+    if (mounted) openAuthenticatedDestination(context);
   }
 
   @override

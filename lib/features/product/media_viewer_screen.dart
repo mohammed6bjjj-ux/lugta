@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../core/formatters.dart';
 import '../../core/media_transfer.dart';
+import '../../core/background_media_downloads.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/widgets/pressable.dart';
 import '../../data/models.dart';
@@ -52,7 +53,10 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _transferring = true);
     messenger.showSnackBar(
-      SnackBar(content: Text(ProductStrings.mediaPreparing)),
+      SnackBar(
+        content: Text(ProductStrings.mediaPreparing),
+        duration: const Duration(minutes: 10),
+      ),
     );
 
     MediaTransferResult result;
@@ -61,8 +65,8 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     } catch (_) {
       result = const MediaTransferResult(succeeded: 0, failed: 1);
     }
-    if (!mounted) return;
-    setState(() => _transferring = false);
+    if (mounted) setState(() => _transferring = false);
+    if (!messenger.mounted) return;
 
     messenger.hideCurrentSnackBar();
     if (result.dismissed) return;
@@ -70,12 +74,35 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
       MediaTransferResult(permissionDenied: true) =>
         ProductStrings.mediaPermissionDenied,
       MediaTransferResult(isCompleteFailure: true) => failureMessage,
+      _ when result.failed > 0 => ProductStrings.mediaPartial(
+        formatNumber(result.succeeded),
+        formatNumber(result.queued),
+        formatNumber(result.failed),
+      ),
+      _ when result.queued > 0 => ProductStrings.mediaQueued(
+        formatNumber(result.queued),
+      ),
       // The share sheet already confirms itself; only saving needs a receipt.
       _ when !announceSuccess => null,
       _ => ProductStrings.mediaSaved(formatNumber(result.succeeded)),
     };
     if (message == null) return;
-    messenger.showSnackBar(SnackBar(content: Text(message)));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 8),
+        action: result.queued > 0
+            ? SnackBarAction(
+                label: ProductStrings.viewDownloads,
+                onPressed: () {
+                  BackgroundMediaDownloads.openDownloads().catchError(
+                    (Object _) {},
+                  );
+                },
+              )
+            : null,
+      ),
+    );
   }
 
   Future<void> _download() => _runTransfer(
@@ -230,7 +257,8 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                     child: _ViewerActionButton(
                       icon: Icons.download_rounded,
                       label: ProductStrings.download,
-                      onTap: _download,
+                      loading: _transferring,
+                      onTap: _transferring ? null : _download,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -238,7 +266,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                     child: _ViewerActionButton(
                       icon: Icons.share_outlined,
                       label: ProductStrings.share,
-                      onTap: _share,
+                      onTap: _transferring ? null : _share,
                     ),
                   ),
                 ],
@@ -290,16 +318,19 @@ class _ViewerActionButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.loading = false,
   });
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
       onTap: onTap,
+      enabled: onTap != null,
       child: Container(
         height: 50,
         alignment: Alignment.center,
@@ -307,25 +338,34 @@ class _ViewerActionButton extends StatelessWidget {
           color: Colors.white.withValues(alpha: .12),
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20, color: Colors.white),
-            const SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+        child: loading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
                   color: Colors.white,
-                  fontWeight: FontWeight.w800,
                 ),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 20, color: Colors.white),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }

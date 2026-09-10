@@ -4,6 +4,17 @@ import '../../data/app_settings.dart';
 class WizardStrings {
   WizardStrings._();
 
+  static String deliveryDiscountAmount(String amount) => _t(
+    'خصم التوصيل: $amount',
+    'داشکاندنی گەیاندن: $amount',
+    'Delivery discount: $amount',
+  );
+  static String deliveryRewardRemaining(String amount, String discount) => _t(
+    'باقي $amount من قيمة الجملة لتستفيد من خصم توصيل حتى $discount.',
+    '$amount لە کۆی نرخی کۆمەڵ ماوە بۆ داشکاندنی گەیاندن تا $discount.',
+    'Add $amount in wholesale value to qualify for up to $discount off delivery.',
+  );
+
   static String _t(String ar, String ckb, String en) =>
       switch (appSettings.language) {
         AppLanguage.ar => ar,

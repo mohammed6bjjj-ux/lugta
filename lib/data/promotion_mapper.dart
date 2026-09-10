@@ -104,6 +104,20 @@ ReferralSummary referralSummaryFromRpc(Object? value) {
     completedReferredOrders: _nonNegativeInt(row['completed_referred_orders']),
     availableFreeDeliveries: _nonNegativeInt(row['available_free_deliveries']),
     walletRewardsEarned: _nonNegativeInt(row['wallet_rewards_earned']),
+    profitShareActive: _bool(row['profit_share_active']),
+    profitSharePercent: _int(row['profit_share_percent'], fallback: 1),
+    profitShareEarned: _nonNegativeInt(row['profit_share_earned']),
+    profitShareOrders: _nonNegativeInt(row['profit_share_orders']),
+    rewardKind: _nullableText(row['referral_kind']),
+    rewardValue: double.tryParse('${row['referral_value']}') ?? 1,
+    referralEnabled: _bool(row['referral_enabled']),
+    pendingCash: _nonNegativeInt(row['referral_pending_cash']),
+    pendingPoints: _nonNegativeInt(row['referral_pending_points']),
+    pendingDelivery: _nonNegativeInt(row['referral_pending_delivery']),
+    releasedPoints: _nonNegativeInt(row['referral_released_points']),
+    releasedDelivery: _nonNegativeInt(row['referral_released_delivery']),
+    signupDeliveryActive: _bool(row['signup_delivery_active']),
+    signupDeliveryEarned: _bool(row['signup_delivery_earned']),
   );
 }
 

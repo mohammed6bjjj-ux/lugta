@@ -34,7 +34,8 @@ void main() {
     expect(publishedText, contains('لكطة (Lugta)'));
     expect(publishedText, contains('0773 882 2202'));
     expect(publishedText, contains('10,000'));
-    expect(publishedText, contains('خمسة أيام'));
+    expect(publishedText, contains('يومين كاملين (48 ساعة)'));
+    expect(publishedText, isNot(contains('خمسة أيام')));
     expect(publishedText, isNot(contains('ملاحظات إدارية')));
     expect(publishedText, isNot(matches(RegExp(r'\[[^\]]+\]'))));
   });

@@ -18,6 +18,7 @@ import '../features/auth/splash_screen.dart';
 import '../features/catalog/category_products_screen.dart';
 import '../features/catalog/favorites_screen.dart';
 import '../features/catalog/products_screen.dart';
+import '../features/catalog/product_filters_sheet.dart';
 import '../features/catalog/search_screen.dart';
 import '../features/cart/cart_screen.dart';
 import '../features/order_wizard/order_success_screen.dart';
@@ -108,7 +109,9 @@ class AppRouter {
       Routes.accountBlocked => _blocked(args),
       Routes.accountDeleted => const AccountDeletedScreen(),
       Routes.shell => const MainShell(),
-      Routes.products => const ProductsScreen(),
+      Routes.products => ProductsScreen(
+        initialFilters: args is ProductFilters ? args : const ProductFilters(),
+      ),
       Routes.categoryProducts =>
         args is Category
             ? CategoryProductsScreen(category: args)

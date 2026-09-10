@@ -22,20 +22,24 @@ class OtpVerificationScreen extends StatefulWidget {
     super.key,
     required this.phone,
     required this.purpose,
+    this.now,
   });
 
   final String phone;
   final String purpose;
+  final DateTime Function()? now;
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends State<OtpVerificationScreen>
+    with WidgetsBindingObserver {
   static const _resendCooldownSeconds = 60;
   final GlobalKey<OtpCodeInputState> _otpKey = GlobalKey<OtpCodeInputState>();
 
   Timer? _timer;
+  late DateTime _resendAvailableAt;
   int _secondsLeft = _resendCooldownSeconds;
   bool _verifying = false;
   bool _resending = false;
@@ -43,30 +47,44 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startCountdown();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   void _startCountdown() {
     _timer?.cancel();
+    _resendAvailableAt = _now().add(
+      const Duration(seconds: _resendCooldownSeconds),
+    );
     setState(() => _secondsLeft = _resendCooldownSeconds);
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      if (_secondsLeft <= 1) {
-        t.cancel();
-        setState(() => _secondsLeft = 0);
-      } else {
-        setState(() => _secondsLeft--);
-      }
-    });
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _updateCountdown(),
+    );
+  }
+
+  DateTime _now() => (widget.now ?? DateTime.now)();
+
+  void _updateCountdown() {
+    if (!mounted) return;
+    final remaining =
+        (_resendAvailableAt.difference(_now()).inMilliseconds / 1000)
+            .ceil()
+            .clamp(0, _resendCooldownSeconds);
+    if (remaining == 0) _timer?.cancel();
+    if (remaining != _secondsLeft) setState(() => _secondsLeft = remaining);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _updateCountdown();
   }
 
   OtpPurpose get _purpose => switch (widget.purpose) {
@@ -76,7 +94,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   };
 
   Future<void> _resend() async {
-    if (_resending || _verifying) return;
+    if (_resending || _verifying || _secondsLeft > 0) return;
     setState(() => _resending = true);
     _otpKey.currentState?.clear();
     try {
@@ -97,7 +115,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   Future<void> _onCompleted(String code) async {
-    if (_verifying) return;
+    if (_verifying || _resending) return;
     setState(() => _verifying = true);
     try {
       await appBackend.auth.verifyOtp(
@@ -107,6 +125,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       );
     } catch (error) {
       if (!mounted) return;
+      if (widget.purpose == 'register' &&
+          error is BackendException &&
+          (error.code == 'registration_draft_missing' ||
+              error.code == 'registration_completion_failed')) {
+        // Phone ownership was verified, but an older install left no draft.
+        // The pending screen exposes completion; never ask to reuse this OTP.
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          Routes.pendingApproval,
+          (_) => false,
+        );
+        return;
+      }
       setState(() => _verifying = false);
       _otpKey.currentState?.clear();
       ScaffoldMessenger.of(

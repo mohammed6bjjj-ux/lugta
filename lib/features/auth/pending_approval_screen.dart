@@ -68,8 +68,13 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
 
   Future<void> _recheckStatus({bool silent = false}) async {
     try {
-      await appBackend.auth.completePendingRegistration();
-      await session.refreshAuthenticatedData();
+      try {
+        await appBackend.auth.completePendingRegistration();
+      } catch (_) {
+        // Stale terms/temporary completion errors must not hide the account
+        // status or the manual completion action for older registrations.
+      }
+      await session.refreshCurrentProfile();
       if (!mounted) return;
       final profile = session.seller;
       if (profile.status != AccountStatus.pending) {

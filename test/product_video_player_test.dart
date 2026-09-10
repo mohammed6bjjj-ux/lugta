@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -76,6 +77,35 @@ void main() {
     expect(find.byKey(const Key('fake-video-surface')), findsOneWidget);
     expect(attempts, 2);
   });
+
+  testWidgets('stalled initialization times out and allows retry', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final stalled = _FakeVideoController(initializeGate: gate.future);
+    final working = _FakeVideoController();
+    var attempts = 0;
+    await tester.pumpWidget(
+      _testApp(
+        ProductVideoPlayer(
+          item: media,
+          active: true,
+          controllerFactory: (_) => attempts++ == 0 ? stalled : working,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 31));
+    await tester.pump();
+    expect(find.byKey(const Key('product-video-error')), findsOneWidget);
+    expect(stalled.disposeCalls, 1);
+    await tester.tap(find.byKey(const Key('product-video-retry')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('fake-video-surface')), findsOneWidget);
+    gate.complete();
+    await tester.pump();
+    expect(attempts, 2);
+  });
 }
 
 Widget _testApp(Widget child) {
@@ -88,9 +118,10 @@ Widget _testApp(Widget child) {
 }
 
 class _FakeVideoController implements ProductVideoController {
-  _FakeVideoController({this.initializeError});
+  _FakeVideoController({this.initializeError, this.initializeGate});
 
   final Object? initializeError;
+  final Future<void>? initializeGate;
   final List<VoidCallback> _listeners = [];
   bool _initialized = false;
   bool _playing = false;
@@ -128,6 +159,7 @@ class _FakeVideoController implements ProductVideoController {
 
   @override
   Future<void> initialize() async {
+    await initializeGate;
     if (initializeError != null) throw initializeError!;
     _initialized = true;
     _notify();

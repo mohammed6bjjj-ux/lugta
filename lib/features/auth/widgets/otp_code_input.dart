@@ -80,6 +80,27 @@ class OtpCodeInputState extends State<OtpCodeInput> {
   }
 
   void _onChanged(int index, String value) {
+    if (!widget.enabled) return;
+    // Android OTP autofill and clipboard paste deliver the whole code into
+    // one field. Distribute it instead of silently truncating it to one digit.
+    if (value.length > 1) {
+      final start = value.length == _length ? 0 : index;
+      for (
+        var offset = 0;
+        offset < value.length && start + offset < _length;
+        offset++
+      ) {
+        _controllers[start + offset].text = value[offset];
+      }
+      if (_code.length == _length) {
+        _nodes[index].unfocus();
+        widget.onCompleted(_code);
+      } else {
+        final next = (start + value.length).clamp(0, _length - 1);
+        _nodes[next].requestFocus();
+      }
+      return;
+    }
     if (value.isNotEmpty) {
       _pulse(index);
       if (index < _length - 1) {
@@ -149,12 +170,15 @@ class OtpCodeInputState extends State<OtpCodeInput> {
                               autofocus: i == 0,
                               textAlign: TextAlign.center,
                               keyboardType: TextInputType.number,
+                              autofillHints: i == 0
+                                  ? const [AutofillHints.oneTimeCode]
+                                  : null,
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
                               ),
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
-                                LengthLimitingTextInputFormatter(1),
+                                LengthLimitingTextInputFormatter(_length),
                               ],
                               decoration: InputDecoration(
                                 filled: false,

@@ -194,7 +194,7 @@ void main() {
       catalog.releasePausedFetch();
       await olderRefresh;
       await catalog.thirdFetchStarted.future.timeout(
-        const Duration(seconds: 2),
+        const Duration(seconds: 14),
       );
       expect(catalog.productFetchCount, 3);
       await catalog.thirdFetchCompleted.future.timeout(
@@ -833,9 +833,11 @@ class _BlockingRealtimeCatalogRepository implements CatalogRepository {
   @override
   Future<DeliveryQuote> quoteDeliveryFee(
     String deliveryZoneId, {
-    required int orderSubtotal,
-  }) =>
-      _delegate.quoteDeliveryFee(deliveryZoneId, orderSubtotal: orderSubtotal);
+    required int orderWholesaleTotal,
+  }) => _delegate.quoteDeliveryFee(
+    deliveryZoneId,
+    orderWholesaleTotal: orderWholesaleTotal,
+  );
 
   @override
   Future<PublicContentSnapshot> fetchPublicContent() =>
@@ -898,9 +900,11 @@ class _PartiallyFailingCatalogRepository implements CatalogRepository {
   @override
   Future<DeliveryQuote> quoteDeliveryFee(
     String deliveryZoneId, {
-    required int orderSubtotal,
-  }) =>
-      _delegate.quoteDeliveryFee(deliveryZoneId, orderSubtotal: orderSubtotal);
+    required int orderWholesaleTotal,
+  }) => _delegate.quoteDeliveryFee(
+    deliveryZoneId,
+    orderWholesaleTotal: orderWholesaleTotal,
+  );
 
   @override
   Future<PublicContentSnapshot> fetchPublicContent() =>

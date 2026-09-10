@@ -15,23 +15,44 @@ abstract final class NetworkMediaRequest {
   static NetworkMediaScopeProvider _scopeProvider = () => null;
   static NetworkMediaAuthorizationRefresh? _authorizationRefresh;
   static Future<void>? _refreshInFlight;
+  static Future<String> Function(String)? _backgroundUrlProvider;
 
   static void configure({
     required NetworkMediaHeadersProvider headersProvider,
     required NetworkMediaScopeProvider scopeProvider,
     NetworkMediaAuthorizationRefresh? refreshAuthorization,
+    Future<String> Function(String)? backgroundUrlProvider,
   }) {
     _headersProvider = headersProvider;
     _scopeProvider = scopeProvider;
     _authorizationRefresh = refreshAuthorization;
     _refreshInFlight = null;
+    _backgroundUrlProvider = backgroundUrlProvider;
   }
 
   static void reset() {
+    _backgroundUrlProvider = null;
     _headersProvider = () => const <String, String>{};
     _scopeProvider = () => null;
     _authorizationRefresh = null;
     _refreshInFlight = null;
+  }
+
+  /// Explicit save only: an object-scoped expiring URL, never a persisted JWT.
+  static Future<String> backgroundDownloadUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      throw const FormatException('Invalid download URL');
+    }
+    if (!isAuthenticatedSupabaseStorageUrl(url)) return url;
+    final provider = _backgroundUrlProvider;
+    if (provider == null) {
+      throw StateError('Private download authorization unavailable');
+    }
+    return provider(url);
   }
 
   static Map<String, String> headersFor(String url) {

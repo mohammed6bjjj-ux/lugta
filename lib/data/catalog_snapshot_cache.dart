@@ -325,6 +325,7 @@ Map<String, Object?> _variantToJson(ProductVariant variant) => {
   'image_url': variant.imageUrl,
   'stock': variant.stock,
   'color_hex': variant.colorHex,
+  'size': variant.size,
 };
 
 ProductVariant _variantFromJson(Map<String, dynamic> json) => ProductVariant(
@@ -338,4 +339,5 @@ ProductVariant _variantFromJson(Map<String, dynamic> json) => ProductVariant(
   imageUrl: json['image_url'] as String? ?? '',
   stock: json['stock'] as int,
   colorHex: json['color_hex'] as int?,
+  size: json['size'] as String?,
 );

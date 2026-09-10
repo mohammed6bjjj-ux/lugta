@@ -16,9 +16,45 @@ const _diskDimensionBuckets = <int>[320, 640, 960, 1280, 1600];
 const _requestTimeout = Duration(seconds: 20);
 
 class _TimeoutHttpFileService extends HttpFileService {
+  _TimeoutHttpFileService() {
+    concurrentFetches = 4;
+  }
   @override
-  Future<FileServiceResponse> get(String url, {Map<String, String>? headers}) =>
-      super.get(url, headers: headers).timeout(_requestTimeout);
+  Future<FileServiceResponse> get(
+    String url, {
+    Map<String, String>? headers,
+  }) async => IdleTimeoutFileResponse(
+    await super.get(url, headers: headers).timeout(_requestTimeout),
+  );
+}
+
+/// Header timeout alone did not catch a server that stalls halfway through a video.
+class IdleTimeoutFileResponse implements FileServiceResponse {
+  IdleTimeoutFileResponse(
+    this.response, {
+    this.idleTimeout = const Duration(seconds: 45),
+  });
+  final FileServiceResponse response;
+  final Duration idleTimeout;
+  @override
+  Stream<List<int>> get content async* {
+    await for (final chunk in response.content.timeout(idleTimeout)) {
+      yield chunk;
+    }
+    // HttpClient validates truncated bodies. Do not compare decoded bytes to
+    // Content-Length here: transparent gzip decompression changes that length.
+  }
+
+  @override
+  int? get contentLength => response.contentLength;
+  @override
+  int get statusCode => response.statusCode;
+  @override
+  DateTime get validTill => response.validTill;
+  @override
+  String? get eTag => response.eTag;
+  @override
+  String get fileExtension => response.fileExtension;
 }
 
 CacheManager? _appNetworkImageCacheManager;

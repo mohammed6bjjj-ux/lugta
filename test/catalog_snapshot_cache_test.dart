@@ -38,7 +38,13 @@ void main() {
         ),
       ],
       variants: const [
-        ProductVariant(id: 'variant-1', nameAr: 'أسود', imageUrl: '', stock: 3),
+        ProductVariant(
+          id: 'variant-1',
+          nameAr: 'أسود / M',
+          imageUrl: '',
+          stock: 3,
+          size: 'M',
+        ),
       ],
       wholesalePrice: 10000,
       suggestedPrice: 15000,
@@ -60,6 +66,8 @@ void main() {
     expect(restored.categories.single.stickerKey, CategoryStickerKey.premium);
     expect(restored.products.single.media.single.url, contains('token=one'));
     expect(restored.products.single.variants.single.stock, 3);
+    expect(restored.products.single.variants.single.size, 'M');
+    expect(restored.products.single.variants.single.localizedName, 'أسود / M');
     expect(restored.products.single.specs['الخامة'], 'فولاذ');
   });
 

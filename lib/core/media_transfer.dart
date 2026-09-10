@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -8,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../data/models.dart';
 import 'network_image_cache.dart';
 import 'network_media_request.dart';
+import 'background_media_downloads.dart';
 
 /// Outcome of a bulk save/share so the UI can report partial success honestly.
 @immutable
@@ -17,17 +19,21 @@ class MediaTransferResult {
     required this.failed,
     this.permissionDenied = false,
     this.dismissed = false,
+    this.queued = 0,
   });
 
   final int succeeded;
   final int failed;
   final bool permissionDenied;
 
+  /// Accepted by the OS, not yet proof of a completed gallery save.
+  final int queued;
+
   /// The platform sheet opened but the user closed it without picking a target.
   final bool dismissed;
 
-  bool get isCompleteSuccess => failed == 0 && succeeded > 0;
-  bool get isCompleteFailure => succeeded == 0 && failed > 0;
+  bool get isCompleteSuccess => failed == 0 && queued == 0 && succeeded > 0;
+  bool get isCompleteFailure => succeeded == 0 && queued == 0 && failed > 0;
 }
 
 /// Downloads product media through the shared cache and hands the real files to
@@ -38,17 +44,58 @@ class MediaTransferResult {
 /// hand customers a link that answers 401 for everyone but the seller, which is
 /// why every path here materialises an actual file first.
 abstract final class MediaTransfer {
+  static final _materializing = <String, Future<File>>{};
+  static final _saving = <String, Future<MediaTransferResult>>{};
+  static final _sharing = <String, Future<MediaTransferResult>>{};
+  static final _gallerySaves = <String, Future<void>>{};
+
+  static String _key(MediaItem item) => appNetworkImageCacheKey(
+    item.url.trim(),
+    authenticatedScopeKey: NetworkMediaRequest.cacheScopeFor(item.url.trim()),
+  );
+
+  static Future<void> _saveForegroundItem(MediaItem item) {
+    final key = _key(item);
+    return _gallerySaves.putIfAbsent(
+      key,
+      () =>
+          (() async {
+            final file = await materialize(item);
+            if (item.isVideo) {
+              await Gal.putVideo(file.path);
+            } else {
+              await Gal.putImage(file.path);
+            }
+          })().whenComplete(() {
+            _gallerySaves.remove(key);
+          }),
+    );
+  }
+
   /// Fetches the object and returns a real file with a meaningful name.
   ///
   /// Reuses [appNetworkImageCacheManager], so media the seller just viewed is
   /// already on disk and costs no second download.
-  static Future<File> materialize(MediaItem item) async {
+  static Future<File> materialize(MediaItem item) {
+    final key = appNetworkImageCacheKey(
+      item.url.trim(),
+      authenticatedScopeKey: NetworkMediaRequest.cacheScopeFor(item.url.trim()),
+    );
+    return _materializing.putIfAbsent(
+      key,
+      () => _materialize(item).whenComplete(() {
+        _materializing.remove(key);
+      }),
+    );
+  }
+
+  static Future<File> _materialize(MediaItem item) async {
     final url = item.url.trim();
     if (url.isEmpty) {
       throw const FormatException('Media item has no URL');
     }
 
-    final cached = await appNetworkImageCacheManager.getSingleFile(
+    Future<File> fetch() => appNetworkImageCacheManager.getSingleFile(
       url,
       key: appNetworkImageCacheKey(
         url,
@@ -56,6 +103,19 @@ abstract final class MediaTransfer {
       ),
       headers: NetworkMediaRequest.headersFor(url),
     );
+    File cached;
+    try {
+      cached = await fetch();
+    } catch (error) {
+      // One bounded retry also repairs a stale seller session after resume.
+      if (isAuthenticatedSupabaseStorageUrl(url) &&
+          error is HttpExceptionWithStatus &&
+          (error.statusCode == 401 || error.statusCode == 403)) {
+        await NetworkMediaRequest.refreshAuthorization();
+      }
+      cached = await fetch();
+    }
+    if (await cached.length() == 0) throw const FormatException('Empty media');
 
     // The cache stores opaque keys, so copy to a temp file whose name is what
     // the gallery and the receiving app will display.
@@ -64,16 +124,63 @@ abstract final class MediaTransfer {
     if (!exportDirectory.existsSync()) {
       await exportDirectory.create(recursive: true);
     }
-    final target = File('${exportDirectory.path}/${_fileName(item)}');
+    // Different URLs can share a media ID. Never let overlapping exports write
+    // the same file while a receiving app is still reading the previous one.
+    final transferDirectory = await exportDirectory.createTemp('transfer-');
+    final target = File('${transferDirectory.path}/${_fileName(item)}');
     return cached.copy(target.path);
   }
 
   /// Saves every item to the device gallery.
-  static Future<MediaTransferResult> saveToGallery(
+  static Future<MediaTransferResult> saveToGallery(List<MediaItem> items) {
+    final unique = {
+      for (final item in items)
+        appNetworkImageCacheKey(
+          item.url.trim(),
+          authenticatedScopeKey: NetworkMediaRequest.cacheScopeFor(
+            item.url.trim(),
+          ),
+        ): item,
+    };
+    final key = (unique.keys.toList()..sort()).join('\n');
+    return _saving.putIfAbsent(
+      key,
+      () => _saveToGallery(unique.values.toList()).whenComplete(() {
+        _saving.remove(key);
+      }),
+    );
+  }
+
+  static Future<MediaTransferResult> _saveToGallery(
     List<MediaItem> items,
   ) async {
     if (items.isEmpty) {
       return const MediaTransferResult(succeeded: 0, failed: 0);
+    }
+
+    if (await BackgroundMediaDownloads.supported()) {
+      var queued = 0, saved = 0, failed = 0;
+      // Queue each file immediately; a failed link never blocks later items.
+      for (final item in items) {
+        try {
+          final state = await BackgroundMediaDownloads.enqueue(
+            item,
+            _fileName(item),
+          );
+          if (state == 'saved') {
+            saved++;
+          } else {
+            queued++;
+          }
+        } catch (_) {
+          failed++;
+        }
+      }
+      return MediaTransferResult(
+        succeeded: saved,
+        failed: failed,
+        queued: queued,
+      );
     }
 
     if (!await Gal.hasAccess()) {
@@ -90,12 +197,7 @@ abstract final class MediaTransfer {
     var failed = 0;
     for (final item in items) {
       try {
-        final file = await materialize(item);
-        if (item.isVideo) {
-          await Gal.putVideo(file.path);
-        } else {
-          await Gal.putImage(file.path);
-        }
+        await _saveForegroundItem(item);
         succeeded++;
       } on GalException catch (error) {
         failed++;
@@ -115,6 +217,20 @@ abstract final class MediaTransfer {
 
   /// Opens the platform share sheet with the media attached as files.
   static Future<MediaTransferResult> share(
+    List<MediaItem> items, {
+    String? text,
+  }) {
+    final unique = {for (final item in items) _key(item): item};
+    final key = '${(unique.keys.toList()..sort()).join('\n')}\n$text';
+    return _sharing.putIfAbsent(
+      key,
+      () => _share(unique.values.toList(), text: text).whenComplete(() {
+        _sharing.remove(key);
+      }),
+    );
+  }
+
+  static Future<MediaTransferResult> _share(
     List<MediaItem> items, {
     String? text,
   }) async {

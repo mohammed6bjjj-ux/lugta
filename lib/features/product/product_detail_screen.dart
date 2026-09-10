@@ -22,6 +22,7 @@ import '../cart/product_cart_configurator.dart';
 import 'media_share_sheet.dart';
 import 'product_strings.dart';
 import 'product_media_thumbnail.dart';
+import 'product_size_options.dart';
 
 /// شاشة تفاصيل المنتج — واجهة العرض الأهم بصرياً في التطبيق.
 /// تصميم غامر: معرض ممتد بلا حواف علوية، أزرار زجاجية عائمة فوقه،
@@ -65,7 +66,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             }
           });
     for (final variant in widget.product.variants) {
-      if (session.isVariantOrderable(variant)) {
+      if (!product.hasSizes && session.isVariantOrderable(variant)) {
         _selectedVariant = variant;
         break;
       }
@@ -98,6 +99,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   }
 
   void _selectVariant(ProductVariant variant) {
+    if (product.hasSizes) ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() {
       _selectedVariant = _selectedVariant?.id == variant.id ? null : variant;
     });
@@ -132,9 +134,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       }
     }
     if (selected == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(CartStrings.chooseVariantFirst)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            product.hasSizes
+                ? ProductStrings.chooseSize
+                : CartStrings.chooseVariantFirst,
+          ),
+        ),
+      );
       return;
     }
     final configuration = await showProductCartConfigurator(
@@ -639,7 +647,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
               const SizedBox(height: AppSpacing.lg),
               Entrance(
                 index: 3,
-                child: SectionHeader(title: ProductStrings.availableVariants),
+                child: SectionHeader(
+                  title: product.hasSizes
+                      ? ProductStrings.sizesAndColors
+                      : ProductStrings.availableVariants,
+                ),
               ),
               const SizedBox(height: AppSpacing.sm + 2),
               Entrance(index: 3, child: _buildVariantChips(theme)),
@@ -944,6 +956,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   // ─────────────────────────── المتغيرات ───────────────────────────
 
   Widget _buildVariantChips(ThemeData theme) {
+    if (product.hasSizes) {
+      return Padding(
+        padding: const EdgeInsetsDirectional.symmetric(
+          horizontal: AppSpacing.md,
+        ),
+        child: ProductSizeOptions(
+          variants: product.variants,
+          selectedId: _selectedVariant?.id,
+          onSelected: _selectVariant,
+          availableStock: session.orderableStockForVariant,
+        ),
+      );
+    }
     return SizedBox(
       height: 70,
       child: ListView.separated(

@@ -14,6 +14,7 @@ import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
 import '../catalog/home_screen.dart';
 import '../catalog/products_screen.dart';
+import '../catalog/product_filters_sheet.dart';
 import '../auth/guest_access_screen.dart';
 import '../auth/guest_strings.dart';
 import '../orders/orders_screen.dart';
@@ -48,14 +49,14 @@ class _MainShellState extends State<MainShell> {
   Widget _createTab(int index) {
     if (_guestSession) {
       return switch (index) {
-        0 => const HomeScreen(),
+        0 => HomeScreen(onOpenProducts: _openProducts),
         1 => const ProductsScreen(),
         2 => const GuestAccessScreen(embedded: true),
         _ => const SizedBox.shrink(),
       };
     }
     return switch (index) {
-      0 => const HomeScreen(),
+      0 => HomeScreen(onOpenProducts: _openProducts),
       1 => const ProductsScreen(),
       2 => const OrdersScreen(),
       3 => const WalletScreen(),
@@ -72,12 +73,21 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  void _openProducts(ProductFilters filters) {
+    setState(() {
+      // An explicit home shortcut starts a fresh catalog view: stale searches
+      // or price filters must not hide the selected category's products.
+      _tabs[1] = ProductsScreen(key: UniqueKey(), initialFilters: filters);
+      _index = 1;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _guestSession = session.isGuest;
     _tabs = List<Widget?>.filled(_guestSession ? 3 : 5, null);
-    _tabs[0] = const HomeScreen();
+    _tabs[0] = _createTab(0);
     if (_guestSession) return;
     final deviceTokens = widget.deviceTokens ?? appBackend.deviceTokens;
     // Subscribe before draining the terminated-state queue so a platform event

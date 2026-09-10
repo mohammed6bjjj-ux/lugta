@@ -10,6 +10,7 @@ import '../core/request_id.dart';
 import 'app_settings.dart';
 import 'async_request_deduplicator.dart';
 import 'catalog_snapshot_cache.dart';
+import 'catalog_refresh_pacing.dart';
 import 'mock_data.dart';
 import 'models.dart';
 import 'notification_deep_link.dart';
@@ -53,6 +54,7 @@ class AppSession extends ChangeNotifier {
   StreamSubscription<void>? _loyaltySubscription;
   StreamSubscription<void>? _foregroundPushSubscription;
   Timer? _catalogRefreshTimer;
+  DateTime? _nextCatalogRealtimeRefreshAt;
   Timer? _walletRefreshTimer;
   Timer? _promotionGrantsRefreshTimer;
   Timer? _loyaltyRefreshTimer;
@@ -1993,7 +1995,7 @@ class AppSession extends ChangeNotifier {
 
   Future<DeliveryQuote> quoteDeliveryFee(
     String deliveryZoneId, {
-    required int orderSubtotal,
+    required int orderWholesaleTotal,
   }) {
     final scope = _requireAuthenticatedScope();
     if (seller.status != AccountStatus.approved) {
@@ -2001,7 +2003,7 @@ class AppSession extends ChangeNotifier {
     }
     return scope.repositories.catalog.quoteDeliveryFee(
       deliveryZoneId,
-      orderSubtotal: orderSubtotal,
+      orderWholesaleTotal: orderWholesaleTotal,
     );
   }
 
@@ -2703,14 +2705,7 @@ class AppSession extends ChangeNotifier {
         if (!_isCurrent(scope)) return;
         _catalogRealtimeDirty = true;
         if (_catalogRealtimeWorkerRunning) return;
-        _catalogRefreshTimer?.cancel();
-        // Spread a global catalog invalidation across devices instead of
-        // making every signed-in phone hit PostgREST in the same millisecond.
-        final spread = _realtimeJitter.nextInt(1201);
-        _catalogRefreshTimer = Timer(
-          Duration(milliseconds: 700 + spread),
-          () => unawaited(_drainCatalogRealtimeRefreshes()),
-        );
+        _scheduleCatalogRealtimeRefresh();
       },
       onError: (_) {
         // Pull-to-refresh remains available when Realtime is temporarily down.
@@ -2731,12 +2726,7 @@ class AppSession extends ChangeNotifier {
         if (!_isCurrentGuest(generation, repositories)) return;
         _catalogRealtimeDirty = true;
         if (_catalogRealtimeWorkerRunning) return;
-        _catalogRefreshTimer?.cancel();
-        final spread = _realtimeJitter.nextInt(1201);
-        _catalogRefreshTimer = Timer(
-          Duration(milliseconds: 700 + spread),
-          () => unawaited(_drainCatalogRealtimeRefreshes()),
-        );
+        _scheduleCatalogRealtimeRefresh();
       },
       onError: (_) {
         // Pull-to-refresh remains available when Realtime is unavailable.
@@ -2747,6 +2737,7 @@ class AppSession extends ChangeNotifier {
   Future<void> _stopCatalogListener() async {
     _catalogRefreshTimer?.cancel();
     _catalogRefreshTimer = null;
+    _nextCatalogRealtimeRefreshAt = null;
     _catalogRealtimeDirty = false;
     final subscription = _catalogSubscription;
     _catalogSubscription = null;
@@ -2947,6 +2938,19 @@ class AppSession extends ChangeNotifier {
     }
   }
 
+  void _scheduleCatalogRealtimeRefresh() {
+    // Do not postpone an existing timer on each uploaded image (starvation).
+    if (_catalogRefreshTimer?.isActive ?? false) return;
+    _catalogRefreshTimer = Timer(
+      catalogRealtimeDelay(
+        DateTime.now(),
+        _nextCatalogRealtimeRefreshAt,
+        _realtimeJitter.nextInt(1201),
+      ),
+      () => unawaited(_drainCatalogRealtimeRefreshes()),
+    );
+  }
+
   Future<void> _drainCatalogRealtimeRefreshes() async {
     if (_catalogRealtimeWorkerRunning) return;
     final generation = _authGeneration;
@@ -2957,16 +2961,28 @@ class AppSession extends ChangeNotifier {
           _catalogRealtimeDirty = false;
           return;
         }
+        if (_nextCatalogRealtimeRefreshAt?.isAfter(DateTime.now()) ?? false) {
+          _scheduleCatalogRealtimeRefresh();
+          return;
+        }
         _catalogRealtimeDirty = false;
         final joinedOlderSnapshot = _catalogRefresh.inFlight != null;
         try {
           await refreshCatalog();
         } catch (_) {
+          if (generation == _authGeneration) {
+            _nextCatalogRealtimeRefreshAt = DateTime.now().add(
+              const Duration(seconds: 30),
+            );
+          }
           return;
         }
         if (!_canRefreshCatalogForGeneration(generation)) {
           return;
         }
+        _nextCatalogRealtimeRefreshAt = DateTime.now().add(
+          const Duration(seconds: 10),
+        );
         // Preserve a trailing invalidation that arrived after the active
         // request had already read its database snapshot.
         if (joinedOlderSnapshot) _catalogRealtimeDirty = true;
@@ -3083,6 +3099,11 @@ class AppSession extends ChangeNotifier {
     final event = message.openEvent;
     final type = event.targetType?.trim().toLowerCase();
     final deepTarget = parseTrustedNotificationDeepLink(event.deepLink);
+    // Push can arrive after a Realtime disconnect. Re-read the authoritative
+    // wallet instead of changing balances from the untrusted message amount.
+    if (type == 'wallet' || type == 'withdrawal') {
+      unawaited(_refreshWalletBestEffort());
+    }
     final targetsLoyalty =
         type == 'loyalty' ||
         deepTarget?.kind == NotificationDeepLinkKind.loyalty;

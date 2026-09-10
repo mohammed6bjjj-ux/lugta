@@ -252,3 +252,12 @@ Product cards use a square media field, compact status badges, one-line product 
 - **Don't** introduce hard offset shadows, glass blur, or ornamental gradients unrelated to the purple/yellow identity.
 - **Don't** hard-code physical left/right layout when a directional equivalent exists.
 - **Don't** ship mixed names such as Luqta, لقطة, لُگطة, or لُكطة; the product name is «لكطة — Lugta».
+
+## Home catalog previews — 2026-09-09
+
+- Preserve the existing brand, header, banners, category shortcuts and new-arrivals rail. Best sellers show six cards, followed by a separate six-card preview for each nonempty category in catalog order.
+- Category previews use newest products and the already-loaded session catalog. Lazy slivers reserve image space; no per-category network requests are introduced.
+- Each preview ends with a full-width, minimum-48dp “عرض المزيد” button. It selects the actual Products tab, applies that category (or popular ordering for best sellers), and clears stale search/filters. Normal tab switches still retain their state.
+- The two-column phone grid adapts to wider viewports. At large accessibility text sizes, both the grid and new-arrivals rail reserve extra height rather than reducing the font.
+- Finish review: light 375px RTL screenshot inspected; dark 320px at 200% text inspected, landscape 844×375 tested. Initial large-text card overflow was corrected. Existing category-rail golden remains unchanged. Demo image fallbacks are intentional in test captures; live catalog imagery was not part of this visual pass.
+- This is application-source work, not a database or store deployment. Existing installed builds need an app update to show the new home layout.

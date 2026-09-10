@@ -16,47 +16,69 @@ List<WalletTransaction> walletTransactionsFromLedgerRows(
     final orderId = _nullableText(row['order_id']);
     final withdrawalId = _nullableText(row['withdrawal_id']);
     final rowId = _text(row['id']);
-    final (WalletTxType type, String groupKey, int visibleAmount)? visible =
-        switch (entryType) {
-          'profit_pending' when bucket == 'pending' && amount > 0 => (
-            WalletTxType.pendingProfit,
-            'profit-pending:${orderId ?? rowId}',
-            amount,
-          ),
-          'profit_release' when bucket == 'available' && amount > 0 => (
-            WalletTxType.profitReleased,
-            'profit-release:${orderId ?? rowId}',
-            amount,
-          ),
-          'profit_reverse' when amount < 0 => (
-            WalletTxType.reversal,
-            'profit-reverse:${orderId ?? rowId}',
-            amount.abs(),
-          ),
-          'withdrawal_hold' when bucket == 'available' && amount < 0 => (
-            WalletTxType.withdrawal,
-            'withdrawal-hold:${withdrawalId ?? rowId}',
-            amount.abs(),
-          ),
-          'withdrawal_release' when bucket == 'available' && amount > 0 => (
-            WalletTxType.withdrawalRefund,
-            'withdrawal-refund:${withdrawalId ?? rowId}',
-            amount,
-          ),
-          'admin_adjustment' when amount > 0 => (
-            WalletTxType.adjustmentCredit,
-            'adjustment-credit:$rowId',
-            amount,
-          ),
-          'admin_adjustment' => (
-            WalletTxType.adjustmentDebit,
-            'adjustment-debit:$rowId',
-            amount.abs(),
-          ),
-          // The held and withdrawn sides are settlement bookkeeping. The
-          // available-balance hold was already shown when the request began.
-          _ => null,
-        };
+    final metadata = row['metadata'] is Map ? row['metadata'] as Map : const {};
+    // Releasing a referral reward moves it out of pending and into available.
+    // Show only the available side, not a misleading cancellation as well.
+    if (entryType == 'promotion_reward' &&
+        bucket == 'pending' &&
+        amount < 0 &&
+        metadata['reward_stage'] == 'released') {
+      continue;
+    }
+    final (WalletTxType type, String groupKey, int visibleAmount)?
+    visible = switch (entryType) {
+      'promotion_reward' when bucket == 'pending' && amount > 0 => (
+        WalletTxType.pendingReward,
+        'reward-pending:$rowId',
+        amount,
+      ),
+      'promotion_reward' when bucket == 'available' && amount > 0 => (
+        WalletTxType.rewardReleased,
+        'reward-available:$rowId',
+        amount,
+      ),
+      'promotion_reward'
+          when (bucket == 'pending' || bucket == 'available') && amount < 0 =>
+        (WalletTxType.rewardReversed, 'reward-reverse:$rowId', amount.abs()),
+      'profit_pending' when bucket == 'pending' && amount > 0 => (
+        WalletTxType.pendingProfit,
+        'profit-pending:${orderId ?? rowId}',
+        amount,
+      ),
+      'profit_release' when bucket == 'available' && amount > 0 => (
+        WalletTxType.profitReleased,
+        'profit-release:${orderId ?? rowId}',
+        amount,
+      ),
+      'profit_reverse' when amount < 0 => (
+        WalletTxType.reversal,
+        'profit-reverse:${orderId ?? rowId}',
+        amount.abs(),
+      ),
+      'withdrawal_hold' when bucket == 'available' && amount < 0 => (
+        WalletTxType.withdrawal,
+        'withdrawal-hold:${withdrawalId ?? rowId}',
+        amount.abs(),
+      ),
+      'withdrawal_release' when bucket == 'available' && amount > 0 => (
+        WalletTxType.withdrawalRefund,
+        'withdrawal-refund:${withdrawalId ?? rowId}',
+        amount,
+      ),
+      'admin_adjustment' when amount > 0 => (
+        WalletTxType.adjustmentCredit,
+        'adjustment-credit:$rowId',
+        amount,
+      ),
+      'admin_adjustment' => (
+        WalletTxType.adjustmentDebit,
+        'adjustment-debit:$rowId',
+        amount.abs(),
+      ),
+      // The held and withdrawn sides are settlement bookkeeping. The
+      // available-balance hold was already shown when the request began.
+      _ => null,
+    };
     if (visible == null) continue;
 
     final (type, groupKey, visibleAmount) = visible;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,6 +13,7 @@ import '../../core/widgets/entrance.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../data/backend.dart';
+import '../../data/repositories/repositories.dart';
 import '../../data/session.dart';
 import 'auth_navigation.dart';
 import 'auth_strings.dart';
@@ -45,25 +48,59 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_loading || _guestLoading) return;
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
+    final phone = _phoneController.text.trim();
     setState(() => _loading = true);
     try {
       await appBackend.auth.signIn(
-        phone: _phoneController.text.trim(),
+        phone: phone,
         password: _passwordController.text,
       );
-      await session.refreshAuthenticatedData();
-      if (!mounted) return;
-      openAuthenticatedDestination(context);
     } catch (error) {
       if (!mounted) return;
+      if (error is BackendException && error.code == 'phone_not_confirmed') {
+        try {
+          await appBackend.auth.resendOtp(
+            phone: phone,
+            purpose: OtpPurpose.registration,
+          );
+          if (!mounted) return;
+          setState(() => _loading = false);
+          Navigator.pushNamed(
+            context,
+            Routes.otp,
+            arguments: {'phone': phone, 'purpose': 'register'},
+          );
+        } catch (resendError) {
+          if (!mounted) return;
+          setState(() => _loading = false);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(resendError.toString())));
+        }
+        return;
+      }
       setState(() => _loading = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.toString())));
+      return;
     }
+    // Authentication succeeded. A failed catalog/wallet read is not a bad
+    // password; bootstrap can safely retry the authoritative profile read.
+    try {
+      await session.refreshCurrentProfile();
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, Routes.splash, (_) => false);
+      return;
+    }
+    if (!mounted) return;
+    openAuthenticatedDestination(context);
+    unawaited(session.refreshAuthenticatedData().catchError((Object _) {}));
   }
 
   Future<void> _continueAsGuest() async {

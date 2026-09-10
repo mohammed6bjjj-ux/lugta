@@ -76,6 +76,63 @@ void main() {
     );
   });
 
+  testWidgets(
+    'clothing requires an explicit size and preserves the exact variant in cart',
+    (tester) async {
+      final clothing = Product(
+        id: 'clothing-test',
+        nameAr: 'قميص',
+        categoryId: 'clothes',
+        description: '',
+        specs: const {},
+        media: const [],
+        variants: const [
+          ProductVariant(
+            id: 'shirt-m',
+            nameAr: 'أسود / M',
+            size: 'M',
+            imageUrl: '',
+            stock: 3,
+          ),
+          ProductVariant(
+            id: 'shirt-l',
+            nameAr: 'أسود / L',
+            size: 'L',
+            imageUrl: '',
+            stock: 2,
+          ),
+        ],
+        wholesalePrice: 5000,
+        suggestedPrice: 8000,
+        createdAt: DateTime(2026),
+      );
+      _setViewport(tester, const Size(430, 1600));
+      await _pumpProduct(tester, clothing);
+      await tester.tap(
+        find.byKey(const ValueKey('product_add_to_cart_button')),
+      );
+      await _finishTransition(tester);
+      expect(
+        find.byKey(const ValueKey('product_cart_configurator')),
+        findsNothing,
+      );
+      expect(session.cartItems, isEmpty);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('product_size_shirt-l')),
+      );
+      await tester.tap(find.byKey(const ValueKey('product_size_shirt-l')));
+      await _finishTransition(tester);
+      await _openConfigurator(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('product_cart_confirm_button')),
+      );
+      await _finishTransition(tester);
+      expect(session.cartItems.single.variant.id, 'shirt-l');
+      expect(session.cartItems.single.variant.size, 'L');
+      expect(session.cartItems.single.variant.localizedName, 'أسود / L');
+    },
+  );
+
   testWidgets('invalid sale price cannot add, then a valid price adds', (
     tester,
   ) async {

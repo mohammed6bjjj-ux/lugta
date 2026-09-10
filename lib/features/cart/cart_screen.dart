@@ -204,7 +204,7 @@ class _CartScreenState extends State<CartScreen> {
     try {
       final quote = await session.quoteDeliveryFee(
         quoteGovernorate.id,
-        orderSubtotal: session.cartSaleTotal,
+        orderWholesaleTotal: session.cartWholesaleTotal,
       );
       if (!mounted || request != _deliveryQuoteRequest) return;
       setState(() {
@@ -299,7 +299,7 @@ class _CartScreenState extends State<CartScreen> {
       }
       final latestQuote = await session.quoteDeliveryFee(
         latestGovernorate.id,
-        orderSubtotal: session.cartSaleTotal,
+        orderWholesaleTotal: session.cartWholesaleTotal,
       );
       if (!mounted) return;
       _governorate = latestGovernorate;
@@ -588,11 +588,23 @@ class _CartScreenState extends State<CartScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      _deliveryQuote?.isFree == true
-                          ? WizardStrings.freeDelivery
-                          : WizardStrings.deliveryFeeIs(
-                              formatIqd(_deliveryFee),
-                            ),
+                      [
+                        _deliveryQuote?.isFree == true
+                            ? WizardStrings.freeDelivery
+                            : WizardStrings.deliveryFeeIs(
+                                formatIqd(_deliveryFee),
+                              ),
+                        if ((_deliveryQuote?.deliveryDiscount ?? 0) > 0)
+                          WizardStrings.deliveryDiscountAmount(
+                            formatIqd(_deliveryQuote!.deliveryDiscount),
+                          ),
+                        if (_deliveryQuote?.rewardAvailable == true &&
+                            _deliveryQuote!.remainingWholesale > 0)
+                          WizardStrings.deliveryRewardRemaining(
+                            formatIqd(_deliveryQuote!.remainingWholesale),
+                            formatIqd(_deliveryQuote!.rewardDiscountCap),
+                          ),
+                      ].join('\n'),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.accentStrong,
                         fontWeight: FontWeight.w800,

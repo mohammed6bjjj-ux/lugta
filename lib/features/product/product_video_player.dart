@@ -144,7 +144,7 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer>
     _controller = controller;
     controller.addListener(_handleControllerChange);
     try {
-      await controller.initialize();
+      await controller.initialize().timeout(const Duration(seconds: 30));
       if (!mounted || generation != _loadGeneration) return;
       setState(() => _loading = false);
     } catch (error) {

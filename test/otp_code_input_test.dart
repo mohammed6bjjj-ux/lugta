@@ -4,6 +4,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app/features/auth/widgets/otp_code_input.dart';
 
 void main() {
+  testWidgets('paste and autofill distribute the complete OTP in RTL', (
+    tester,
+  ) async {
+    final completed = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(body: OtpCodeInput(onCompleted: completed.add)),
+        ),
+      ),
+    );
+    await tester.enterText(find.byType(TextFormField).first, '654321');
+    await tester.pumpAndSettle();
+    expect(completed, ['654321']);
+    final digits = tester
+        .widgetList<TextFormField>(find.byType(TextFormField))
+        .map((field) => field.controller!.text)
+        .join();
+    expect(digits, '654321');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('OTP input fits a narrow width and completes all six digits', (
     WidgetTester tester,
   ) async {

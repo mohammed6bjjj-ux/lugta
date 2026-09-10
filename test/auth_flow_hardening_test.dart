@@ -11,6 +11,8 @@ import 'package:flutter_app/data/services/device_token_registrar.dart';
 import 'package:flutter_app/features/auth/auth_strings.dart';
 import 'package:flutter_app/features/auth/forgot_password_screen.dart';
 import 'package:flutter_app/features/auth/login_screen.dart';
+import 'package:flutter_app/features/auth/otp_verification_screen.dart';
+import 'package:flutter_app/features/auth/widgets/otp_code_input.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -197,6 +199,7 @@ void main() {
       await repository.signUp(_registration());
 
       expect(auth.lastSignUpData?['registration_attempt_id'], isNotEmpty);
+      expect(auth.lastSignUpData?['registration_protocol'], 2);
       expect(await secureStorage.read(key: pendingRegistrationKey), isNotEmpty);
     },
   );
@@ -244,30 +247,76 @@ void main() {
     );
   }
 
-  test(
-    'an already-active profile is treated as completed registration '
-    'without calling the completion RPC again',
-    () async {
+  test('an already-active profile is treated as completed registration '
+      'without calling the completion RPC again', () async {
+    const secureStorage = FlutterSecureStorage();
+    final auth = _FakeGoTrueClient();
+    var rpcCalls = 0;
+    final rest = http_testing.MockClient((request) async {
+      if (request.url.path.contains('/rpc/complete_seller_registration')) {
+        rpcCalls += 1;
+        return http.Response('{}', 404, request: request);
+      }
+      if (request.url.path.endsWith('/profiles')) {
+        // The phone-confirmation trigger already completed this seller.
+        return http.Response(
+          '{"status":"active"}',
+          200,
+          request: request,
+          headers: const {'content-type': 'application/json'},
+        );
+      }
+      return http.Response(
+        '[]',
+        200,
+        request: request,
+        headers: const {'content-type': 'application/json'},
+      );
+    });
+    final client = _FakeSupabaseClient(auth, httpClient: rest);
+    addTearDown(() async {
+      await client.dispose();
+      auth.dispose();
+    });
+    final repository = SupabaseAuthRepository(
+      client,
+      const NoopDeviceTokenRegistrar(),
+      secureStorage: secureStorage,
+    );
+
+    await repository.signUp(_registration());
+    expect(await secureStorage.read(key: pendingRegistrationKey), isNotEmpty);
+    auth.establishSession();
+
+    final completed = await repository.completePendingRegistration();
+
+    expect(completed, isTrue);
+    expect(rpcCalls, 0);
+    expect(await secureStorage.read(key: pendingRegistrationKey), isNull);
+  });
+
+  // 'active' covers auto-approval; 'pending_approval' covers the
+  // trigger-completed registration when auto-approval is disabled.
+  for (final completedStatus in const ['active', 'pending_approval']) {
+    test('OTP verification succeeds when the draft is gone but the backend '
+        'already completed the registration ($completedStatus)', () async {
       const secureStorage = FlutterSecureStorage();
       final auth = _FakeGoTrueClient();
-      var rpcCalls = 0;
       final rest = http_testing.MockClient((request) async {
-        if (request.url.path.contains('/rpc/complete_seller_registration')) {
-          rpcCalls += 1;
-          return http.Response('{}', 404, request: request);
-        }
         if (request.url.path.endsWith('/profiles')) {
-          // The phone-confirmation trigger already completed this seller.
           return http.Response(
-            '{"status":"active"}',
+            '{"status":"$completedStatus"}',
             200,
             request: request,
             headers: const {'content-type': 'application/json'},
           );
         }
-        return http.Response('[]', 200,
-            request: request,
-            headers: const {'content-type': 'application/json'});
+        return http.Response(
+          '[]',
+          200,
+          request: request,
+          headers: const {'content-type': 'application/json'},
+        );
       });
       final client = _FakeSupabaseClient(auth, httpClient: rest);
       addTearDown(() async {
@@ -280,63 +329,17 @@ void main() {
         secureStorage: secureStorage,
       );
 
-      await repository.signUp(_registration());
-      expect(await secureStorage.read(key: pendingRegistrationKey), isNotEmpty);
+      // No local draft exists (fresh storage) and the fake user carries no
+      // seller_registration metadata, yet the backend already completed
+      // this registration.
       auth.establishSession();
 
-      final completed = await repository.completePendingRegistration();
-
-      expect(completed, isTrue);
-      expect(rpcCalls, 0);
-      expect(await secureStorage.read(key: pendingRegistrationKey), isNull);
-    },
-  );
-
-  // 'active' covers auto-approval; 'pending_approval' covers the
-  // trigger-completed registration when auto-approval is disabled.
-  for (final completedStatus in const ['active', 'pending_approval']) {
-    test(
-      'OTP verification succeeds when the draft is gone but the backend '
-      'already completed the registration ($completedStatus)',
-      () async {
-        const secureStorage = FlutterSecureStorage();
-        final auth = _FakeGoTrueClient();
-        final rest = http_testing.MockClient((request) async {
-          if (request.url.path.endsWith('/profiles')) {
-            return http.Response(
-              '{"status":"$completedStatus"}',
-              200,
-              request: request,
-              headers: const {'content-type': 'application/json'},
-            );
-          }
-          return http.Response('[]', 200,
-              request: request,
-              headers: const {'content-type': 'application/json'});
-        });
-        final client = _FakeSupabaseClient(auth, httpClient: rest);
-        addTearDown(() async {
-          await client.dispose();
-          auth.dispose();
-        });
-        final repository = SupabaseAuthRepository(
-          client,
-          const NoopDeviceTokenRegistrar(),
-          secureStorage: secureStorage,
-        );
-
-        // No local draft exists (fresh storage) and the fake user carries no
-        // seller_registration metadata, yet the backend already completed
-        // this registration.
-        auth.establishSession();
-
-        await repository.verifyOtp(
-          phone: '07712345678',
-          token: '123456',
-          purpose: OtpPurpose.registration,
-        );
-      },
-    );
+      await repository.verifyOtp(
+        phone: '07712345678',
+        token: '123456',
+        purpose: OtpPurpose.registration,
+      );
+    });
   }
 
   test(
@@ -610,6 +613,160 @@ void main() {
       );
     },
   );
+
+  test(
+    'manual completion survives a lost reply and restart with referral intact',
+    () async {
+      const storage = FlutterSecureStorage();
+      final auth = _FakeGoTrueClient()..establishSession();
+      var fail = true;
+      final paths = <String>[];
+      final client = _FakeSupabaseClient(
+        auth,
+        httpClient: http_testing.MockClient((request) async {
+          paths.add(request.url.path);
+          if (request.url.path.endsWith('/profiles')) {
+            return http.Response(
+              '{"status":"pending_phone"}',
+              200,
+              request: request,
+              headers: const {'content-type': 'application/json'},
+            );
+          }
+          final body = jsonDecode(request.body) as Map;
+          expect(body['p_referral_code'], 'TESTCODE01');
+          return fail
+              ? http.Response(
+                  '{"code":"08006","message":"connection lost"}',
+                  503,
+                  request: request,
+                  headers: const {'content-type': 'application/json'},
+                )
+              : http.Response(
+                  '{}',
+                  200,
+                  request: request,
+                  headers: const {'content-type': 'application/json'},
+                );
+        }),
+      );
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      final first = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: storage,
+      );
+      await expectLater(
+        first.completeRegistration(
+          const RegistrationCompletionRequest(
+            fullName: 'Test',
+            storeName: 'Store',
+            governorateId: 'test',
+            termsVersion: '1',
+            referralCode: ' testcode01 ',
+          ),
+        ),
+        throwsA(isA<BackendException>()),
+      );
+      expect(paths, ['/rest/v1/rpc/complete_seller_registration_v2']);
+      final draft = await storage.read(key: pendingRegistrationKey);
+      expect(draft, contains('TESTCODE01'));
+      expect(draft, isNot(contains('password')));
+      fail = false;
+      final restarted = SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+        secureStorage: storage,
+      );
+      expect(await restarted.completePendingRegistration(), isTrue);
+      expect(paths.last, '/rest/v1/rpc/complete_seller_registration_v2');
+      expect(await storage.read(key: pendingRegistrationKey), isNull);
+    },
+  );
+
+  test(
+    'v2 falls back only for missing endpoint and retains all seven legacy parameters',
+    () async {
+      final auth = _FakeGoTrueClient()..establishSession();
+      final calls = <String>[];
+      final client = _FakeSupabaseClient(
+        auth,
+        httpClient: http_testing.MockClient((request) async {
+          calls.add(request.url.path);
+          final body = jsonDecode(request.body) as Map;
+          expect(body['p_referral_code'], 'TESTCODE01');
+          expect(body.length, 7);
+          return request.url.path.endsWith('_v2')
+              ? http.Response(
+                  '{"code":"PGRST202","message":"missing function"}',
+                  404,
+                  request: request,
+                  headers: const {'content-type': 'application/json'},
+                )
+              : http.Response(
+                  '{}',
+                  200,
+                  request: request,
+                  headers: const {'content-type': 'application/json'},
+                );
+        }),
+      );
+      addTearDown(() async {
+        await client.dispose();
+        auth.dispose();
+      });
+      await SupabaseAuthRepository(
+        client,
+        const NoopDeviceTokenRegistrar(),
+      ).completeRegistration(
+        const RegistrationCompletionRequest(
+          fullName: 'Test',
+          storeName: 'Store',
+          governorateId: 'test',
+          termsVersion: '1',
+          referralCode: 'TESTCODE01',
+        ),
+      );
+      expect(calls, [
+        '/rest/v1/rpc/complete_seller_registration_v2',
+        '/rest/v1/rpc/complete_seller_registration',
+      ]);
+    },
+  );
+
+  testWidgets('OTP cooldown catches up after app resume', (tester) async {
+    var now = DateTime.utc(2026, 9, 6);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: OtpVerificationScreen(
+          phone: '07712345678',
+          purpose: 'register',
+          now: () => now,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey('countdown')), findsOneWidget);
+    now = now.add(const Duration(minutes: 3));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey('resend')), findsOneWidget);
+    expect(
+      tester.widget<OtpCodeInput>(find.byType(OtpCodeInput)).enabled,
+      isTrue,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
 
 RegistrationRequest _registration({String? referralCode}) =>

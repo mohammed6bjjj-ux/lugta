@@ -64,14 +64,43 @@ class AppBackend {
         };
       },
       scopeProvider: () => client.auth.currentUser?.id,
+      backgroundUrlProvider: (url) async {
+        final uri = Uri.parse(url);
+        final base = Uri.parse(AppConfig.supabaseUrl);
+        const prefix = '/storage/v1/object/authenticated/';
+        if (uri.host != base.host ||
+            !uri.path.startsWith(prefix) ||
+            client.auth.currentUser == null) {
+          throw StateError('Unsupported private media origin');
+        }
+        final segments = uri.pathSegments.skip(4).toList();
+        if (segments.length < 2 ||
+            segments.any((part) => part == '..' || part.isEmpty)) {
+          throw const FormatException('Invalid storage object');
+        }
+        // Only the explicitly saved object is delegated to the OS for 24 hours.
+        // Do not put the session's bearer token in DownloadManager's database.
+        return client.storage
+            .from(segments.first)
+            .createSignedUrl(segments.skip(1).join('/'), 86400);
+      },
       refreshAuthorization: () async {
         if (client.auth.currentSession != null) {
           await client.auth.refreshSession();
         }
       },
     );
+    // Even FCM token-refresh listeners must not see a recovery-only session.
+    await SupabaseAuthRepository(
+      client,
+      const NoopDeviceTokenRegistrar(),
+    ).abandonPasswordRecovery();
     deviceTokens = await createDeviceTokenRegistrar(client);
-    if (client.auth.currentSession != null) {
+    final initializedRepositories = createSupabaseRepositories(
+      client,
+      deviceTokens: deviceTokens,
+    );
+    if (initializedRepositories.auth.hasSession) {
       unawaited(
         deviceTokens.registerCurrentDevice().catchError((Object error) {
           if (kDebugMode) {
@@ -82,14 +111,9 @@ class AppBackend {
         }),
       );
     }
-    final initializedRepositories = createSupabaseRepositories(
-      client,
-      deviceTokens: deviceTokens,
-    );
     // A phone recovery OTP creates a real Auth session. Clear any durable
     // recovery-only session before AppSession can observe it as a normal
     // signed-in identity during application bootstrap.
-    await initializedRepositories.auth.abandonPasswordRecovery();
     repositories = initializedRepositories;
   }
 }

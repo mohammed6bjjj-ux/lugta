@@ -146,6 +146,7 @@ class SupabaseAuthRepository implements AuthRepository {
           password: request.password,
           channel: OtpChannel.sms,
           data: {
+            'registration_protocol': 2,
             'registration_attempt_id': draft.registrationAttemptId,
             // Recovery-only payload. It contains no password and grants no
             // authority: the server RPC still validates the authenticated
@@ -279,6 +280,10 @@ class SupabaseAuthRepository implements AuthRepository {
       instagramHandle: normalizedInstagram,
       referralCode: _normalizeReferralCode(request.referralCode),
     );
+    // Legacy-account recovery needs the same crash-safe draft as new signup.
+    // Keep it until the server acknowledges completion, including lost replies.
+    await _writePendingRegistration(draft);
+    _pendingRegistration = draft;
     await _completeSellerRegistration(draft);
     await _clearPendingRegistration();
     await _registerDeviceBestEffort();
@@ -298,6 +303,19 @@ class SupabaseAuthRepository implements AuthRepository {
     try {
       await _guard(() async {
         await _client.rpc(
+          'complete_seller_registration_v2',
+          params: {...commonParams, 'p_referral_code': draft.referralCode},
+        );
+      });
+      return;
+    } on BackendException catch (error) {
+      // Rolling deployment only: permission/network/validation failures must
+      // never retry through a different endpoint or discard the referral.
+      if (error.code != 'PGRST202') rethrow;
+    }
+    try {
+      await _guard(() async {
+        await _client.rpc(
           'complete_seller_registration',
           params: {...commonParams, 'p_referral_code': draft.referralCode},
         );
@@ -306,7 +324,7 @@ class SupabaseAuthRepository implements AuthRepository {
       // During a rolling backend deployment, an installation with no referral
       // may still finish against the previous six-argument RPC. A supplied
       // referral is never silently discarded.
-      if (draft.referralCode != null || !_isMissingBackendFeature(error)) {
+      if (draft.referralCode != null || error.code != 'PGRST202') {
         rethrow;
       }
       await _guard(() async {
@@ -1081,11 +1099,16 @@ class SupabaseCatalogRepository implements CatalogRepository {
     wholesale_price, old_wholesale_price, suggested_price,
     min_sale_price, max_sale_price, is_new, packaging_enabled, created_at
   ''';
-  static const _variantColumns = '''
+  static const _guestVariantColumns = '''
     id, product_id, sku, name_ar, name_ckb, name_en,
     stock_on_hand, stock_reserved, wholesale_price_override,
     suggested_price_override, sort_order
   ''';
+  // Anonymous catalog access intentionally has column-level grants. Signed-in
+  // shoppers can read structured sizes; guests still see the composed label.
+  String get _variantColumns => _client.auth.currentUser == null
+      ? _guestVariantColumns
+      : '${_guestVariantColumns.trim()}, option_values';
   static const _mediaColumns = '''
     id, product_id, variant_id, bucket_name, object_path,
     media_type, is_cover, sort_order
@@ -1403,18 +1426,29 @@ class SupabaseCatalogRepository implements CatalogRepository {
   @override
   Future<DeliveryQuote> quoteDeliveryFee(
     String deliveryZoneId, {
-    required int orderSubtotal,
+    required int orderWholesaleTotal,
   }) async => _guard(() async {
+    final params = {
+      'p_delivery_zone_id': deliveryZoneId,
+      'p_order_wholesale_total': orderWholesaleTotal,
+    };
     final row = _singleMap(
-      await _readRetry.run(
-        () => _client.rpc(
-          'quote_delivery_fee',
-          params: {
-            'p_delivery_zone_id': deliveryZoneId,
-            'p_order_sale_total': orderSubtotal,
-          },
-        ),
-      ),
+      await _readRetry.run(() async {
+        try {
+          return await _client.rpc(
+            'quote_delivery_fee_wholesale_v2',
+            params: params,
+          );
+        } on PostgrestException catch (error) {
+          // Compatibility for deployments before the additive v2 endpoint.
+          // Never hide authorization or connectivity failures behind a fallback.
+          if (error.code != 'PGRST202' && error.code != '42883') rethrow;
+          return await _client.rpc(
+            'quote_delivery_fee_wholesale',
+            params: params,
+          );
+        }
+      }),
     );
     return DeliveryQuote(
       baseDeliveryFee: _int(row['base_delivery_fee']),
@@ -1423,6 +1457,9 @@ class SupabaseCatalogRepository implements CatalogRepository {
       freeDeliveryReason: _nullableText(row['free_delivery_reason']),
       campaignName: _nullableText(row['campaign_name']),
       validUntil: _dateOrNull(row['valid_until']),
+      rewardAvailable: row['reward_available'] == true,
+      rewardDiscountCap: _int(row['reward_discount_cap']),
+      remainingWholesale: _int(row['remaining_wholesale']),
     );
   });
 
@@ -1749,12 +1786,19 @@ class SupabaseWalletRepository implements WalletRepository {
 
   @override
   Future<WalletSnapshot> fetchWallet() async => _guard(() async {
+    final sellerId = _requireUserId(_client);
     final results = await Future.wait<Object?>([
-      _client.from('seller_wallet_summary').select().maybeSingle(),
+      _client
+          .from('seller_wallet_summary')
+          .select()
+          .eq('seller_id', sellerId)
+          .maybeSingle(),
       _client
           .from('seller_wallet_ledger')
           .select()
+          .eq('seller_id', sellerId)
           .order('created_at', ascending: false)
+          .order('id', ascending: false)
           .limit(300),
       _client
           .from('withdrawal_requests')
@@ -2179,6 +2223,15 @@ class SupabasePromotionsRepository implements PromotionsRepository {
   Future<ReferralSummary> fetchReferralSummary() async {
     try {
       return await _guard(() async {
+        final value = await _client.rpc('get_my_referral_summary_v2');
+        return referralSummaryFromRpc(value);
+      });
+    } on BackendException catch (error) {
+      if (!_isMissingBackendFeature(error)) rethrow;
+    }
+
+    try {
+      return await _guard(() async {
         final value = await _client.rpc('get_my_referral_summary');
         return referralSummaryFromRpc(value);
       });
@@ -2561,6 +2614,7 @@ Product _productFromJson(
           nameAr: _text(item['name_ar']),
           nameCkb: _nullableText(item['name_ckb']),
           nameEn: _nullableText(item['name_en']),
+          size: _nullableText(_jsonMap(item['option_values'])['size']),
           imageUrl: _variantImage(item, media, mediaUrls),
           stock: (_int(item['stock_on_hand']) - _int(item['stock_reserved']))
               .clamp(0, 1 << 31),

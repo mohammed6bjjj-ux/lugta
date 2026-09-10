@@ -108,6 +108,140 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 AppSpacing.xxl,
               ),
               children: [
+                if (summary.signupDeliveryActive ||
+                    summary.signupDeliveryEarned) ...[
+                  AppCard(
+                    key: const ValueKey('referral_signup_offer'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.redeem_outlined,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          summary.signupDeliveryActive
+                              ? EngagementStrings.referralSignupTitle
+                              : EngagementStrings.referralSignupEarned,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          summary.signupDeliveryActive
+                              ? EngagementStrings.referralSignupBody
+                              : EngagementStrings.referralSignupPaused,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(height: 1.65),
+                        ),
+                        if (summary.signupDeliveryActive &&
+                            summary.signupDeliveryEarned) ...[
+                          const Divider(height: AppSpacing.xl),
+                          Text(
+                            EngagementStrings.referralSignupEarned,
+                            key: const ValueKey('referral_signup_earned'),
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (summary.rewardKind != null ||
+                    summary.profitShareActive ||
+                    summary.profitShareEarned > 0) ...[
+                  AppCard(
+                    key: const ValueKey('referral_profit_offer'),
+                    color: AppColors.accentSoft,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          summary.rewardKind != null
+                              ? EngagementStrings.rewardTitle(
+                                  summary.rewardKind!,
+                                  summary.rewardValue,
+                                )
+                              : EngagementStrings.referralProfitTitle(
+                                  summary.profitSharePercent,
+                                ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: AppColors.accentStrong,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          (summary.rewardKind != null
+                                  ? summary.referralEnabled
+                                  : summary.profitShareActive)
+                              ? (summary.rewardKind != null
+                                    ? EngagementStrings.configuredRewardBody
+                                    : EngagementStrings.referralProfitBody)
+                              : EngagementStrings.referralProfitPaused,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(height: 1.65),
+                        ),
+                        if (summary.profitShareActive &&
+                            summary.rewardKind == null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            EngagementStrings.referralProfitExample,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(height: 1.65),
+                          ),
+                        ],
+                        const Divider(height: AppSpacing.xl),
+                        if (summary.rewardKind != null) ...[
+                          Text(
+                            '${EngagementStrings.pendingCash}: ${formatIqd(summary.pendingCash)}',
+                            key: const ValueKey('referral_pending_cash'),
+                          ),
+                          if (summary.pendingPoints > 0 ||
+                              summary.rewardKind == 'points')
+                            Text(
+                              '${EngagementStrings.pendingPoints}: ${summary.pendingPoints}',
+                            ),
+                          if (summary.pendingDelivery > 0 ||
+                              summary.rewardKind == 'delivery_credit')
+                            Text(
+                              '${EngagementStrings.pendingDelivery}: ${formatIqd(summary.pendingDelivery)}',
+                            ),
+                          if (summary.releasedPoints > 0)
+                            Text(
+                              '${EngagementStrings.releasedPoints}: ${summary.releasedPoints}',
+                            ),
+                          if (summary.releasedDelivery > 0)
+                            Text(
+                              '${EngagementStrings.releasedDelivery}: ${formatIqd(summary.releasedDelivery)}',
+                            ),
+                          if (summary.rewardKind == 'delivery_credit' ||
+                              summary.releasedDelivery > 0 ||
+                              summary.pendingDelivery > 0)
+                            Text(EngagementStrings.deliveryCreditHelp),
+                          const Divider(height: AppSpacing.xl),
+                        ],
+                        Text(EngagementStrings.referralProfitEarned),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          formatIqd(summary.profitShareEarned),
+                          key: const ValueKey('referral_profit_earned'),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: AppColors.accentStrong,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 Text(
                   EngagementStrings.referralSubtitle,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(

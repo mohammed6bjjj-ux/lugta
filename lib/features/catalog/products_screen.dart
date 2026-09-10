@@ -20,7 +20,12 @@ import 'product_filters_sheet.dart';
 /// ثم شريط التخفيضات، ثم شبكة كل المنتجات.
 /// تعمل كتبويب داخل الشِل (بلا bottomNavigationBar وبحشوة سفلية 120).
 class ProductsScreen extends StatefulWidget {
-  const ProductsScreen({super.key});
+  const ProductsScreen({
+    super.key,
+    this.initialFilters = const ProductFilters(),
+  });
+
+  final ProductFilters initialFilters;
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
@@ -34,7 +39,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Timer? _debounce;
   String _query = '';
 
-  ProductFilters _filters = const ProductFilters();
+  late ProductFilters _filters;
+
+  @override
+  void initState() {
+    super.initState();
+    _filters = widget.initialFilters;
+  }
 
   @override
   void dispose() {
@@ -291,7 +302,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   ),
 
                   // ── التخفيضات ──
-                  if (discounted.isNotEmpty) ...[
+                  if (discounted.isNotEmpty &&
+                      _filters.isDefault &&
+                      _query.isEmpty) ...[
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.only(

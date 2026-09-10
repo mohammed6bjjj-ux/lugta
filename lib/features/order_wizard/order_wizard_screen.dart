@@ -20,6 +20,7 @@ import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
 import '../profile/legal/legal_document_screen.dart';
 import '../profile/legal/legal_documents.dart';
+import '../product/product_strings.dart';
 import 'order_draft_reconciliation.dart';
 import 'wizard_strings.dart';
 
@@ -191,7 +192,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     try {
       final quote = await session.quoteDeliveryFee(
         governorate.id,
-        orderSubtotal: _salePrice * _totalQuantity,
+        orderWholesaleTotal: _wholesaleTotal,
       );
       if (!mounted || _governorate?.id != governorate.id) return;
       setState(() {
@@ -319,7 +320,14 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       }
       final latestQuote = await session.quoteDeliveryFee(
         latestGovernorate.id,
-        orderSubtotal: _salePrice * _totalQuantity,
+        orderWholesaleTotal: reconciliation.selectedItems.fold<int>(
+          0,
+          (total, item) =>
+              total +
+              (item.variant.wholesalePriceOverride ??
+                      latestProduct.wholesalePrice) *
+                  item.quantity,
+        ),
       );
       if (!mounted) return;
       final deliveryFeeChanged =
@@ -589,7 +597,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       children: [
         Entrance(
           child: Text(
-            WizardStrings.variantsTitle,
+            _product.hasSizes
+                ? ProductStrings.sizesAndColors
+                : WizardStrings.variantsTitle,
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -1356,6 +1366,25 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 ),
               ),
             ),
+            if (!_loadingDeliveryQuote &&
+                _deliveryQuote != null &&
+                (_deliveryQuote!.deliveryDiscount > 0 ||
+                    (_deliveryQuote!.rewardAvailable &&
+                        _deliveryQuote!.remainingWholesale > 0))) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                _deliveryQuote!.deliveryDiscount > 0
+                    ? WizardStrings.deliveryDiscountAmount(
+                        formatIqd(_deliveryQuote!.deliveryDiscount),
+                      )
+                    : WizardStrings.deliveryRewardRemaining(
+                        formatIqd(_deliveryQuote!.remainingWholesale),
+                        formatIqd(_deliveryQuote!.rewardDiscountCap),
+                      ),
+                key: const ValueKey('delivery_reward_progress'),
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
             if (!_loadingDeliveryQuote && _deliveryQuote?.isFree == true) ...[
               const SizedBox(height: AppSpacing.sm),
               AppCard(

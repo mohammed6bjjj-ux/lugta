@@ -37,6 +37,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _showTermsError = false;
   bool _obscure = true;
   bool _loading = false;
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -50,68 +51,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
-    FocusScope.of(context).unfocus();
-    if (!session.isDemo &&
-        (session.termsVersion.trim().isEmpty ||
-            session.policiesText.trim().isEmpty)) {
-      try {
-        await session.refreshPublicData();
-      } catch (_) {
-        // The message below is deliberately stable and user-facing.
+    if (_submitting) return;
+    _submitting = true;
+    try {
+      FocusScope.of(context).unfocus();
+      if (!session.isDemo &&
+          (session.termsVersion.trim().isEmpty ||
+              session.policiesText.trim().isEmpty)) {
+        try {
+          await session.refreshPublicData();
+        } catch (_) {
+          // The message below is deliberately stable and user-facing.
+        }
+        if (!mounted) return;
+        if (session.termsVersion.trim().isEmpty ||
+            session.policiesText.trim().isEmpty) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(AuthStrings.termsUnavailable)));
+          return;
+        }
       }
-      if (!mounted) return;
-      if (session.termsVersion.trim().isEmpty ||
-          session.policiesText.trim().isEmpty) {
+      final valid = _formKey.currentState!.validate();
+      if (!_acceptedTerms) {
+        setState(() => _showTermsError = true);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(AuthStrings.termsUnavailable)));
+        ).showSnackBar(SnackBar(content: Text(AuthStrings.termsRequiredSnack)));
         return;
       }
-    }
-    final valid = _formKey.currentState!.validate();
-    if (!_acceptedTerms) {
-      setState(() => _showTermsError = true);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(AuthStrings.termsRequiredSnack)));
-      return;
-    }
-    if (!valid) return;
+      if (!valid) return;
 
-    setState(() => _loading = true);
-    try {
-      await appBackend.auth.signUp(
-        RegistrationRequest(
-          fullName: _nameController.text.trim(),
-          phone: _phoneController.text.trim(),
-          password: _passwordController.text,
-          storeName: _storeNameController.text.trim(),
-          instagramUrl: _instagramController.text.trim().isEmpty
-              ? null
-              : _instagramController.text.trim(),
-          referralCode: _referralCodeController.text.trim().isEmpty
-              ? null
-              : _referralCodeController.text.trim(),
-          governorateId: _governorate!.id,
-          termsVersion: session.termsVersion,
-        ),
-      );
-      if (!mounted) return;
-      setState(() => _loading = false);
-      Navigator.pushNamed(
-        context,
-        Routes.otp,
-        arguments: {
-          'phone': _phoneController.text.trim(),
-          'purpose': 'register',
-        },
-      );
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      final phone = _phoneController.text.trim();
+      setState(() => _loading = true);
+      try {
+        await appBackend.auth.signUp(
+          RegistrationRequest(
+            fullName: _nameController.text.trim(),
+            phone: phone,
+            password: _passwordController.text,
+            storeName: _storeNameController.text.trim(),
+            instagramUrl: _instagramController.text.trim().isEmpty
+                ? null
+                : _instagramController.text.trim(),
+            referralCode: _referralCodeController.text.trim().isEmpty
+                ? null
+                : _referralCodeController.text.trim(),
+            governorateId: _governorate!.id,
+            termsVersion: session.termsVersion,
+          ),
+        );
+        if (!mounted) return;
+        setState(() => _loading = false);
+        Navigator.pushNamed(
+          context,
+          Routes.otp,
+          arguments: {'phone': phone, 'purpose': 'register'},
+        );
+      } catch (error) {
+        if (!mounted) return;
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      _submitting = false;
     }
   }
 

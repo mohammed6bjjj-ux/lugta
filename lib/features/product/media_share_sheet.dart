@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../app/theme.dart';
 import '../../core/formatters.dart';
 import '../../core/media_transfer.dart';
+import '../../core/background_media_downloads.dart';
 import '../../core/widgets/entrance.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/primary_button.dart';
@@ -89,7 +90,10 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _transferring = true);
     messenger.showSnackBar(
-      SnackBar(content: Text(ProductStrings.mediaPreparing)),
+      SnackBar(
+        content: Text(ProductStrings.mediaPreparing),
+        duration: const Duration(minutes: 10),
+      ),
     );
 
     MediaTransferResult result;
@@ -98,8 +102,8 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
     } catch (_) {
       result = MediaTransferResult(succeeded: 0, failed: items.length);
     }
-    if (!mounted) return;
-    setState(() => _transferring = false);
+    if (mounted) setState(() => _transferring = false);
+    if (!messenger.mounted) return;
 
     messenger.hideCurrentSnackBar();
     if (result.dismissed) return;
@@ -107,12 +111,35 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
       MediaTransferResult(permissionDenied: true) =>
         ProductStrings.mediaPermissionDenied,
       MediaTransferResult(isCompleteFailure: true) => failureMessage,
+      _ when result.failed > 0 => ProductStrings.mediaPartial(
+        formatNumber(result.succeeded),
+        formatNumber(result.queued),
+        formatNumber(result.failed),
+      ),
+      _ when result.queued > 0 => ProductStrings.mediaQueued(
+        formatNumber(result.queued),
+      ),
       // The share sheet already confirms itself; only saving needs a receipt.
       _ when !announceSuccess => null,
       _ => ProductStrings.mediaSaved(formatNumber(result.succeeded)),
     };
     if (message == null) return;
-    messenger.showSnackBar(SnackBar(content: Text(message)));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 8),
+        action: result.queued > 0
+            ? SnackBarAction(
+                label: ProductStrings.viewDownloads,
+                onPressed: () {
+                  BackgroundMediaDownloads.openDownloads().catchError(
+                    (Object _) {},
+                  );
+                },
+              )
+            : null,
+      ),
+    );
   }
 
   Future<void> _downloadSelected() => _runTransfer(
@@ -242,7 +269,8 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
                           label: ProductStrings.downloadToDevice,
                           icon: Icons.download_rounded,
                           accented: true,
-                          onPressed: _selectedIds.isEmpty
+                          loading: _transferring,
+                          onPressed: _selectedIds.isEmpty || _transferring
                               ? null
                               : _downloadSelected,
                         ),
@@ -252,7 +280,7 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
                         child: SecondaryButton(
                           label: ProductStrings.share,
                           icon: Icons.share_outlined,
-                          onPressed: _selectedIds.isEmpty
+                          onPressed: _selectedIds.isEmpty || _transferring
                               ? null
                               : _shareSelected,
                         ),
