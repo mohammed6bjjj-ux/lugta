@@ -289,9 +289,12 @@ class MockData {
         nameAr: 'مكافأة دعوة صديق',
         nameCkb: 'دیاریی بانگهێشتی هاوڕێ',
         nameEn: 'Referral reward',
-        descriptionAr: 'توصيل مجاني مقابل دعوة ناجحة.',
-        descriptionCkb: 'گەیاندنی بەخۆڕایی بۆ بانگهێشتێکی سەرکەوتوو.',
-        descriptionEn: 'Free delivery for a successful referral.',
+        descriptionAr:
+            'خصم توصيل لاستخدام واحد مقابل دعوة ناجحة، وفق شروط العرض.',
+        descriptionCkb:
+            'داشکاندنی گەیاندن بۆ یەک جار بەهۆی بانگهێشتێکی سەرکەوتوو، بەپێی مەرجەکانی ئۆفەر.',
+        descriptionEn:
+            'A single-use delivery discount for a successful referral, subject to the offer conditions.',
         audienceType: 'referred_accounts',
         triggerType: 'qualified_referral_count',
         triggerThreshold: 1,

@@ -20,6 +20,7 @@ import '../cart/cart_strings.dart';
 import '../auth/guest_strings.dart';
 import 'catalog_strings.dart';
 import 'home_catalog_sections.dart';
+import 'home_best_sellers.dart';
 import 'product_filters_sheet.dart';
 
 /// الشاشة الرئيسية — محتوى تبويب «الرئيسية» داخل الشِل.
@@ -121,9 +122,10 @@ class HomeScreen extends StatelessWidget {
   }
 
   List<Product> get _bestSellers {
-    final sorted = [...session.products]
-      ..sort((a, b) => b.ordersCount.compareTo(a.ordersCount));
-    return sorted.take(6).toList();
+    final visibleCategories = session.categories.map((c) => c.id).toSet();
+    return homeBestSellers(
+      session.products.where((p) => visibleCategories.contains(p.categoryId)),
+    );
   }
 
   Future<void> _refreshHome() => Future.wait<void>([

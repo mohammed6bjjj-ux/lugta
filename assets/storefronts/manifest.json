@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-11T21:52:14.362Z",
+  "sourceHash": "256dca46bc313fe4d70b57eb60fddee6b0862e7236d3718771fcab0a2345524a",
+  "notice": "Real template screenshots. Demo product names and prices are illustrative, not live offers.",
+  "templates": [
+    {
+      "id": "theme1",
+      "full": "theme-1-full.png",
+      "thumb": "theme-1-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=1",
+      "fullBytes": 476754,
+      "thumbBytes": 133397
+    },
+    {
+      "id": "theme2",
+      "full": "theme-2-full.png",
+      "thumb": "theme-2-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=2",
+      "fullBytes": 500640,
+      "thumbBytes": 133924
+    },
+    {
+      "id": "theme3",
+      "full": "theme-3-full.png",
+      "thumb": "theme-3-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=3",
+      "fullBytes": 490214,
+      "thumbBytes": 128457
+    },
+    {
+      "id": "theme4",
+      "full": "theme-4-full.png",
+      "thumb": "theme-4-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=4",
+      "fullBytes": 512877,
+      "thumbBytes": 148586
+    },
+    {
+      "id": "theme5",
+      "full": "theme-5-full.png",
+      "thumb": "theme-5-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=5",
+      "fullBytes": 324888,
+      "thumbBytes": 118542
+    },
+    {
+      "id": "theme6",
+      "full": "theme-6-full.png",
+      "thumb": "theme-6-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=6",
+      "fullBytes": 338575,
+      "thumbBytes": 128524
+    },
+    {
+      "id": "theme7",
+      "full": "theme-7-full.png",
+      "thumb": "theme-7-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=7",
+      "fullBytes": 397056,
+      "thumbBytes": 135190
+    },
+    {
+      "id": "theme8",
+      "full": "theme-8-full.png",
+      "thumb": "theme-8-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=8",
+      "fullBytes": 288356,
+      "thumbBytes": 50198
+    },
+    {
+      "id": "theme9",
+      "full": "theme-9-full.png",
+      "thumb": "theme-9-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=9",
+      "fullBytes": 369859,
+      "thumbBytes": 94892
+    },
+    {
+      "id": "theme10",
+      "full": "theme-10-full.png",
+      "thumb": "theme-10-thumb.png",
+      "width": 390,
+      "source": "http://127.0.0.1:1431/store.html?theme=10",
+      "fullBytes": 382905,
+      "thumbBytes": 131601
+    }
+  ]
+}

@@ -16,8 +16,10 @@ import '../../core/widgets/session_refresh.dart';
 import '../../data/models.dart';
 import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
+import '../assistant/assistant_strings.dart';
 import '../promotions/engagement_strings.dart';
 import '../loyalty/loyalty_strings.dart';
+import '../storefront/storefront_strings.dart';
 import 'profile_strings.dart';
 import 'legal/legal_document_screen.dart';
 import 'legal/legal_documents.dart';
@@ -228,6 +230,21 @@ class ProfileScreen extends StatelessWidget {
                   child: _MenuGroup(
                     title: CoreStrings.tabProfile,
                     children: [
+                      _MenuItem(
+                        key: const ValueKey('profile_assistant_item'),
+                        icon: Icons.chat_bubble_outline_rounded,
+                        title: AssistantStrings.title,
+                        subtitle: AssistantStrings.subtitle,
+                        onTap: () =>
+                            Navigator.pushNamed(context, Routes.assistant),
+                      ),
+                      _MenuItem(
+                        key: const ValueKey('profile_my_store_item'),
+                        icon: Icons.storefront_outlined,
+                        title: StorefrontStrings.title,
+                        onTap: () =>
+                            Navigator.pushNamed(context, Routes.myStore),
+                      ),
                       _MenuItem(
                         icon: Icons.person_outline_rounded,
                         title: ProfileStrings.editProfile,

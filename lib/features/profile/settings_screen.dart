@@ -12,6 +12,7 @@ import '../../data/session.dart';
 import 'profile_strings.dart';
 import 'sales_analytics_strings.dart';
 import 'settings_mutation_queue.dart';
+import '../storefront/storefront_strings.dart';
 
 /// شاشة الإعدادات — المظهر، اللغة، مفاتيح الإشعارات، وخيارات عامة.
 class SettingsScreen extends StatefulWidget {
@@ -222,6 +223,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           body: ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
+              _GroupCard(
+                children: [
+                  ListTile(
+                    key: const ValueKey('my_store_settings_tile'),
+                    onTap: () => Navigator.pushNamed(context, Routes.myStore),
+                    leading: const _SettingIcon(
+                      icon: Icons.storefront_outlined,
+                      active: true,
+                    ),
+                    title: Text(
+                      StorefrontStrings.title,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
               Entrance(child: _GroupTitle(ProfileStrings.sectionPayments)),
               Entrance(
                 index: 1,

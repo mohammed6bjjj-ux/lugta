@@ -636,6 +636,7 @@ class Product {
     this.minSalePrice,
     this.maxSalePrice,
     this.ordersCount = 0,
+    this.homeDisplayOrder,
     this.isNew = false,
     this.nameCkb,
     this.nameEn,
@@ -673,6 +674,9 @@ class Product {
   final int? maxSalePrice;
 
   final int ordersCount;
+
+  /// Staff-curated home position; deliberately independent of sales analytics.
+  final int? homeDisplayOrder;
   final bool isNew;
   final bool packagingEnabled;
   final DateTime createdAt;
@@ -755,12 +759,25 @@ class PackagingBox {
     required this.name,
     required this.price,
     required this.imageUrl,
+    this.categoryId,
+    this.categoryIds,
   });
 
   final String id;
   final String name;
   final int price;
   final String imageUrl;
+  final String? categoryId;
+
+  /// Null is the legacy single-category contract; empty is explicitly general.
+  final List<String>? categoryIds;
+
+  /// A null scope preserves general boxes from older catalog versions.
+  bool isAvailableFor(Product product) =>
+      product.packagingEnabled &&
+      (categoryIds != null
+          ? categoryIds!.isEmpty || categoryIds!.contains(product.categoryId)
+          : categoryId == null || categoryId == product.categoryId);
 
   bool get isFree => price == 0;
 }
@@ -817,6 +834,7 @@ class Promotion {
     this.newAccountDays,
     this.triggerThreshold,
     this.rewardValidDays,
+    this.displayCopy = const {},
   });
 
   final String id;
@@ -842,21 +860,40 @@ class Promotion {
   final bool showInbox;
   final bool sendPush;
 
-  String get localizedName => switch (appSettings.language) {
-    AppLanguage.ckb => nameCkb?.trim().isNotEmpty == true ? nameCkb! : nameAr,
-    AppLanguage.en => nameEn?.trim().isNotEmpty == true ? nameEn! : nameAr,
-    AppLanguage.ar => nameAr,
-  };
+  final Map<String, String> displayCopy;
+  String? localizedCopy(String field) {
+    final language = appSettings.language.name;
+    for (final key in ['${field}_$language', '${field}_ar']) {
+      final value = displayCopy[key]?.trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
 
-  String get localizedDescription => switch (appSettings.language) {
-    AppLanguage.ckb =>
-      descriptionCkb?.trim().isNotEmpty == true
-          ? descriptionCkb!
-          : descriptionAr,
-    AppLanguage.en =>
-      descriptionEn?.trim().isNotEmpty == true ? descriptionEn! : descriptionAr,
-    AppLanguage.ar => descriptionAr,
-  };
+  String? get localizedRewardLabel => localizedCopy('label');
+
+  String get localizedName =>
+      localizedCopy('title') ??
+      switch (appSettings.language) {
+        AppLanguage.ckb =>
+          nameCkb?.trim().isNotEmpty == true ? nameCkb! : nameAr,
+        AppLanguage.en => nameEn?.trim().isNotEmpty == true ? nameEn! : nameAr,
+        AppLanguage.ar => nameAr,
+      };
+
+  String get localizedDescription =>
+      localizedCopy('description') ??
+      switch (appSettings.language) {
+        AppLanguage.ckb =>
+          descriptionCkb?.trim().isNotEmpty == true
+              ? descriptionCkb!
+              : descriptionAr,
+        AppLanguage.en =>
+          descriptionEn?.trim().isNotEmpty == true
+              ? descriptionEn!
+              : descriptionAr,
+        AppLanguage.ar => descriptionAr,
+      };
 }
 
 class PromotionGrant {
@@ -1145,12 +1182,14 @@ class Order {
     this.freeDeliveryReason,
     this.packagingTotal = 0,
     this.complaints = const <OrderComplaint>[],
+    this.storefrontRequestId,
   });
 
   final String id;
 
   /// رقم مقروء مثل ORD-1042.
   final String code;
+  final String? storefrontRequestId;
 
   final String productId;
   final String productName;
@@ -1271,6 +1310,7 @@ class Order {
     createdAt: createdAt,
     storeNameSnapshot: storeNameSnapshot,
     sellerPhoneSnapshot: sellerPhoneSnapshot,
+    storefrontRequestId: storefrontRequestId,
   );
 }
 

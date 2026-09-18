@@ -91,15 +91,20 @@ class AppBackend {
       },
     );
     // Even FCM token-refresh listeners must not see a recovery-only session.
-    await SupabaseAuthRepository(
+    AuthRepository pushAuth = SupabaseAuthRepository(
       client,
       const NoopDeviceTokenRegistrar(),
-    ).abandonPasswordRecovery();
-    deviceTokens = await createDeviceTokenRegistrar(client);
+    );
+    await pushAuth.abandonPasswordRecovery();
+    deviceTokens = await createDeviceTokenRegistrar(
+      client,
+      hasNormalSession: () => pushAuth.hasSession,
+    );
     final initializedRepositories = createSupabaseRepositories(
       client,
       deviceTokens: deviceTokens,
     );
+    pushAuth = initializedRepositories.auth;
     if (initializedRepositories.auth.hasSession) {
       unawaited(
         deviceTokens.registerCurrentDevice().catchError((Object error) {

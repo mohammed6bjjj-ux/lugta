@@ -220,7 +220,7 @@ void main() {
       find.byKey(const ValueKey('promotion_grant_grant-demo-free-delivery')),
       findsOneWidget,
     );
-    expect(find.text('توصيل مجاني'), findsOneWidget);
+    expect(find.text('خصم توصيل'), findsOneWidget);
   });
 
   testWidgets('server notification popup shows durable notification copy', (

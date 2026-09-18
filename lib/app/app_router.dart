@@ -31,11 +31,14 @@ import '../features/profile/edit_profile_screen.dart';
 import '../features/profile/notifications_screen.dart';
 import '../features/profile/policies_screen.dart';
 import '../features/profile/settings_screen.dart';
+import '../features/assistant/assistant_screen.dart';
 import '../features/profile/sales_analytics_screen.dart';
 import '../features/profile/support_screen.dart';
 import '../features/promotions/promotions_screen.dart';
 import '../features/referrals/referral_screen.dart';
 import '../features/loyalty/loyalty_screen.dart';
+import '../features/storefront/storefront_screen.dart';
+import '../features/storefront/storefront_request_screen.dart';
 import '../features/shell/main_shell.dart';
 import '../features/wallet/withdraw_request_screen.dart';
 import '../features/wallet/withdrawals_history_screen.dart';
@@ -83,8 +86,11 @@ class AppRouter {
       Routes.promotions ||
       Routes.referrals ||
       Routes.loyalty ||
+      Routes.myStore ||
+      Routes.storefrontRequest ||
       Routes.editProfile ||
       Routes.settings ||
+      Routes.assistant ||
       Routes.salesAnalytics => true,
       _ => false,
     };
@@ -143,11 +149,22 @@ class AppRouter {
       Routes.promotions => const PromotionsScreen(),
       Routes.referrals => const ReferralScreen(),
       Routes.loyalty => const LoyaltyScreen(),
+      Routes.myStore => StorefrontScreen(
+        product: args is Product ? args : null,
+      ),
+      Routes.storefrontRequest =>
+        args is String &&
+                RegExp(
+                  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+                ).hasMatch(args)
+            ? StorefrontRequestScreen(requestId: args)
+            : const _UnknownRouteScreen(),
       Routes.editProfile => const EditProfileScreen(),
       Routes.support => const SupportScreen(),
       Routes.policies => const PoliciesScreen(),
       Routes.about => const AboutScreen(),
       Routes.settings => const SettingsScreen(),
+      Routes.assistant => const AssistantScreen(),
       Routes.salesAnalytics => const SalesAnalyticsScreen(),
       _ => const _UnknownRouteScreen(),
     };

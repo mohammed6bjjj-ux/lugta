@@ -8,6 +8,7 @@ import '../../app/theme.dart';
 import '../../core/widgets/brand_logo.dart';
 import '../../core/widgets/entrance.dart';
 import '../../data/backend.dart';
+import '../../data/repositories/repositories.dart';
 import '../../data/session.dart';
 import 'auth_navigation.dart';
 import 'auth_strings.dart';
@@ -50,10 +51,14 @@ class _SplashScreenState extends State<SplashScreen> {
       await appBackend.auth.abandonPasswordRecovery();
       if (appBackend.auth.hasSession) {
         await (() async {
-          await appBackend.auth.completePendingRegistration();
-          if (session.seller.id.isEmpty) {
-            await session.refreshCurrentProfile();
+          try {
+            await appBackend.auth.completePendingRegistration();
+          } on BackendException {
+            // A stale registration draft can require new terms/governorate.
+            // The current server profile, not completion success or a cached
+            // approval, decides access and exposes manual completion safely.
           }
+          await session.refreshCurrentProfile();
         })().timeout(_profileTimeout);
       }
       await minimumDelay;

@@ -19,6 +19,7 @@ import '../sales_analytics.dart';
 import '../wallet_ledger_mapper.dart';
 import '../services/device_token_registrar.dart';
 import 'repositories.dart';
+import 'supabase_storefront_repository.dart';
 import 'transient_read_retry.dart';
 
 AppRepositories createSupabaseRepositories(
@@ -34,6 +35,7 @@ AppRepositories createSupabaseRepositories(
     notifications: SupabaseNotificationsRepository(client),
     promotions: SupabasePromotionsRepository(client),
     loyalty: SupabaseLoyaltyRepository(client),
+    storefront: SupabaseStorefrontRepository(client),
     isDemo: false,
   );
 }
@@ -608,6 +610,15 @@ class SupabaseAuthRepository implements AuthRepository {
     if (encoded == null || encoded.isEmpty) return;
     _passwordRecoveryActive = true;
 
+    try {
+      // Previous builds may have registered this installation during recovery.
+      // Invalidate it even though the recovery-only session is not app access.
+      await _deviceTokens.unregisterCurrentDevice();
+    } catch (_) {
+      // The registrar retains its deletion marker for retry when offline.
+      // Push cleanup must not keep the temporary Auth session signed in.
+    }
+
     Object? signOutError;
     StackTrace? signOutStack;
     try {
@@ -1117,6 +1128,23 @@ class SupabaseCatalogRepository implements CatalogRepository {
   final SupabaseClient _client;
   final TransientReadRetry _readRetry = TransientReadRetry();
 
+  // Additive deployment: a phone updated ahead of the database still loads its
+  // catalog. Only the specific absent optional column permits this fallback.
+  bool _hasHomeDisplayOrder = true;
+  Future<T> _readProductColumns<T>(Future<T> Function(String) read) async {
+    if (!_hasHomeDisplayOrder) return read(_productColumns);
+    try {
+      return await read('${_productColumns.trim()}, home_display_order');
+    } on PostgrestException catch (error) {
+      if (error.code != '42703' ||
+          !error.message.contains('home_display_order')) {
+        rethrow;
+      }
+      _hasHomeDisplayOrder = false;
+      return read(_productColumns);
+    }
+  }
+
   @override
   Future<List<Category>> fetchCategories() async => _guard(() async {
     final rows = _maps(
@@ -1199,14 +1227,16 @@ class SupabaseCatalogRepository implements CatalogRepository {
     for (var offset = 0; ; offset += _catalogPageSize) {
       final page = _maps(
         await _readRetry.run(
-          () => _client
-              .from('products')
-              .select(_productColumns)
-              .eq('status', 'active')
-              .order('created_at', ascending: false)
-              .order('id')
-              .range(offset, offset + _catalogPageSize - 1)
-              .retry(enabled: false),
+          () => _readProductColumns(
+            (columns) => _client
+                .from('products')
+                .select(columns)
+                .eq('status', 'active')
+                .order('created_at', ascending: false)
+                .order('id')
+                .range(offset, offset + _catalogPageSize - 1)
+                .retry(enabled: false),
+          ),
         ),
       );
       result.addAll(page);
@@ -1273,13 +1303,15 @@ class SupabaseCatalogRepository implements CatalogRepository {
   Future<Product> fetchProduct(String productId) async => _guard(() async {
     final row = _map(
       await _readRetry.run(
-        () => _client
-            .from('products')
-            .select(_productColumns)
-            .eq('id', productId)
-            .eq('status', 'active')
-            .single()
-            .retry(enabled: false),
+        () => _readProductColumns(
+          (columns) => _client
+              .from('products')
+              .select(columns)
+              .eq('id', productId)
+              .eq('status', 'active')
+              .single()
+              .retry(enabled: false),
+        ),
       ),
     );
     final relatedRows = await Future.wait<Object>([
@@ -1392,7 +1424,7 @@ class SupabaseCatalogRepository implements CatalogRepository {
         () => _client
             .from('packaging_boxes')
             .select(
-              'id,name,price,image_bucket,image_path,sort_order,created_at',
+              'id,name,price,image_bucket,image_path,sort_order,created_at,category_id,category_ids',
             )
             .eq('is_active', true)
             .order('sort_order')
@@ -1413,6 +1445,12 @@ class SupabaseCatalogRepository implements CatalogRepository {
       for (final row in rows)
         PackagingBox(
           id: _text(row['id']),
+          categoryId: _nullableText(row['category_id']),
+          categoryIds: row['category_ids'] == null
+              ? null
+              : List<String>.unmodifiable(
+                  (row['category_ids'] as List).cast<String>(),
+                ),
           name: _text(row['name']),
           price: _int(row['price']),
           imageUrl:
@@ -1803,16 +1841,19 @@ class SupabaseWalletRepository implements WalletRepository {
       _client
           .from('withdrawal_requests')
           .select()
+          .eq('seller_id', sellerId)
           .order('requested_at', ascending: false)
           .limit(100),
       _client
           .from('seller_account_statement')
           .select()
+          .eq('seller_id', sellerId)
           .order('order_created_at', ascending: false)
           .limit(500),
       _client
           .from('withdrawal_sources')
           .select()
+          .eq('seller_id', sellerId)
           .order('created_at', ascending: false)
           .limit(500),
       fetchPayoutAccounts(),
@@ -1835,7 +1876,10 @@ class SupabaseWalletRepository implements WalletRepository {
       totalEarned: _int(summary['total_earned']),
       minimumWithdrawal: walletConfiguration.minimumWithdrawal,
       withdrawalFees: walletConfiguration.transferFees,
-      transactions: walletTransactionsFromLedgerRows(ledgerRows),
+      transactions: walletTransactionsFromLedgerRows(
+        ledgerRows,
+        statementRows: statementRows,
+      ),
       withdrawals: withdrawalRows.map(_withdrawalFromJson).toList(),
       payoutAccounts: payoutAccounts,
       statementLines: statementRows.map(_statementLineFromJson).toList(),
@@ -2044,14 +2088,55 @@ class SupabaseNotificationsRepository implements NotificationsRepository {
 
   @override
   Future<List<AppNotification>> fetchNotifications() async => _guard(() async {
-    final rows = _maps(
-      await _client
+    final userId = _requireUserId(_client);
+    final now = DateTime.now().toUtc().toIso8601String();
+    // Inbox recency must not hide an older, higher-priority launch campaign.
+    // Both reads remain recipient-scoped and RLS-protected; no campaign table
+    // or other recipient data is read by the phone.
+    final pages = await Future.wait([
+      _client
           .from('notifications')
           .select()
+          .eq('recipient_id', userId)
           .order('created_at', ascending: false)
+          .order('id', ascending: true)
           .limit(200),
-    );
-    return rows.map((row) => _notificationFromJson(_client, row)).toList();
+      _client
+          .from('notifications')
+          .select()
+          .eq('recipient_id', userId)
+          .isFilter('read_at', null)
+          .isFilter('popup_seen_at', null)
+          .eq('payload->>show_popup', 'true')
+          .or('expires_at.is.null,expires_at.gt.$now')
+          .or('payload->>expires_at.is.null,payload->>expires_at.gt.$now')
+          // JSON (not ->> text) preserves numeric priority ordering.
+          .order('payload->popup_priority', ascending: false)
+          .order('created_at', ascending: false)
+          .order('id', ascending: true)
+          .limit(200),
+    ]);
+    final byId = <String, Map<String, dynamic>>{};
+    for (final row in _maps(pages[0])) {
+      byId[_text(row['id'])] = row;
+    }
+    for (final row in _maps(pages[1])) {
+      final previous = byId[_text(row['id'])];
+      byId[_text(row['id'])] = {
+        ...row,
+        // A concurrent read/seen acknowledgement must never be undone by the
+        // overlapping pending-popup read.
+        'read_at': previous?['read_at'] ?? row['read_at'],
+        'popup_seen_at': previous?['popup_seen_at'] ?? row['popup_seen_at'],
+      };
+    }
+    final items =
+        byId.values.map((row) => _notificationFromJson(_client, row)).toList()
+          ..sort((a, b) {
+            final newest = b.at.compareTo(a.at);
+            return newest != 0 ? newest : a.id.compareTo(b.id);
+          });
+    return items;
   });
 
   @override
@@ -2206,9 +2291,26 @@ class SupabasePromotionsRepository implements PromotionsRepository {
   Future<List<PromotionGrant>> fetchPromotionGrants() async {
     try {
       return await _guard(() async {
-        final rows = _maps(
-          await _client.from('promotion_grants').select('*, promotions(*)'),
-        );
+        List<Map<String, dynamic>> rows;
+        try {
+          rows = _maps(
+            await _client
+                .from('promotion_grants')
+                .select(
+                  '*, promotions(*, promotion_display_copy(copy,revision))',
+                ),
+          );
+        } on PostgrestException catch (error) {
+          // Older servers keep their existing rewards; only the optional copy
+          // relationship is allowed to fall back. Auth/network errors propagate.
+          if (!{'PGRST200', 'PGRST205', '42P01'}.contains(error.code) ||
+              !error.toString().contains('promotion_display_copy')) {
+            rethrow;
+          }
+          rows = _maps(
+            await _client.from('promotion_grants').select('*, promotions(*)'),
+          );
+        }
         final grants = rows.map(promotionGrantFromJson).toList(growable: false)
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return grants;
@@ -2629,6 +2731,9 @@ Product _productFromJson(
     maxSalePrice: _intOrNull(row['max_sale_price']),
     isNew: _bool(row['is_new']),
     packagingEnabled: _bool(row['packaging_enabled']),
+    homeDisplayOrder: row['home_display_order'] == null
+        ? null
+        : _int(row['home_display_order']),
     createdAt: _date(row['created_at']),
   );
 }
@@ -2682,6 +2787,7 @@ Order _orderFromJson(Map<String, dynamic> row, Map<String, String> mediaUrls) {
   return Order(
     id: _text(row['id']),
     code: _text(row['order_number']),
+    storefrontRequestId: _nullableText(row['storefront_request_id']),
     productId: _text(firstItem['product_id']),
     productName: _localized(firstItem, 'product_name'),
     productImage: items.isEmpty ? '' : items.first.imageUrl,

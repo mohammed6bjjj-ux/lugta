@@ -65,6 +65,22 @@ class CatalogSnapshotCache {
     String scopeKey = 'default',
     DateTime? savedAt,
   }) {
+    // Reserve space for staff-selected home products even when they are older
+    // than the first catalog page. Otherwise a cold/offline launch silently
+    // replaces the curated section with automatic best sellers.
+    final curated =
+        products.where((product) {
+          final rank = product.homeDisplayOrder;
+          return rank != null && rank >= 1 && rank <= 6;
+        }).toList()..sort((a, b) {
+          final rank = a.homeDisplayOrder!.compareTo(b.homeDisplayOrder!);
+          return rank != 0 ? rank : a.id.compareTo(b.id);
+        });
+    final cachedIds = curated.take(6).map((product) => product.id).toSet();
+    for (final product in products) {
+      if (cachedIds.length >= maxCachedProducts) break;
+      cachedIds.add(product.id);
+    }
     final payload = <String, Object?>{
       'version': 1,
       'saved_at': (savedAt ?? DateTime.now()).toUtc().toIso8601String(),
@@ -72,7 +88,11 @@ class CatalogSnapshotCache {
       // This is a first-paint accelerator, not a second source of truth. Keep
       // it bounded so a large catalog never turns SharedPreferences into a
       // multi-megabyte database; the live request replaces it moments later.
-      'products': products.take(maxCachedProducts).map(_productToJson).toList(),
+      'products': products
+          .where((product) => cachedIds.contains(product.id))
+          .take(maxCachedProducts)
+          .map(_productToJson)
+          .toList(),
     };
     final previous = _writeTail;
     late final Future<void> next;
@@ -270,6 +290,7 @@ Map<String, Object?> _productToJson(Product product) => {
   'min_sale_price': product.minSalePrice,
   'max_sale_price': product.maxSalePrice,
   'orders_count': product.ordersCount,
+  'home_display_order': product.homeDisplayOrder,
   'is_new': product.isNew,
   'created_at': product.createdAt.toUtc().toIso8601String(),
 };
@@ -292,6 +313,7 @@ Product _productFromJson(Map<String, dynamic> json) => Product(
   minSalePrice: json['min_sale_price'] as int?,
   maxSalePrice: json['max_sale_price'] as int?,
   ordersCount: json['orders_count'] as int? ?? 0,
+  homeDisplayOrder: json['home_display_order'] as int?,
   isNew: json['is_new'] as bool? ?? false,
   createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
 );

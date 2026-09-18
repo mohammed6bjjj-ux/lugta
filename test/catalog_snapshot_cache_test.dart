@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/category_sticker_icons.dart';
 import 'package:flutter_app/data/catalog_snapshot_cache.dart';
+import 'package:flutter_app/features/catalog/home_best_sellers.dart';
 import 'package:flutter_app/data/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -48,6 +49,7 @@ void main() {
       ],
       wholesalePrice: 10000,
       suggestedPrice: 15000,
+      homeDisplayOrder: 2,
       createdAt: savedAt,
     );
 
@@ -69,6 +71,7 @@ void main() {
     expect(restored.products.single.variants.single.size, 'M');
     expect(restored.products.single.variants.single.localizedName, 'أسود / M');
     expect(restored.products.single.specs['الخامة'], 'فولاذ');
+    expect(restored.products.single.homeDisplayOrder, 2);
   });
 
   test('ignores expired or corrupt catalog snapshots', () async {
@@ -245,6 +248,64 @@ void main() {
       'product-${CatalogSnapshotCache.maxCachedProducts - 1}',
     );
   });
+
+  test(
+    'older curated products survive the 120 product cache bound and reorder',
+    () async {
+      final store = _MemoryCatalogSnapshotStore();
+      final cache = CatalogSnapshotCache(store: store);
+      final now = DateTime.utc(2026, 9, 16);
+      Product item(int index, int? rank) => Product(
+        id: 'p$index',
+        nameAr: 'منتج $index',
+        categoryId: 'c',
+        description: '',
+        specs: const {},
+        media: const [],
+        variants: const [],
+        wholesalePrice: 1000,
+        suggestedPrice: 2000,
+        createdAt: now,
+        homeDisplayOrder: rank,
+      );
+      final products = [
+        for (var i = 0; i < 130; i++)
+          item(
+            i,
+            i == 129
+                ? 1
+                : i == 128
+                ? 2
+                : null,
+          ),
+      ];
+      await cache.write(categories: const [], products: products, savedAt: now);
+      var snapshot = (await cache.read(now: now))!;
+      expect(snapshot.products, hasLength(120));
+      expect(homeBestSellers(snapshot.products).map((p) => p.id), [
+        'p129',
+        'p128',
+      ]);
+      expect(products.first.id, 'p0');
+      await cache.write(
+        categories: const [],
+        products: [item(128, 1), item(129, 2)],
+        savedAt: now,
+      );
+      snapshot = (await cache.read(now: now))!;
+      expect(homeBestSellers(snapshot.products).map((p) => p.id), [
+        'p128',
+        'p129',
+      ]);
+      await cache.write(
+        categories: const [],
+        products: [item(128, null)],
+        savedAt: now,
+      );
+      snapshot = (await cache.read(now: now))!;
+      expect(snapshot.products.single.homeDisplayOrder, isNull);
+    },
+  );
 
   test('keeps snapshots isolated between authenticated users', () async {
     final store = _MemoryCatalogSnapshotStore();

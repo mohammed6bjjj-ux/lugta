@@ -49,6 +49,58 @@ class _CatalogClient extends SupabaseClient {
 }
 
 void main() {
+  test(
+    'packaging scope list is fetched and preserved by the repository',
+    () async {
+      final client = SupabaseClient(
+        'http://localhost',
+        'test-key',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+        httpClient: MockClient((request) async {
+          expect(request.url.path, endsWith('/packaging_boxes'));
+          expect(
+            request.url.queryParameters['select'],
+            contains('category_ids'),
+          );
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 'multi',
+                'name': 'Watch box',
+                'price': 3000,
+                'category_id': 'men',
+                'category_ids': ['men', 'women'],
+              },
+              {
+                'id': 'legacy',
+                'name': 'Legacy box',
+                'price': 0,
+                'category_id': 'glasses',
+                'category_ids': null,
+              },
+              {
+                'id': 'general',
+                'name': 'General box',
+                'price': 0,
+                'category_ids': [],
+              },
+            ]),
+            200,
+            request: request,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      addTearDown(client.dispose);
+      final boxes = await _read(
+        SupabaseCatalogRepository(client).fetchPackagingBoxes(),
+      );
+      expect(boxes[0].categoryIds, ['men', 'women']);
+      expect(boxes[1].categoryIds, isNull);
+      expect(boxes[1].categoryId, 'glasses');
+      expect(boxes[2].categoryIds, isEmpty);
+    },
+  );
   for (final signedIn in [true, false]) {
     for (final detail in [true, false]) {
       test('size fetch: signedIn=$signedIn detail=$detail', () async {

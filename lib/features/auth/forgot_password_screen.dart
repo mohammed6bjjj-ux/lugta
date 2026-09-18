@@ -48,6 +48,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _abandoning = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  // Keep the identity of this attempt separate from the editable phone field.
+  // Queued platform input must never retarget an OTP already sent.
+  String? _submittedPhone;
 
   Timer? _timer;
   int _secondsLeft = _resendCooldownSeconds;
@@ -64,28 +67,32 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   // ─────────────────────── الخطوة 1: الهاتف ───────────────────────
 
   Future<void> _sendCode() async {
+    if (_loading || _abandoning || _step != 0) return;
     FocusScope.of(context).unfocus();
     if (!_phoneFormKey.currentState!.validate()) return;
 
-    setState(() => _loading = true);
+    final phone = _phoneController.text.trim();
+    setState(() {
+      _loading = true;
+      _submittedPhone = phone;
+    });
     try {
-      await appBackend.auth.sendPasswordRecoveryOtp(
-        _phoneController.text.trim(),
-      );
+      await appBackend.auth.sendPasswordRecoveryOtp(phone);
       if (!mounted) return;
       setState(() {
         _loading = false;
         _step = 1;
       });
       _startCountdown();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AuthStrings.codeSentTo(_phoneController.text.trim())),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AuthStrings.codeSentTo(phone))));
     } catch (error) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _submittedPhone = null;
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.toString())));
@@ -112,23 +119,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _resend() async {
-    if (_resending || _verifying) return;
+    final phone = _submittedPhone;
+    if (_resending ||
+        _verifying ||
+        _abandoning ||
+        _loading ||
+        _step != 1 ||
+        _secondsLeft > 0 ||
+        phone == null) {
+      return;
+    }
     setState(() => _resending = true);
     _otpKey.currentState?.clear();
     try {
       await appBackend.auth.resendOtp(
-        phone: _phoneController.text.trim(),
+        phone: phone,
         purpose: OtpPurpose.passwordRecovery,
       );
       if (!mounted) return;
       _startCountdown();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AuthStrings.newCodeSentTo(_phoneController.text.trim()),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AuthStrings.newCodeSentTo(phone))));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -140,11 +152,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _onCodeCompleted(String code) async {
-    if (_verifying) return;
+    final phone = _submittedPhone;
+    if (_verifying ||
+        _resending ||
+        _abandoning ||
+        _loading ||
+        _step != 1 ||
+        phone == null) {
+      return;
+    }
     setState(() => _verifying = true);
     try {
       await appBackend.auth.verifyOtp(
-        phone: _phoneController.text.trim(),
+        phone: phone,
         token: code,
         purpose: OtpPurpose.passwordRecovery,
       );
@@ -176,6 +196,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _savePassword() async {
+    if (_loading || _abandoning || _step != 2) return;
     FocusScope.of(context).unfocus();
     if (!_passwordFormKey.currentState!.validate()) return;
 
@@ -206,7 +227,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _editPhone() async {
-    if (_abandoning || _verifying || _resending) return;
+    if (_abandoning || _verifying || _resending || _loading || _step != 1) {
+      return;
+    }
     setState(() => _abandoning = true);
     try {
       await appBackend.auth.abandonPasswordRecovery();
@@ -217,6 +240,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() {
         _step = 0;
         _abandoning = false;
+        _submittedPhone = null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -329,6 +353,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               AppTextField(
                 label: AuthStrings.phoneLabel,
                 controller: _phoneController,
+                enabled: !_loading && !_abandoning,
                 hint: '07XXXXXXXXX',
                 keyboardType: TextInputType.phone,
                 textDirection: TextDirection.ltr,
@@ -380,7 +405,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                 ),
                 Text(
-                  _phoneController.text.trim(),
+                  _submittedPhone ?? '',
                   textDirection: TextDirection.ltr,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w800,

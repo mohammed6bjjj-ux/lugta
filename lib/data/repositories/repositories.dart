@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../models.dart';
 import '../sales_analytics.dart';
+import 'storefront_repository.dart';
 
 enum OtpPurpose { registration, passwordRecovery, phoneChange }
 
@@ -456,6 +457,7 @@ class AppRepositories {
     required this.notifications,
     this.promotions = const EmptyPromotionsRepository(),
     this.loyalty = const EmptyLoyaltyRepository(),
+    this.storefront = const UnavailableStorefrontRepository(),
     required this.isDemo,
   });
 
@@ -467,6 +469,7 @@ class AppRepositories {
   final NotificationsRepository notifications;
   final PromotionsRepository promotions;
   final LoyaltyRepository loyalty;
+  final StorefrontRepository storefront;
   final bool isDemo;
 }
 

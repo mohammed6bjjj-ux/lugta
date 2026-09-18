@@ -45,10 +45,13 @@ abstract class Routes {
   static const promotions = '/promotions';
   static const referrals = '/referrals';
   static const loyalty = '/loyalty';
+  static const myStore = '/my-store';
+  static const storefrontRequest = '/storefront-request';
   static const editProfile = '/edit-profile';
   static const support = '/support';
   static const policies = '/policies';
   static const about = '/about';
   static const settings = '/settings';
+  static const assistant = '/assistant';
   static const salesAnalytics = '/sales-analytics';
 }

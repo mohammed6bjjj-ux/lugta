@@ -42,7 +42,9 @@ Future<ProductCartConfiguration?> showProductCartConfigurator({
   builder: (context) => _ProductCartConfiguratorSheet(
     product: product,
     variant: variant,
-    packagingBoxes: packagingBoxes,
+    packagingBoxes: packagingBoxes
+        .where((box) => box.isAvailableFor(product))
+        .toList(growable: false),
     existingItem: existingItem,
     allowPriceEditing: allowPriceEditing,
     availableStock: availableStock,
@@ -108,7 +110,10 @@ class _ProductCartConfiguratorSheetState
     final existing = widget.existingItem;
     final safeAvailableStock = _availableStock < 1 ? 1 : _availableStock;
     _quantity = (existing?.quantity ?? 1).clamp(1, safeAvailableStock);
-    _packagingBox = existing?.packagingBox;
+    final existingBoxId = existing?.packagingBox?.id;
+    for (final box in widget.packagingBoxes) {
+      if (box.id == existingBoxId) _packagingBox = box;
+    }
     var initialPrice =
         existing?.unitSalePrice ??
         widget.variant.suggestedPriceOverride ??

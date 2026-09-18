@@ -14,6 +14,48 @@ import 'package:flutter_app/features/shell/main_shell.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'launch card follows admin priority without waiting for seen ack',
+    (tester) async {
+      final base = createDemoRepositories();
+      final pendingAck = _PendingPopupAck();
+      await tester.runAsync(() async {
+        await base.auth.signIn(phone: '07700000000', password: 'test-password');
+        await session.configure(
+          AppRepositories(
+            auth: base.auth,
+            profile: base.profile,
+            catalog: base.catalog,
+            orders: base.orders,
+            wallet: base.wallet,
+            notifications: pendingAck,
+            isDemo: true,
+          ),
+          loadInitialData: true,
+        );
+      });
+      await tester.pumpWidget(const MaterialApp(home: MainShell()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pendingAck.seenIds, ['first']);
+      expect(
+        find.byKey(const ValueKey('promotion_popup_close')),
+        findsOneWidget,
+      );
+      expect(find.text('First by admin'), findsOneWidget);
+      expect(pendingAck.release.isCompleted, isFalse);
+      await tester.tap(find.byKey(const ValueKey('promotion_popup_close')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.runAsync(session.refreshNotifications);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('promotion_popup_close')), findsNothing);
+      expect(pendingAck.seenIds, ['first']);
+      pendingAck.release.complete();
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   Future<void> configureApprovedDemoSession() async {
     final repositories = createDemoRepositories();
     await repositories.auth.signIn(
@@ -22,6 +64,46 @@ void main() {
     );
     await session.configure(repositories, loadInitialData: true);
   }
+
+  testWidgets('website push opens seller review, not canonical order details', (
+    tester,
+  ) async {
+    await tester.runAsync(configureApprovedDemoSession);
+    const requestId = 'abcd1234-2222-4333-8444-abcdefabcdef';
+    final deviceTokens = _FakeDeviceTokens(
+      pending: [
+        const PushOpenEvent(
+          targetType: 'storefront_request',
+          deepLink: '/storefront-requests/$requestId',
+        ),
+      ],
+    );
+    Object? openedRequestId;
+    await tester.pumpWidget(
+      MaterialApp(
+        onGenerateRoute: (settings) {
+          if (settings.name == '/storefront-request') {
+            openedRequestId = settings.arguments;
+            return MaterialPageRoute<void>(
+              settings: settings,
+              builder: (_) => const Scaffold(
+                body: Text('Seller request review', key: ValueKey('review')),
+              ),
+            );
+          }
+          return AppRouter.onGenerateRoute(settings);
+        },
+        home: MainShell(deviceTokens: deviceTokens),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(openedRequestId, requestId);
+    expect(find.byKey(const ValueKey('review')), findsOneWidget);
+    expect(find.byType(OrderDetailScreen), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await deviceTokens.dispose();
+  });
 
   testWidgets(
     'terminated push opens a loaded linked order after shell starts',
@@ -327,4 +409,42 @@ class _FakeDeviceTokens implements DeviceTokenRegistrar {
     await _foreground.close();
     await _opens.close();
   }
+}
+
+class _PendingPopupAck implements NotificationsRepository {
+  final release = Completer<void>();
+  final seenIds = <String>[];
+  @override
+  Future<List<AppNotification>> fetchNotifications() async => [
+    AppNotification(
+      id: 'second',
+      title: 'Second',
+      body: '',
+      type: NotificationType.promotion,
+      at: DateTime.utc(2026),
+      showPopup: true,
+      popupPriority: 1,
+    ),
+    AppNotification(
+      id: 'first',
+      title: 'First by admin',
+      body: 'Campaign',
+      type: NotificationType.promotion,
+      at: DateTime.utc(2020),
+      showPopup: true,
+      popupPriority: 99999,
+    ),
+  ];
+  @override
+  Future<void> markPopupSeen(String notificationId) {
+    seenIds.add(notificationId);
+    return release.future;
+  }
+
+  @override
+  Future<void> markRead(String notificationId) async {}
+  @override
+  Future<void> markAllRead() async {}
+  @override
+  Stream<List<AppNotification>> watchNotifications() => const Stream.empty();
 }

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
@@ -14,13 +17,21 @@ import '../../data/models.dart';
 import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
 import 'orders_strings.dart';
+import '../storefront/storefront_request_screen.dart';
+import '../storefront/storefront_requests_view_model.dart';
+import '../storefront/storefront_strings.dart';
 
 /// فلاتر قائمة الطلبات.
-enum _OrdersFilter { all, active, completed, returned, cancelled }
+enum _OrdersFilter { all, website, active, completed, returned, cancelled }
 
 extension _OrdersFilterX on _OrdersFilter {
   String get label => switch (this) {
     _OrdersFilter.all => OrdersStrings.filterAll,
+    _OrdersFilter.website => StorefrontStrings.t(
+      'طلبات الموقع',
+      'داواکارییەکانی ماڵپەڕ',
+      'Website requests',
+    ),
     _OrdersFilter.active => OrdersStrings.filterActive,
     _OrdersFilter.completed => OrdersStrings.filterCompleted,
     _OrdersFilter.returned => OrdersStrings.filterReturned,
@@ -29,6 +40,7 @@ extension _OrdersFilterX on _OrdersFilter {
 
   bool matches(OrderStatus status) => switch (this) {
     _OrdersFilter.all => true,
+    _OrdersFilter.website => false,
     _OrdersFilter.active =>
       status == OrderStatus.pendingReview ||
           status == OrderStatus.confirmed ||
@@ -45,6 +57,7 @@ extension _OrdersFilterX on _OrdersFilter {
 
   IconData get emptyIcon => switch (this) {
     _OrdersFilter.all => Icons.receipt_long_outlined,
+    _OrdersFilter.website => Icons.public,
     _OrdersFilter.active => Icons.local_shipping_outlined,
     _OrdersFilter.completed => Icons.verified_rounded,
     _OrdersFilter.returned => Icons.assignment_return_outlined,
@@ -53,6 +66,11 @@ extension _OrdersFilterX on _OrdersFilter {
 
   String get emptyTitle => switch (this) {
     _OrdersFilter.all => OrdersStrings.emptyAllTitle,
+    _OrdersFilter.website => StorefrontStrings.t(
+      'لا توجد طلبات من الموقع',
+      'هیچ داواکارییەکی ماڵپەڕ نییە',
+      'No website requests yet',
+    ),
     _OrdersFilter.active => OrdersStrings.emptyActiveTitle,
     _OrdersFilter.completed => OrdersStrings.emptyCompletedTitle,
     _OrdersFilter.returned => OrdersStrings.emptyReturnedTitle,
@@ -61,6 +79,11 @@ extension _OrdersFilterX on _OrdersFilter {
 
   String get emptySubtitle => switch (this) {
     _OrdersFilter.all => OrdersStrings.emptyAllSubtitle,
+    _OrdersFilter.website => StorefrontStrings.t(
+      'ستظهر طلبات الزبائن هنا لمراجعتها قبل إرسالها للإدارة.',
+      'داواکاری کڕیاران لێرە دەردەکەوێت بۆ پشکنین.',
+      'Customer requests will appear here for review before they are sent to administration.',
+    ),
     _OrdersFilter.active => OrdersStrings.emptyActiveSubtitle,
     _OrdersFilter.completed => OrdersStrings.emptyCompletedSubtitle,
     _OrdersFilter.returned => OrdersStrings.emptyReturnedSubtitle,
@@ -77,8 +100,70 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> {
+class _OrdersScreenState extends State<OrdersScreen>
+    with WidgetsBindingObserver {
   _OrdersFilter _filter = _OrdersFilter.all;
+  late final StorefrontRequestsViewModel _websiteRequests;
+  String _websiteNotificationStamp = '';
+  Timer? _websiteRefreshDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    final userId = session.auth.currentUserId;
+    _websiteRequests = StorefrontRequestsViewModel(
+      repository: session.storefront,
+      isCurrentUser: () =>
+          userId != null && session.auth.currentUserId == userId,
+    );
+    _websiteRequests.addListener(_websiteRequestsChanged);
+    _websiteNotificationStamp = _notificationStamp();
+    session.addListener(_onSessionChanged);
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_websiteRequests.load());
+  }
+
+  String _notificationStamp() => session.notifications
+      .where(
+        (item) =>
+            item.targetType == 'storefront_request' ||
+            (item.deepLink?.startsWith('/storefront-requests/') ?? false),
+      )
+      .map((item) => item.id)
+      .join('|');
+
+  void _onSessionChanged() {
+    final stamp = _notificationStamp();
+    if (stamp == _websiteNotificationStamp) return;
+    _websiteNotificationStamp = stamp;
+    _websiteRefreshDebounce?.cancel();
+    _websiteRefreshDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) unawaited(_websiteRequests.load());
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_websiteRequests.load());
+  }
+
+  void _websiteRequestsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _websiteRefreshDebounce?.cancel();
+    session.removeListener(_onSessionChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _websiteRequests.removeListener(_websiteRequestsChanged);
+    _websiteRequests.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refreshOrders() async {
+    await Future.wait([session.refreshOrders(), _websiteRequests.load()]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +178,33 @@ class _OrdersScreenState extends State<OrdersScreen> {
             final filtered = orders
                 .where((o) => _filter.matches(o.status))
                 .toList();
+            final websiteRequests = _websiteRequests.requests
+                .where(
+                  (request) =>
+                      _filter == _OrdersFilter.website ||
+                      ((_filter == _OrdersFilter.all ||
+                              _filter == _OrdersFilter.active) &&
+                          request.pending),
+                )
+                .take(
+                  _filter == _OrdersFilter.website
+                      ? _websiteRequests.requests.length
+                      : 5,
+                )
+                .toList();
+            final showWebsiteNavigation = _filter == _OrdersFilter.website
+                ? _websiteRequests.hasMore
+                : (_filter == _OrdersFilter.all ||
+                          _filter == _OrdersFilter.active) &&
+                      (_websiteRequests.requests.isNotEmpty ||
+                          _websiteRequests.hasMore);
+            final showWebsiteStatus =
+                (_filter == _OrdersFilter.all ||
+                    _filter == _OrdersFilter.website ||
+                    _filter == _OrdersFilter.active) &&
+                (_websiteRequests.loading ||
+                    (_websiteRequests.errorCode != null &&
+                        _websiteRequests.errorCode != 'unavailable'));
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,7 +255,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
                 // ── الفلاتر النصية الخفيفة ──
                 SizedBox(
-                  height: 38,
+                  height: math.max(
+                    48,
+                    MediaQuery.textScalerOf(context).scale(12) + 24,
+                  ),
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(
@@ -153,9 +268,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     separatorBuilder: (_, _) => const SizedBox(width: 6),
                     itemBuilder: (context, index) {
                       final filter = _OrdersFilter.values[index];
-                      final count = orders
-                          .where((o) => filter.matches(o.status))
-                          .length;
+                      final count = filter == _OrdersFilter.website
+                          ? _websiteRequests.requests.length
+                          : orders
+                                .where((o) => filter.matches(o.status))
+                                .length;
                       return _FilterPill(
                         label: filter.label,
                         count: count,
@@ -170,8 +287,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 // ── القائمة ──
                 Expanded(
                   child: SessionRefreshIndicator(
-                    onRefresh: session.refreshOrders,
-                    child: filtered.isEmpty
+                    onRefresh: _refreshOrders,
+                    child:
+                        filtered.isEmpty &&
+                            websiteRequests.isEmpty &&
+                            !showWebsiteNavigation &&
+                            !showWebsiteStatus
                         ? CustomScrollView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             slivers: [
@@ -197,14 +318,90 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               AppSpacing.md,
                               110,
                             ),
-                            itemCount: filtered.length,
+                            itemCount:
+                                filtered.length +
+                                websiteRequests.length +
+                                (showWebsiteNavigation ? 1 : 0) +
+                                (showWebsiteStatus ? 1 : 0),
                             separatorBuilder: (_, _) =>
                                 const SizedBox(height: AppSpacing.sm + 2),
-                            itemBuilder: (context, index) => Entrance(
-                              key: ValueKey(filtered[index].id),
-                              index: index,
-                              child: _OrderCard(order: filtered[index]),
-                            ),
+                            itemBuilder: (context, index) {
+                              if (showWebsiteStatus && index == 0) {
+                                return _websiteRequests.loading
+                                    ? const LinearProgressIndicator()
+                                    : ListTile(
+                                        title: Text(
+                                          StorefrontRequestStrings.error(
+                                            _websiteRequests.errorCode,
+                                          ),
+                                        ),
+                                        trailing: IconButton(
+                                          tooltip: StorefrontStrings.retry,
+                                          onPressed: _websiteRequests.load,
+                                          icon: const Icon(Icons.refresh),
+                                        ),
+                                      );
+                              }
+                              final offset =
+                                  index - (showWebsiteStatus ? 1 : 0);
+                              if (offset < websiteRequests.length) {
+                                final request = websiteRequests[offset];
+                                return StorefrontRequestCard(
+                                  key: ValueKey('website_${request.id}'),
+                                  request: request,
+                                  onTap: () async {
+                                    await Navigator.pushNamed(
+                                      context,
+                                      Routes.storefrontRequest,
+                                      arguments: request.id,
+                                    );
+                                    if (mounted) await _refreshOrders();
+                                  },
+                                );
+                              }
+                              if (showWebsiteNavigation &&
+                                  offset == websiteRequests.length) {
+                                return OutlinedButton(
+                                  onPressed: _websiteRequests.loading
+                                      ? null
+                                      : () {
+                                          if (_filter ==
+                                              _OrdersFilter.website) {
+                                            unawaited(
+                                              _websiteRequests.loadMore(),
+                                            );
+                                          } else {
+                                            setState(
+                                              () => _filter =
+                                                  _OrdersFilter.website,
+                                            );
+                                          }
+                                        },
+                                  child: Text(
+                                    _filter == _OrdersFilter.website
+                                        ? StorefrontStrings.t(
+                                            'تحميل طلبات أقدم',
+                                            'بارکردنی داواکاری کۆنتر',
+                                            'Load older requests',
+                                          )
+                                        : StorefrontStrings.t(
+                                            'عرض جميع طلبات الموقع',
+                                            'بینینی هەموو داواکارییەکانی ماڵپەڕ',
+                                            'View all website requests',
+                                          ),
+                                  ),
+                                );
+                              }
+                              final orderIndex =
+                                  offset -
+                                  websiteRequests.length -
+                                  (showWebsiteNavigation ? 1 : 0);
+                              return Entrance(
+                                key: ValueKey(filtered[orderIndex].id),
+                                index: orderIndex,
+                                child: _OrderCard(order: filtered[orderIndex]),
+                              );
+                            },
                           ),
                   ),
                 ),
@@ -288,11 +485,30 @@ class _OrderCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(10),
       radius: AppRadius.md + 2,
+      color: order.storefrontRequestId == null ? null : AppColors.successSoft,
       onTap: () =>
           Navigator.pushNamed(context, Routes.orderDetail, arguments: order),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (order.storefrontRequestId != null) ...[
+            Row(
+              children: [
+                Icon(Icons.public, size: 20, color: AppColors.success),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    StorefrontRequestStrings.origin,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           Row(
             children: [
               AppNetworkImage(

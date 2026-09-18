@@ -408,11 +408,13 @@ class FirebaseDeviceTokenRegistrar implements DeviceTokenRegistrar {
   Future<void> _registerToken(String token) async {
     if (!_backend.hasAuthenticatedUser) return;
     final deviceId = await _localStore.getOrCreateDeviceId();
+    if (!_backend.hasAuthenticatedUser) return;
     await _backend.registerToken(
       deviceId: deviceId,
       platform: platform,
       token: token,
     );
+    if (!_backend.hasAuthenticatedUser) return;
     await _localStore.writeLastToken(token);
     // Registration makes this installation token intentionally active for the
     // current account. Never let an older deletion marker remove it later.
@@ -684,12 +686,17 @@ class FirebasePushMessagingClient implements PushMessagingClient {
 }
 
 class SupabaseDeviceTokenBackend implements DeviceTokenBackend {
-  SupabaseDeviceTokenBackend(this._client);
+  SupabaseDeviceTokenBackend(
+    this._client, {
+    required this.hasNormalSession,
+  });
 
   final SupabaseClient _client;
+  final bool Function() hasNormalSession;
 
   @override
-  bool get hasAuthenticatedUser => _client.auth.currentSession != null;
+  bool get hasAuthenticatedUser =>
+      _client.auth.currentSession != null && hasNormalSession();
 
   @override
   Future<void> registerToken({
@@ -808,8 +815,9 @@ String? get _devicePlatform {
 }
 
 Future<DeviceTokenRegistrar> createDeviceTokenRegistrar(
-  SupabaseClient client,
-) async {
+  SupabaseClient client, {
+  required bool Function() hasNormalSession,
+}) async {
   final platform = _devicePlatform;
   // firebase_messaging does not currently support a Windows client. Keep the
   // database enum future-ready without calling an unsupported native plugin.
@@ -841,7 +849,10 @@ Future<DeviceTokenRegistrar> createDeviceTokenRegistrar(
     return await initializeOptionalDeviceTokenRegistrar(
       () => FirebaseDeviceTokenRegistrar(
         messaging: FirebasePushMessagingClient(FirebaseMessaging.instance),
-        backend: SupabaseDeviceTokenBackend(client),
+        backend: SupabaseDeviceTokenBackend(
+          client,
+          hasNormalSession: hasNormalSession,
+        ),
         localStore: SharedPreferencesDeviceTokenStore(),
         platform: platform,
         foregroundPresenter: platform == 'android'

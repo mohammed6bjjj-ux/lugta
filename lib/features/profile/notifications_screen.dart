@@ -47,6 +47,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     final targetType = notification.targetType?.trim().toLowerCase();
     final deepTarget = parseTrustedNotificationDeepLink(notification.deepLink);
+    if (deepTarget?.kind == NotificationDeepLinkKind.storefrontRequest) {
+      Navigator.pushNamed(
+        context,
+        Routes.storefrontRequest,
+        arguments: deepTarget!.entityId!,
+      );
+      return;
+    }
     if (targetType == 'loyalty' ||
         deepTarget?.kind == NotificationDeepLinkKind.loyalty) {
       Navigator.pushNamed(context, Routes.loyalty);

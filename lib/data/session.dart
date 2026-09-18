@@ -17,6 +17,7 @@ import 'notification_deep_link.dart';
 import 'sales_analytics.dart';
 import 'repositories/demo_repositories.dart';
 import 'repositories/repositories.dart';
+import 'repositories/storefront_repository.dart';
 import 'services/app_heartbeat_service.dart';
 import 'services/device_token_registrar.dart';
 
@@ -148,6 +149,7 @@ class AppSession extends ChangeNotifier {
   bool _isGuest = false;
 
   AuthRepository get auth => _repositories.auth;
+  StorefrontRepository get storefront => _repositories.storefront;
   bool get isConfigured => _isConfigured;
   bool get isDemo => _repositories.isDemo;
   bool get isAuthenticated => auth.hasSession;
@@ -221,7 +223,9 @@ class AppSession extends ChangeNotifier {
             .toList(growable: false)
           ..sort((a, b) {
             final priority = b.popupPriority.compareTo(a.popupPriority);
-            return priority != 0 ? priority : b.at.compareTo(a.at);
+            if (priority != 0) return priority;
+            final newest = b.at.compareTo(a.at);
+            return newest != 0 ? newest : a.id.compareTo(b.id);
           });
     return candidates.firstOrNull;
   }
@@ -1011,7 +1015,10 @@ class AppSession extends ChangeNotifier {
               normalizedDuringRestore = true;
             }
             final packagingBox = product.packagingEnabled
-                ? _packagingBoxForCartId(map['packaging_box_id']?.toString())
+                ? _packagingBoxForCartId(
+                    map['packaging_box_id']?.toString(),
+                    product,
+                  )
                 : null;
             if (map['packaging_box_id'] != null && packagingBox == null) {
               normalizedDuringRestore = true;
@@ -1070,7 +1077,7 @@ class AppSession extends ChangeNotifier {
         orderableStockForVariant(variant),
       );
       final packaging = product.packagingEnabled
-          ? _packagingBoxForCartId(current.packagingBox?.id)
+          ? _packagingBoxForCartId(current.packagingBox?.id, product)
           : null;
       if (quantity != current.quantity ||
           packaging?.id != current.packagingBox?.id) {
@@ -1116,10 +1123,10 @@ class AppSession extends ChangeNotifier {
     return null;
   }
 
-  PackagingBox? _packagingBoxForCartId(String? id) {
+  PackagingBox? _packagingBoxForCartId(String? id, Product product) {
     if (id == null || id.isEmpty) return null;
     for (final box in packagingBoxes) {
-      if (box.id == id) return box;
+      if (box.id == id && box.isAvailableFor(product)) return box;
     }
     return null;
   }
@@ -1793,7 +1800,8 @@ class AppSession extends ChangeNotifier {
         throw const BackendException('التعليب غير متاح لهذا المنتج.');
       }
       for (final availableBox in packagingBoxes) {
-        if (availableBox.id == packagingBox.id) {
+        if (availableBox.id == packagingBox.id &&
+            availableBox.isAvailableFor(product)) {
           canonicalBox = availableBox;
           break;
         }
@@ -1859,10 +1867,14 @@ class AppSession extends ChangeNotifier {
     if (packagingBox != null && !item.product.packagingEnabled) {
       throw const BackendException('التعليب غير متاح لهذا المنتج.');
     }
+    final canonicalBox = _packagingBoxForCartId(packagingBox?.id, item.product);
+    if (packagingBox != null && canonicalBox == null) {
+      throw const BackendException('العلبة المختارة غير متاحة لهذا المنتج.');
+    }
     _replaceCartItem(
       index,
       item.copyWith(
-        packagingBox: packagingBox,
+        packagingBox: canonicalBox,
         clearPackaging: packagingBox == null,
       ),
     );

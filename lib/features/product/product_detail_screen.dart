@@ -19,6 +19,7 @@ import '../../data/session.dart';
 import '../../l10n/core_strings.dart';
 import '../cart/cart_strings.dart';
 import '../cart/product_cart_configurator.dart';
+import '../storefront/storefront_strings.dart';
 import 'media_share_sheet.dart';
 import 'product_strings.dart';
 import 'product_media_thumbnail.dart';
@@ -51,6 +52,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   String _cartFlightImageUrl = '';
   int _currentPage = 0;
   ProductVariant? _selectedVariant;
+  bool _openingStorefront = false;
+  bool? _listedInStore;
+  String? _storefrontUserId;
 
   Product get product =>
       session.productById(widget.product.id) ?? widget.product;
@@ -58,6 +62,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(_refreshStorefrontMembership());
     _cartMotionController =
         AnimationController(vsync: this, duration: AppDurations.slow)
           ..addStatusListener((status) {
@@ -70,6 +75,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         _selectedVariant = variant;
         break;
       }
+    }
+  }
+
+  Future<void> _refreshStorefrontMembership() async {
+    final userId = session.auth.currentUserId;
+    if (userId == null) return;
+    try {
+      final snapshot = await session.storefront.fetch();
+      if (!mounted || session.auth.currentUserId != userId) return;
+      setState(() {
+        _storefrontUserId = userId;
+        _listedInStore = snapshot.listings.any(
+          (item) => item.productId == widget.product.id,
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _listedInStore = null);
+      // The management screen performs its own authoritative read and retry.
     }
   }
 
@@ -101,7 +125,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   void _selectVariant(ProductVariant variant) {
     if (product.hasSizes) ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() {
-      _selectedVariant = _selectedVariant?.id == variant.id ? null : variant;
+      _selectedVariant = !product.hasSizes && _selectedVariant?.id == variant.id
+          ? null
+          : variant;
     });
     // اختيار متغير يعيد المعرض للصورة الرئيسية التي تعرض صورة المتغير.
     if (_selectedVariant != null && _galleryController.hasClients) {
@@ -369,6 +395,40 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 ),
               ),
               const Spacer(),
+              IconButton.filledTonal(
+                key: const ValueKey('product_add_to_store'),
+                tooltip:
+                    _storefrontUserId != session.auth.currentUserId ||
+                        _listedInStore == null
+                    ? StorefrontStrings.title
+                    : _listedInStore!
+                    ? StorefrontStrings.manageProduct
+                    : StorefrontStrings.addProduct,
+                onPressed: _openingStorefront
+                    ? null
+                    : () async {
+                        setState(() => _openingStorefront = true);
+                        try {
+                          await Navigator.pushNamed(
+                            context,
+                            Routes.myStore,
+                            arguments: product,
+                          );
+                          if (mounted) await _refreshStorefrontMembership();
+                        } finally {
+                          if (mounted) {
+                            setState(() => _openingStorefront = false);
+                          }
+                        }
+                      },
+                icon: Icon(
+                  _storefrontUserId == session.auth.currentUserId &&
+                          _listedInStore == true
+                      ? Icons.storefront_outlined
+                      : Icons.add_business_outlined,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               ListenableBuilder(
                 listenable: session,
                 builder: (context, _) {
@@ -965,6 +1025,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
           variants: product.variants,
           selectedId: _selectedVariant?.id,
           onSelected: _selectVariant,
+          onSelectionCleared: () => setState(() => _selectedVariant = null),
           availableStock: session.orderableStockForVariant,
         ),
       );
@@ -1274,12 +1335,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                         ? Row(
                             children: [
                               Expanded(
-                                child: SecondaryButton(
-                                  label: CartStrings.buyNow,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(0, 56),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 12,
+                                    ),
+                                    backgroundColor: AppColors.surface,
+                                    foregroundColor: AppColors.textPrimary,
+                                    textStyle: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.md,
+                                      ),
+                                    ),
+                                  ),
                                   onPressed: () => Navigator.pushNamed(
                                     context,
                                     Routes.orderWizard,
                                     arguments: product,
+                                  ),
+                                  child: Text(
+                                    CartStrings.buyNow,
+                                    textAlign: TextAlign.center,
                                   ),
                                 ),
                               ),

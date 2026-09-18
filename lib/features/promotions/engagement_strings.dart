@@ -82,14 +82,14 @@ class EngagementStrings {
   static String get yourCode =>
       t('رمز دعوتك', 'کۆدی بانگهێشتت', 'Your referral code');
   static String get referralSignupTitle => t(
-    'توصيل مجاني إضافي لصديقك',
-    'گەیاندنێکی خۆڕایی زیادە بۆ هاوڕێکەت',
-    'An extra free delivery for your friend',
+    'خصم توصيل إضافي لصديقك',
+    'داشکاندنێکی زیادەی گەیاندن بۆ هاوڕێکەت',
+    'An extra delivery discount for your friend',
   );
   static String get referralSignupBody => t(
-    'اللي يكمل التسجيل برمزك ويؤكد رقمه يحصل على توصيل مجاني واحد إضافي فوق مكافأة الترحيب، بدون انتظار أول طلب. يُستخدم بعد تفعيل الحساب.',
-    'ئەو کەسەی بە کۆدەکەت تۆمارکردن تەواو دەکات و ژمارەکەی پشتڕاست دەکاتەوە، گەیاندنێکی خۆڕایی زیادە لەسەر دیاریی بەخێرهاتن وەردەگرێت، بەبێ چاوەڕوانی یەکەم داواکاری. دوای چالاککردنی هەژمار بەکاردێت.',
-    'Friends who complete registration with your code and verify their phone get one free delivery on top of their welcome reward. No first order required; usable once their account is activated.',
+    'اللي يكمل التسجيل برمزك ويؤكد رقمه يحصل على خصم توصيل إضافي لاستخدام واحد فوق مكافأة الترحيب، بدون انتظار أول طلب. يُستخدم بعد تفعيل الحساب وفق مبلغ الخصم وشروطه الموضحة في عروضي ومكافآتي.',
+    'ئەو کەسەی بە کۆدەکەت تۆمارکردن تەواو دەکات و ژمارەکەی پشتڕاست دەکاتەوە، داشکاندنێکی زیادەی گەیاندن بۆ یەک جار لەسەر دیاریی بەخێرهاتن وەردەگرێت، بەبێ چاوەڕوانی یەکەم داواکاری. دوای چالاککردنی هەژمار بە بڕ و مەرجەکانی ناو ئۆفەر و دیارییەکانم بەکاردێت.',
+    'Friends who complete registration with your code and verify their phone get one extra single-use delivery discount on top of their welcome reward. No first order is required to earn it. After account activation, the amount and conditions shown in My offers & rewards apply.',
   );
   static String get referralSignupEarned => t(
     'استلمت هدية التسجيل بالإحالة',
@@ -144,9 +144,9 @@ class EngagementStrings {
     'Completed referred orders',
   );
   static String get availableFreeDeliveries => t(
-    'توصيل مجاني متاح',
-    'گەیاندنی خۆڕایی بەردەست',
-    'Free deliveries available',
+    'خصومات توصيل متاحة',
+    'داشکاندنی گەیاندنی بەردەست',
+    'Delivery discounts available',
   );
   static String get walletRewardsEarned =>
       t('مكافآت المحفظة', 'دیارییەکانی جزدان', 'Wallet rewards earned');
@@ -178,8 +178,13 @@ class EngagementStrings {
       t('صالحة لغاية', 'بەردەستە هەتا', 'Valid until');
   static String get noExpiry =>
       t('بدون تاريخ انتهاء', 'بێ بەرواری بەسەرچوون', 'No expiry');
-  static String get freeDelivery =>
-      t('توصيل مجاني', 'گەیاندنی بەخۆڕایی', 'Free delivery');
+  static String get deliveryDiscount =>
+      t('خصم توصيل', 'داشکاندنی گەیاندن', 'Delivery discount');
+  static String deliveryDiscountUpTo(String amount) => t(
+    'خصم توصيل حتى $amount',
+    'داشکاندنی گەیاندن تا $amount',
+    'Delivery discount up to $amount',
+  );
   static String percent(int value) => '$value%';
   static String get viewOffer =>
       t('عرض المكافآت', 'دیارییەکان ببینە', 'View rewards');

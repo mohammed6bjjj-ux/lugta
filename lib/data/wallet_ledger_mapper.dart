@@ -3,8 +3,22 @@ import 'models.dart';
 /// Converts the append-only double-entry wallet ledger into user-visible
 /// movements. Internal counter-entries are intentionally not rendered twice.
 List<WalletTransaction> walletTransactionsFromLedgerRows(
-  List<Map<String, dynamic>> rows,
-) {
+  List<Map<String, dynamic>> rows, {
+  List<Map<String, dynamic>> statementRows = const [],
+}) {
+  // Presentation only: never rewrite the immutable ledger recording time.
+  final settlementDates = <String, DateTime>{};
+  for (final statement in statementRows) {
+    final orderId = _nullableText(statement['order_id']);
+    final completedAt = DateTime.tryParse(
+      statement['completed_at']?.toString() ?? '',
+    );
+    if (orderId != null &&
+        statement['order_status'] == 'completed' &&
+        completedAt != null) {
+      settlementDates[orderId] = completedAt.toLocal();
+    }
+  }
   final grouped = <String, _WalletMovement>{};
 
   for (final row in rows) {
@@ -82,7 +96,9 @@ List<WalletTransaction> walletTransactionsFromLedgerRows(
     if (visible == null) continue;
 
     final (type, groupKey, visibleAmount) = visible;
-    final at = _date(row['created_at']);
+    final at = type == WalletTxType.profitReleased
+        ? settlementDates[orderId] ?? _date(row['created_at'])
+        : _date(row['created_at']);
     final existing = grouped[groupKey];
     if (existing == null) {
       grouped[groupKey] = _WalletMovement(

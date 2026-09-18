@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../app/product_link_inbox.dart';
+import '../product/product_strings.dart';
 
 import 'package:flutter/material.dart';
 
@@ -34,6 +36,7 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
+  bool _productLinkOpening = false;
   int _index = 0;
   StreamSubscription<PushOpenEvent>? _pushOpenSubscription;
   final List<PushOpenEvent> _queuedPushOpens = [];
@@ -88,6 +91,8 @@ class _MainShellState extends State<MainShell> {
     _guestSession = session.isGuest;
     _tabs = List<Widget?>.filled(_guestSession ? 3 : 5, null);
     _tabs[0] = _createTab(0);
+    productLinkInbox.addListener(_scheduleProductLink);
+    _scheduleProductLink();
     if (_guestSession) return;
     final deviceTokens = widget.deviceTokens ?? appBackend.deviceTokens;
     // Subscribe before draining the terminated-state queue so a platform event
@@ -102,6 +107,59 @@ class _MainShellState extends State<MainShell> {
     _scheduleNotificationPopup();
   }
 
+  void _scheduleProductLink() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_openProductLink());
+    });
+    // A native Universal Link can arrive while the foreground UI is idle.
+    // Registering a post-frame callback alone does not request a new frame.
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  Future<void> _openProductLink() async {
+    if (_productLinkOpening ||
+        !session.isConfigured ||
+        (!session.isGuest &&
+            (!session.isAuthenticated ||
+                session.destination != SessionDestination.shell))) {
+      return;
+    }
+    final id = productLinkInbox.take();
+    if (id == null) return;
+    _productLinkOpening = true;
+    if (_popupDialogOpen) {
+      _popupDialogOpen = false;
+      Navigator.of(context).pop(false);
+    }
+    final userId = session.auth.currentUserId;
+    final wasGuest = session.isGuest;
+    try {
+      final product = await session
+          .refreshProductById(id)
+          .timeout(const Duration(seconds: 20));
+      if (!mounted ||
+          userId != session.auth.currentUserId ||
+          wasGuest != session.isGuest ||
+          (!wasGuest && session.destination != SessionDestination.shell)) {
+        return;
+      }
+      await Navigator.of(
+        context,
+      ).pushNamed(Routes.productDetail, arguments: product);
+    } catch (_) {
+      if (mounted &&
+          userId == session.auth.currentUserId &&
+          wasGuest == session.isGuest) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ProductStrings.productLinkUnavailable)),
+        );
+      }
+    } finally {
+      _productLinkOpening = false;
+      if (mounted && productLinkInbox.pending != null) _scheduleProductLink();
+    }
+  }
+
   /// Wait for the durable server notification instead of choosing a random
   /// catalog item. An explicit push tap always wins over an automatic popup.
   void _scheduleNotificationPopup() {
@@ -109,7 +167,10 @@ class _MainShellState extends State<MainShell> {
       if (!mounted) return;
       void attempt() {
         if (!mounted) return;
-        if (_queuedPushOpens.isNotEmpty || _pushNavigationInFlight) {
+        if (_queuedPushOpens.isNotEmpty ||
+            _pushNavigationInFlight ||
+            _productLinkOpening ||
+            productLinkInbox.pending != null) {
           session.removeListener(attempt);
           return;
         }
@@ -131,9 +192,16 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _showNotificationPopup(AppNotification notification) async {
-    await session.markNotificationPopupSeen(notification.id);
-    if (!mounted || _queuedPushOpens.isNotEmpty) return;
+    if (!mounted ||
+        _queuedPushOpens.isNotEmpty ||
+        _productLinkOpening ||
+        productLinkInbox.pending != null) {
+      return;
+    }
     _popupDialogOpen = true;
+    // Mark locally immediately, but never wait for the acknowledgement network
+    // request before displaying an already-loaded announcement.
+    unawaited(session.markNotificationPopupSeen(notification.id));
     final open = await showPromotionNotificationPopup(context, notification);
     _popupDialogOpen = false;
     if (!open || !mounted || _queuedPushOpens.isNotEmpty) return;
@@ -148,6 +216,16 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _openNotificationTarget(AppNotification notification) async {
     final type = notification.targetType?.trim().toLowerCase();
+    final websiteTarget = parseTrustedNotificationDeepLink(
+      notification.deepLink,
+    );
+    if (websiteTarget?.kind == NotificationDeepLinkKind.storefrontRequest) {
+      await Navigator.of(context).pushNamed(
+        Routes.storefrontRequest,
+        arguments: websiteTarget!.entityId!,
+      );
+      return;
+    }
     if (type == 'loyalty') {
       unawaited(session.refreshLoyaltySummary().catchError((_) {}));
       await Navigator.of(context).pushNamed(Routes.loyalty);
@@ -299,6 +377,13 @@ class _MainShellState extends State<MainShell> {
             session.markNotificationRead(durable.id).catchError((_) {}),
           );
         }
+        if (deepTarget?.kind == NotificationDeepLinkKind.storefrontRequest) {
+          await navigator.pushNamed(
+            Routes.storefrontRequest,
+            arguments: deepTarget!.entityId!,
+          );
+          continue;
+        }
         if (targetType == 'referral' ||
             durable?.type == NotificationType.referral) {
           _refreshPromotionEngagement(includeReferralSummary: true);
@@ -411,6 +496,7 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    productLinkInbox.removeListener(_scheduleProductLink);
     unawaited(_pushOpenSubscription?.cancel());
     if (_popupWaiter != null) session.removeListener(_popupWaiter!);
     super.dispose();

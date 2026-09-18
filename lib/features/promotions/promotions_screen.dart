@@ -95,7 +95,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
               slivers: [
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: 64,
+                    height:
+                        64 +
+                        (MediaQuery.textScalerOf(context).scale(14) - 14) * 1.5,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsetsDirectional.fromSTEB(
@@ -172,6 +174,24 @@ class _RewardCard extends StatelessWidget {
     final promotion = grant.promotion;
     final title = promotion?.localizedName.trim();
     final description = promotion?.localizedDescription.trim();
+    final stackStatus = MediaQuery.textScalerOf(context).scale(14) > 20;
+    final statusBadge = Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Text(
+        statusLabel,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: statusColor,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
 
     return AppCard(
       key: ValueKey('promotion_grant_${grant.id}'),
@@ -206,6 +226,7 @@ class _RewardCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       _rewardValue(grant),
+                      key: ValueKey('promotion_reward_value_${grant.id}'),
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppColors.accentStrong,
                         fontWeight: FontWeight.w800,
@@ -214,25 +235,13 @@ class _RewardCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+              if (!stackStatus) statusBadge,
             ],
           ),
+          if (stackStatus) ...[
+            const SizedBox(height: AppSpacing.sm),
+            statusBadge,
+          ],
           if (description != null && description.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             Text(
@@ -303,15 +312,21 @@ IconData _statusIcon(PromotionGrantStatus status) => switch (status) {
 };
 
 IconData _rewardIcon(String type) => switch (type.toLowerCase()) {
-  'free_delivery' => Icons.local_shipping_outlined,
+  'free_delivery' || 'delivery_credit' => Icons.local_shipping_outlined,
   'wallet_credit' || 'cashback' => Icons.account_balance_wallet_outlined,
   'percent_discount' || 'percentage_discount' => Icons.percent_rounded,
   _ => Icons.redeem_outlined,
 };
 
 String _rewardValue(PromotionGrant grant) =>
+    grant.promotion?.localizedRewardLabel ??
     switch (grant.rewardType.toLowerCase()) {
-      'free_delivery' => EngagementStrings.freeDelivery,
+      // The legacy wire value represents a use, not an IQD amount. Its current
+      // monetary terms come from the promotion, not this historical use count.
+      'free_delivery' => EngagementStrings.deliveryDiscount,
+      'delivery_credit' => EngagementStrings.deliveryDiscountUpTo(
+        formatIqd(grant.rewardValue),
+      ),
       'wallet_credit' || 'cashback' => formatIqd(grant.rewardValue),
       'percent_discount' ||
       'percentage_discount' => EngagementStrings.percent(grant.rewardValue),

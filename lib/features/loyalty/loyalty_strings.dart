@@ -351,9 +351,9 @@ class LoyaltyStrings {
   static String get reward =>
       _t('مكافأة المستوى', 'خەڵاتی ئاست', 'Level reward');
   static String freeDeliveryReward(int count) => _t(
-    '$count توصيل مجاني',
-    '$count گەیاندنی بەخۆڕایی',
-    '$count free deliveries',
+    'خصومات توصيل: $count',
+    'داشکاندنی گەیاندن: $count',
+    count == 1 ? '1 delivery discount' : '$count delivery discounts',
   );
   static String walletReward(String amount) => _t(
     '$amount رصيد محفظة',

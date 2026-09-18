@@ -24,6 +24,82 @@ void main() {
   };
 
   test(
+    'released profit uses corrected settlement date without changing ledger',
+    () {
+      final ledger = [
+        row(
+          id: 'release',
+          entryType: 'profit_release',
+          bucket: 'available',
+          amount: 11000,
+          orderId: 'order-1',
+          createdAt: '2026-09-16T13:51:00Z',
+        ),
+        row(
+          id: 'pending',
+          entryType: 'profit_pending',
+          bucket: 'pending',
+          amount: 11000,
+          orderId: 'order-1',
+          createdAt: '2026-09-14T13:00:00Z',
+        ),
+      ];
+      final result = walletTransactionsFromLedgerRows(
+        ledger,
+        statementRows: [
+          {
+            'order_id': 'order-1',
+            'order_status': 'completed',
+            'completed_at': '2026-09-15T13:51:00Z',
+          },
+        ],
+      );
+      expect(result.first.at, DateTime.parse('2026-09-15T13:51:00Z').toLocal());
+      expect(result.first.amount, 11000);
+      expect(result.last.at, DateTime.parse('2026-09-14T13:00:00Z').toLocal());
+      expect(ledger.first['created_at'], '2026-09-16T13:51:00Z');
+    },
+  );
+
+  test('missing invalid or unsettled statement keeps original ledger date', () {
+    for (final statement in [
+      <String, dynamic>{},
+      {
+        'order_id': 'order-1',
+        'order_status': 'completed',
+        'completed_at': 'bad',
+      },
+      {
+        'order_id': 'order-1',
+        'order_status': 'delivered',
+        'completed_at': '2026-09-13T12:00:00Z',
+      },
+      {
+        'order_id': 'other',
+        'order_status': 'completed',
+        'completed_at': '2026-09-13T12:00:00Z',
+      },
+    ]) {
+      final result = walletTransactionsFromLedgerRows(
+        [
+          row(
+            id: 'r',
+            entryType: 'profit_release',
+            bucket: 'available',
+            amount: 23000,
+            orderId: 'order-1',
+          ),
+        ],
+        statementRows: [statement],
+      );
+      expect(
+        result.single.at,
+        DateTime.parse('2026-07-21T12:00:00Z').toLocal(),
+      );
+    }
+  });
+
+  test(
     'shows pending, released and reversed rewards but hides release counter-entry',
     () {
       final transactions = walletTransactionsFromLedgerRows([

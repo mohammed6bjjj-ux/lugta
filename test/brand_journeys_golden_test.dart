@@ -149,6 +149,23 @@ void main() {
             'goldens/lugta/${journey.key}-${scenario.name}.png',
           ),
         );
+        if (journey.key == 'account') {
+          final assistant = find.byKey(
+            const ValueKey('profile_assistant_item'),
+          );
+          await tester.scrollUntilVisible(assistant, 250);
+          await Scrollable.ensureVisible(
+            tester.element(assistant),
+            alignment: .2,
+          );
+          await tester.pumpAndSettle();
+          await expectLater(
+            find.byType(MaterialApp),
+            matchesGoldenFile(
+              'goldens/lugta/account-menu-${scenario.name}.png',
+            ),
+          );
+        }
       });
     }
   }

@@ -6,6 +6,7 @@ enum NotificationDeepLinkKind {
   referrals,
   loyalty,
   order,
+  storefrontRequest,
 }
 
 class NotificationDeepLinkTarget {
@@ -73,6 +74,19 @@ NotificationDeepLinkTarget? parseTrustedNotificationDeepLink(String? raw) {
 
   if (segments.length != 2 || !_isSafeEntityId(segments[1])) return null;
   final id = segments[1];
+  // Request UUIDs are separate from real order identifiers. Never interpret a
+  // website submission as an order before the seller has approved it.
+  if (root == 'storefront-requests') {
+    if (!RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(id)) {
+      return null;
+    }
+    return NotificationDeepLinkTarget(
+      NotificationDeepLinkKind.storefrontRequest,
+      entityId: id.toLowerCase(),
+    );
+  }
   return switch (root) {
     'product' || 'products' => NotificationDeepLinkTarget(
       NotificationDeepLinkKind.product,

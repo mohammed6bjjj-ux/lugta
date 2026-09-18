@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'app/app_bootstrap.dart';
 import 'app/app_lifecycle_reconciler.dart';
 import 'app/app_router.dart';
+import 'app/product_link_inbox.dart';
 import 'app/ckb_localizations.dart';
 import 'app/theme.dart';
 import 'data/app_settings.dart';
@@ -12,6 +13,7 @@ import 'l10n/core_strings.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  productLinkInbox.start();
   runApp(SellerApp(bootstrap: appBootstrap.initialize));
 }
 

@@ -93,11 +93,8 @@ class CoreStrings {
     'پاکەتکردن (لەسەر کڕیار)',
     'Packaging (on customer)',
   );
-  static String get deliveryDiscount => _t(
-    'خصم التوصيل المجاني',
-    'داشکاندنی گەیاندنی خۆڕایی',
-    'Free-delivery discount',
-  );
+  static String get deliveryDiscount =>
+      _t('خصم التوصيل', 'داشکاندنی گەیاندن', 'Delivery discount');
   static String get customerTotal =>
       _t('المبلغ النهائي على الزبون', 'کۆی گشتی لەسەر کڕیار', 'Customer total');
 }

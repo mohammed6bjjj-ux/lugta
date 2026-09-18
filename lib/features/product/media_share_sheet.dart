@@ -10,6 +10,7 @@ import '../../core/widgets/pressable.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../data/models.dart';
 import 'product_strings.dart';
+import 'product_link_actions.dart';
 import 'product_media_thumbnail.dart';
 
 /// نص المنشور التسويقي الجاهز للنشر: الاسم + الوصف + السعر المقترح فقط.
@@ -229,25 +230,38 @@ class _MediaShareSheetState extends State<_MediaShareSheet> {
           ),
           const Divider(),
           Expanded(
-            child: GridView.builder(
+            child: CustomScrollView(
               controller: scrollController,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: AppSpacing.sm + 2,
-                crossAxisSpacing: AppSpacing.sm + 2,
-              ),
-              itemCount: _media.length,
-              itemBuilder: (context, index) => Entrance(
-                index: index,
-                baseDelay: const Duration(milliseconds: 30),
-                offsetY: 16,
-                child: _MediaTile(
-                  item: _media[index],
-                  selected: _selectedIds.contains(_media[index].id),
-                  onTap: () => _toggleItem(_media[index]),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: ProductLinkActions(
+                    productId: widget.product.id,
+                    productName: widget.product.localizedName,
+                  ),
                 ),
-              ),
+                SliverPadding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  sliver: SliverGrid.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisSpacing: AppSpacing.sm + 2,
+                          crossAxisSpacing: AppSpacing.sm + 2,
+                        ),
+                    itemCount: _media.length,
+                    itemBuilder: (context, index) => Entrance(
+                      index: index,
+                      baseDelay: const Duration(milliseconds: 30),
+                      offsetY: 16,
+                      child: _MediaTile(
+                        item: _media[index],
+                        selected: _selectedIds.contains(_media[index].id),
+                        onTap: () => _toggleItem(_media[index]),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const Divider(),

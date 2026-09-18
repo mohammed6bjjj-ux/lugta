@@ -15,7 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final product = Product(
-    id: 'download-product',
+    id: '22222222-2222-4222-8222-222222222222',
     nameAr: 'ساعة',
     categoryId: 'watches',
     description: '',
@@ -88,6 +88,8 @@ void main() {
         );
         await tester.tap(find.text('open'));
         await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('share_product_link')), findsOneWidget);
+        expect(find.byKey(const ValueKey('copy_product_link')), findsOneWidget);
         expect(find.text(ProductStrings.downloadToDevice), findsOneWidget);
         await tester.tap(find.text(ProductStrings.downloadToDevice));
         await tester.pump();

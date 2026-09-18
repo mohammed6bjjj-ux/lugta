@@ -7,6 +7,62 @@ import 'package:flutter_app/l10n/core_strings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final language in AppLanguage.values) {
+    testWidgets(
+      'partial delivery reward is not called free in ${language.name}',
+      (tester) async {
+        final previousLanguage = appSettings.language;
+        appSettings.language = language;
+        addTearDown(() => appSettings.language = previousLanguage);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light(),
+            home: Directionality(
+              textDirection: language == AppLanguage.en
+                  ? TextDirection.ltr
+                  : TextDirection.rtl,
+              child: const Scaffold(
+                body: SingleChildScrollView(
+                  child: PriceSummaryCard(
+                    wholesaleTotal: 10000,
+                    saleTotal: 15000,
+                    deliveryFee: 2500,
+                    baseDeliveryFee: 5000,
+                    promotionDeliveryDiscount: 2500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        final discountRow = find.byKey(
+          const ValueKey('price_summary_delivery_discount'),
+        );
+        expect(
+          find.descendant(
+            of: discountRow,
+            matching: find.text('- ${formatIqd(2500)}'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text(CoreStrings.deliveryDiscount), findsOneWidget);
+        expect(
+          CoreStrings.deliveryDiscount,
+          isNot(matches(RegExp('مجان|خۆڕایی|free', caseSensitive: false))),
+        );
+        final payable = find.byKey(
+          const ValueKey('price_summary_customer_delivery_final'),
+        );
+        expect(
+          find.descendant(of: payable, matching: find.text(formatIqd(2500))),
+          findsOneWidget,
+        );
+        expect(find.text(formatIqd(17500)), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'free delivery shows the regular 5,000 fee and an explicit matching discount',
     (tester) async {

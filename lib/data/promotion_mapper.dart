@@ -79,7 +79,17 @@ Promotion promotionFromJson(
   showPopup: _bool(row['show_popup']),
   showInbox: _bool(row['show_inbox']),
   sendPush: _bool(row['send_push']),
+  displayCopy: _displayCopy(row['promotion_display_copy']),
 );
+
+Map<String, String> _displayCopy(Object? value) {
+  final relation = value is List ? (value.isEmpty ? null : value.first) : value;
+  final copy = _mapOrEmpty(_mapOrEmpty(relation)['copy']);
+  return Map.unmodifiable({
+    for (final entry in copy.entries)
+      if (entry.value is String) entry.key: entry.value as String,
+  });
+}
 
 ReferralSummary referralSummaryFromRpc(Object? value) {
   final row = switch (value) {

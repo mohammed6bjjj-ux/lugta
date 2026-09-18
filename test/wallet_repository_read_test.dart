@@ -48,7 +48,10 @@ void main() {
             final table = request.url.pathSegments.last;
             Object response = [];
             if (table == 'seller_wallet_summary' ||
-                table == 'seller_wallet_ledger') {
+                table == 'seller_wallet_ledger' ||
+                table == 'withdrawal_requests' ||
+                table == 'seller_account_statement' ||
+                table == 'withdrawal_sources') {
               expect(request.url.queryParameters['seller_id'], 'eq.seller');
               checked.add(table);
             }
@@ -109,7 +112,11 @@ void main() {
               }
               throw error;
             });
-        expect(checked, {'seller_wallet_summary', 'seller_wallet_ledger'});
+        expect(checked, {
+          'seller_wallet_summary', 'seller_wallet_ledger',
+          'withdrawal_requests', 'seller_account_statement',
+          'withdrawal_sources',
+        });
         expect(wallet.available, settled ? 12000 : 0);
         expect(wallet.pending, settled ? 0 : 12000);
         expect(wallet.minimumWithdrawal, 4000);

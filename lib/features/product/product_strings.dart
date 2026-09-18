@@ -18,8 +18,28 @@ class ProductStrings {
       _t('إضافة إلى المفضلة', 'زیادکردن بۆ دڵخوازەکان', 'Add to favorites');
   static String get removeFromFavorites =>
       _t('إزالة من المفضلة', 'لابردن لە دڵخوازەکان', 'Remove from favorites');
-  static String get shareMediaTooltip =>
-      _t('مشاركة الوسائط', 'هاوبەشکردنی میدیا', 'Share media');
+  static String get shareMediaTooltip => _t(
+    'مشاركة المنتج والوسائط',
+    'هاوبەشکردنی بەرهەم و میدیا',
+    'Share product and media',
+  );
+  static String get shareProductLink => _t(
+    'مشاركة رابط المنتج',
+    'هاوبەشکردنی بەستەری بەرهەم',
+    'Share product link',
+  );
+  static String get copyProductLink =>
+      _t('نسخ رابط المنتج', 'کۆپیکردنی بەستەری بەرهەم', 'Copy product link');
+  static String get productLinkCopied => _t(
+    'تم نسخ رابط المنتج',
+    'بەستەری بەرهەم کۆپی کرا',
+    'Product link copied',
+  );
+  static String get productLinkUnavailable => _t(
+    'تعذر فتح المنتج. قد يكون غير متاح؛ تحقق من الاتصال وأعد فتح الرابط.',
+    'بەرهەم نەکرایەوە. پەیوەندی بپشکنە و دووبارە بەستەرەکە بکەرەوە.',
+    'Cannot open this product. It may be unavailable; check your connection and reopen the link.',
+  );
   static String get video => _t('فيديو', 'ڤیدیۆ', 'Video');
   static String get availableVariants =>
       _t('المتغيرات المتوفرة', 'جۆرە بەردەستەکان', 'Available variants');
@@ -31,6 +51,22 @@ class ProductStrings {
     'Choose your size and color before adding to cart.',
   );
   static String get noSize => _t('بدون مقاس', 'بێ قەبارە', 'No size');
+  static String get colorOrStyle =>
+      _t('اللون / الموديل', 'ڕەنگ / مۆدێل', 'Color / style');
+  static String get sizeLabel => _t('المقاس', 'قەبارە', 'Size');
+  static String get defaultOption => _t('الأساسي', 'بنەڕەتی', 'Default');
+  static String get chooseSizeOnly => _t(
+    'اختر مقاسك للمتابعة. المقاسات المشطوبة غير متوفرة.',
+    'قەبارەکەت هەڵبژێرە بۆ بەردەوامبوون. قەبارە هێڵ بەسەرداهاتووەکان بەردەست نین.',
+    'Choose a size to continue. Crossed-out sizes are unavailable.',
+  );
+  static String get chooseExactOption => _t(
+    'تتوفر عدة خيارات بهذا المقاس. اختر الخيار المطلوب:',
+    'چەند هەڵبژاردەیەک بەم قەبارەیە هەیە. هەڵبژاردەی پێویست هەڵبژێرە:',
+    'There are multiple options in this size. Choose one:',
+  );
+  static String numberedOption(String number) =>
+      _t('الخيار $number', 'هەڵبژاردەی $number', 'Option $number');
   static String get specifications =>
       _t('المواصفات', 'تایبەتمەندییەکان', 'Specifications');
   static String get descriptionTitle => _t('الوصف', 'وەسف', 'Description');

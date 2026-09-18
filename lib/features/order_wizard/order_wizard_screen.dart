@@ -336,7 +336,11 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       final packagingStillAvailable =
           _packagingBox == null ||
           (latestProduct.packagingEnabled &&
-              session.packagingBoxes.any((box) => box.id == _packagingBox!.id));
+              session.packagingBoxes.any(
+                (box) =>
+                    box.id == _packagingBox!.id &&
+                    box.isAvailableFor(latestProduct),
+              ));
 
       _product = latestProduct;
       _drafts = reconciliation.drafts;
@@ -639,7 +643,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
 
   Widget _buildPackagingSelector() {
     final theme = Theme.of(context);
-    final boxes = session.packagingBoxes;
+    final boxes = session.packagingBoxes
+        .where((box) => box.isAvailableFor(_product))
+        .toList(growable: false);
     final selectedBox = _packagingBox;
     return AppCard(
       child: Column(
@@ -761,7 +767,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _PackagingPickerSheet(
-        boxes: session.packagingBoxes,
+        boxes: session.packagingBoxes
+            .where((box) => box.isAvailableFor(_product))
+            .toList(growable: false),
         selectedBoxId: _packagingBox?.id,
       ),
     );

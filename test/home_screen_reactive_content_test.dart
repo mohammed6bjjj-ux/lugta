@@ -17,6 +17,7 @@ import 'package:flutter_app/features/shell/main_shell.dart';
 import 'package:flutter_app/data/services/device_token_registrar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'home_catalog_sections_test.dart' show fixtureProduct;
+import 'home_best_sellers_test.dart' as ordering;
 
 void main() {
   setUpAll(() async {
@@ -106,6 +107,68 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'home grid follows updated admin ranks and hides unknown category',
+    (tester) async {
+      session.categories = const [
+        Category(
+          id: 'watches',
+          nameAr: 'ساعات',
+          imageUrl: '',
+          icon: Icons.watch,
+        ),
+      ];
+      session.products = [
+        ordering.product('b', rank: 2),
+        ordering.product('a', rank: 1),
+        ordering.product('popular', orders: 999),
+      ];
+      await tester.pumpWidget(_testApp(const HomeScreen()));
+      await tester.pump(const Duration(milliseconds: 400));
+      List<String> displayed() {
+        final grid = tester.widget<SliverGrid>(
+          find.byKey(
+            const ValueKey('home-grid-best-sellers'),
+            skipOffstage: false,
+          ),
+        );
+        final delegate = grid.delegate as SliverChildBuilderDelegate;
+        final context = tester.element(find.byType(HomeScreen));
+        return [
+          for (var i = 0; i < delegate.childCount!; i++)
+            (delegate.builder(context, i) as ProductCard).product.id,
+        ];
+      }
+
+      expect(displayed(), ['a', 'b']);
+      session.products = [
+        ordering.product('b', rank: 1),
+        ordering.product('a', rank: 2),
+      ];
+      await tester.runAsync(
+        () =>
+            session.configure(createDemoRepositories(), loadInitialData: false),
+      );
+      await tester.pump();
+      expect(displayed(), ['b', 'a']);
+      session.categories = [];
+      await tester.runAsync(
+        () =>
+            session.configure(createDemoRepositories(), loadInitialData: false),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey('home-grid-best-sellers'),
+          skipOffstage: false,
+        ),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('category rail stays readable with many items at 200% text', (
     tester,
