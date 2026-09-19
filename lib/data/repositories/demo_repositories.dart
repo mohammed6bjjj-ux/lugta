@@ -5,6 +5,7 @@ import '../../core/phone_number.dart';
 import '../mock_data.dart';
 import '../models.dart';
 import '../sales_analytics.dart';
+import '../withdrawal_amount_rules.dart';
 import 'repositories.dart';
 
 AppRepositories createDemoRepositories() {
@@ -781,6 +782,14 @@ class DemoWalletRepository implements WalletRepository {
 
   @override
   Future<Withdrawal> requestWithdrawal(CreateWithdrawalRequest request) async {
+    if (!isWholeThousandWithdrawal(request.amount)) {
+      throw const BackendException(
+        'مبلغ السحب لازم يكون من مضاعفات ١٬٠٠٠ دينار.',
+      );
+    }
+    if (request.amount < MockData.minWithdrawalAmount) {
+      throw const BackendException('المبلغ أقل من الحد الأدنى المسموح للسحب.');
+    }
     if (request.amount > _available) {
       throw const BackendException('الرصيد المتاح لا يكفي لهذا السحب.');
     }

@@ -17,6 +17,7 @@ import '../models.dart';
 import '../promotion_mapper.dart';
 import '../sales_analytics.dart';
 import '../wallet_ledger_mapper.dart';
+import '../withdrawal_amount_rules.dart';
 import '../services/device_token_registrar.dart';
 import 'repositories.dart';
 import 'supabase_storefront_repository.dart';
@@ -2048,6 +2049,11 @@ class SupabaseWalletRepository implements WalletRepository {
   @override
   Future<Withdrawal> requestWithdrawal(CreateWithdrawalRequest request) async =>
       _guard(() async {
+        if (!isWholeThousandWithdrawal(request.amount)) {
+          throw const BackendException(
+            'مبلغ السحب لازم يكون من مضاعفات ١٬٠٠٠ دينار.',
+          );
+        }
         final payoutId = request.payoutAccountId;
         if (payoutId == null || payoutId.isEmpty) {
           throw const BackendException(
@@ -3396,6 +3402,8 @@ String _postgrestMessage(PostgrestException error) {
         'طلبات السحب متوقفة مؤقتاً. حاول لاحقاً.',
     'withdrawal amount is below the configured minimum':
         'المبلغ أقل من الحد الأدنى المسموح للسحب.',
+    'withdrawal amount must be a multiple of 1000 IQD':
+        'مبلغ السحب لازم يكون من مضاعفات ١٬٠٠٠ دينار.',
     'insufficient available balance': 'الرصيد المتاح لا يكفي لهذا السحب.',
     'withdrawal not found': 'طلب السحب غير موجود.',
     'only a pending withdrawal can be cancelled':

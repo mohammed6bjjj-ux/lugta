@@ -12,6 +12,7 @@ import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/session_refresh.dart';
 import '../../data/models.dart';
 import '../../data/session.dart';
+import '../../data/withdrawal_amount_rules.dart';
 import '../profile/legal/legal_document_screen.dart';
 import '../profile/legal/legal_documents.dart';
 import 'payout_account_rules.dart';
@@ -90,6 +91,9 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
         formatIqd(session.minWithdrawalAmount),
       );
     }
+    if (!isWholeThousandWithdrawal(amount)) {
+      return WalletStrings.wholeThousandsRequired;
+    }
     if (amount > session.availableBalance) {
       return WalletStrings.amountExceedsBalance(
         formatIqd(session.availableBalance),
@@ -106,7 +110,9 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
   }
 
   void _fillMaxAmount() {
-    _amountController.text = formatNumber(session.availableBalance);
+    _amountController.text = formatNumber(
+      maximumWholeThousandWithdrawal(session.availableBalance),
+    );
     setState(() {});
   }
 
@@ -355,15 +361,13 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: Text(WalletStrings.withdrawAll),
+                        child: Text(WalletStrings.withdrawMaximum),
                       ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    WalletStrings.minWithdrawal(
-                      formatIqd(session.minWithdrawalAmount),
-                    ),
+                    '${WalletStrings.minWithdrawal(formatIqd(session.minWithdrawalAmount))}\n${WalletStrings.wholeThousandsHint}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,

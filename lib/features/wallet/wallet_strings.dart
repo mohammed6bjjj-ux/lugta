@@ -250,6 +250,17 @@ class WalletStrings {
       _t('مثال: $example', 'نموونە: $example', 'e.g. $example');
   static String get withdrawAll =>
       _t('سحب الكل', 'هەمووی ڕابکێشە', 'Withdraw all');
+  static String get withdrawMaximum => _t('أقصى مبلغ', 'زۆرترین بڕ', 'Maximum');
+  static String get wholeThousandsRequired => _t(
+    'أدخل مبلغاً بمضاعفات ١٬٠٠٠ دينار، مثل ١٠٬٠٠٠ أو ٣٥٬٠٠٠.',
+    'بڕێک بە چەندقاتەی ١٬٠٠٠ دینار بنووسە، وەک ١٠٬٠٠٠ یان ٣٥٬٠٠٠.',
+    'Enter a multiple of 1,000 IQD, such as 10,000 or 35,000.',
+  );
+  static String get wholeThousandsHint => _t(
+    'السحب بمضاعفات ١٬٠٠٠ دينار فقط. المبلغ المتبقي يبقى بمحفظتك.',
+    'ڕاکێشان تەنها بە چەندقاتەی ١٬٠٠٠ دینارە. بڕی ماوە لە جزدانەکەت دەمێنێتەوە.',
+    'Withdraw in multiples of 1,000 IQD. Any remainder stays in your wallet.',
+  );
   static String minWithdrawal(String amount) => _t(
     'الحد الأدنى للسحب $amount',
     'کەمترین بڕی ڕاکێشان $amount',
