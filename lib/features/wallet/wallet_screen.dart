@@ -136,7 +136,14 @@ class _WalletScreenState extends State<WalletScreen>
                     },
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  const Entrance(child: _BalanceCard()),
+                  Entrance(
+                    child: _BalanceCard(
+                      available: session.availableBalance,
+                      pending: session.pendingBalance,
+                      earned: session.totalEarned,
+                      minimumWithdrawal: session.minWithdrawalAmount,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   Entrance(
                     index: 2,
@@ -179,7 +186,18 @@ class _WalletScreenState extends State<WalletScreen>
 
 /// بطاقة الرصيد المتكاملة: الرقم الكبير، إحصاءان، وزر السحب — في سطح داكن واحد.
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard();
+  const _BalanceCard({
+    required this.available,
+    required this.pending,
+    required this.earned,
+    required this.minimumWithdrawal,
+  });
+
+  final int available;
+  final int pending;
+  final int earned;
+  final int minimumWithdrawal;
+  bool get canWithdraw => available >= minimumWithdrawal;
 
   @override
   Widget build(BuildContext context) {
@@ -225,7 +243,7 @@ class _BalanceCard extends StatelessWidget {
           const SizedBox(height: 2),
           // عدّ تصاعدي ناعم للرصيد عند البناء.
           TweenAnimationBuilder<int>(
-            tween: IntTween(begin: 0, end: session.availableBalance),
+            tween: IntTween(begin: 0, end: available),
             duration: const Duration(milliseconds: 900),
             curve: AppCurves.emphasized,
             builder: (context, value, _) => Text(
@@ -244,7 +262,7 @@ class _BalanceCard extends StatelessWidget {
               Expanded(
                 child: _InlineMetric(
                   label: WalletStrings.pendingProfit,
-                  value: session.pendingBalance,
+                  value: pending,
                   valueColor: AppColors.accent,
                 ),
               ),
@@ -257,7 +275,7 @@ class _BalanceCard extends StatelessWidget {
               Expanded(
                 child: _InlineMetric(
                   label: WalletStrings.totalEarned,
-                  value: session.totalEarned,
+                  value: earned,
                   valueColor: Colors.white,
                 ),
               ),
@@ -268,7 +286,7 @@ class _BalanceCard extends StatelessWidget {
             label: WalletStrings.withdrawRequest,
             icon: Icons.payments_outlined,
             accented: true,
-            onPressed: session.canWithdraw
+            onPressed: canWithdraw
                 ? () => Navigator.pushNamed(context, Routes.withdrawRequest)
                 : null,
           ),
@@ -283,10 +301,10 @@ class _BalanceCard extends StatelessWidget {
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
-                  session.canWithdraw
+                  canWithdraw
                       ? WalletStrings.pendingAutoReleaseHint
                       : WalletStrings.minWithdrawalHint(
-                          formatIqd(session.minWithdrawalAmount),
+                          formatIqd(minimumWithdrawal),
                         ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
